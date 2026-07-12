@@ -6,7 +6,8 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:flow": "node scripts/verify-flow.mjs"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.1",
+    "socket.io-client": "^4.8.3",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
