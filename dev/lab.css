@@ -91,6 +91,7 @@ main { padding: 18px clamp(18px, 4vw, 52px) 40px; }
 .players-area, .event-area { min-width: 0; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; min-height: 42px; border-bottom: 1px solid #30343c; }
 .section-heading span { color: #9fa5b0; font-size: 13px; }
+.section-tools { display: flex; align-items: center; gap: 10px; }
 
 .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 10px; padding-top: 12px; }
 .player-card { border: 1px solid #363b44; border-radius: 7px; background: #191c22; overflow: hidden; }
@@ -106,6 +107,11 @@ main { padding: 18px clamp(18px, 4vw, 52px) 40px; }
 .player-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
 .player-actions button { min-width: 0; padding-inline: 7px; font-size: 13px; }
 .player-actions .wide { grid-column: 1 / -1; }
+.player-role { margin-bottom: 7px; color: #f0c957; font-weight: 750; }
+.player-target { width: 100%; min-height: 38px; margin-bottom: 8px; border: 1px solid #424751; border-radius: 6px; padding: 7px 9px; background: #111319; color: #fff; }
+.alignment { margin-bottom: 9px; padding: 9px; border-radius: 5px; text-align: center; font-weight: 750; }
+.alignment.good { background: #173728; color: #9be0b5; }
+.alignment.werewolf { background: #481e22; color: #ff9393; }
 
 .empty-state { grid-column: 1 / -1; padding: 48px 16px; border: 1px dashed #3b404a; color: #8f95a0; text-align: center; }
 

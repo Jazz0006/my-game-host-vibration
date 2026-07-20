@@ -4,7 +4,7 @@ const DEFAULT_URL = process.env.BASE_URL ?? "http://127.0.0.1:3001";
 const TIMEOUT_MS = 5000;
 
 function readArguments(argv) {
-  const options = { players: 8, url: DEFAULT_URL, help: false };
+  const options = { players: 5, url: DEFAULT_URL, help: false };
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -29,7 +29,7 @@ function readArguments(argv) {
     throw new Error(`未知参数：${argument}`);
   }
 
-  if (!Number.isInteger(options.players) || options.players < 2 || options.players > 20) {
+  if (!Number.isInteger(options.players) || options.players < 2 || options.players > 5) {
     throw new Error("--players 必须是 2 到 20 之间的整数（包含房主）");
   }
 

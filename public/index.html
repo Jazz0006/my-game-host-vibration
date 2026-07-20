@@ -6,27 +6,46 @@
   <title>无法官狼人杀助手</title>
   <style>
     * { box-sizing: border-box; }
-    body { max-width: 560px; margin: 0 auto; padding: 24px 16px; font-family: system-ui, sans-serif; background: #111318; color: #f5f5f5; }
-    h1 { margin: 0 0 20px; font-size: 28px; text-align: center; letter-spacing: 0; }
-    h2 { margin: 0 0 12px; font-size: 19px; letter-spacing: 0; }
-    .panel { margin-bottom: 14px; padding: 16px; border: 1px solid #373b45; border-radius: 8px; background: #1b1e25; }
+    body { max-width: 600px; min-height: 100vh; margin: 0 auto; padding: 24px 16px calc(28px + env(safe-area-inset-bottom)); font-family: system-ui, sans-serif; background: #101218; color: #f5f5f5; }
+    h1 { margin: 0 0 20px; font-size: 28px; text-align: center; }
+    h2 { margin: 0 0 12px; font-size: 20px; }
+    h3 { margin: 18px 0 8px; font-size: 17px; }
+    p { line-height: 1.55; }
+    .panel { margin-bottom: 14px; padding: 16px; border: 1px solid #373b45; border-radius: 10px; background: #1b1e25; }
     label { display: block; margin: 12px 0 6px; color: #c8cad0; }
-    input, select, button { width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 6px; font: inherit; }
+    input, select, button { width: 100%; min-height: 48px; padding: 10px 12px; border-radius: 8px; font: inherit; }
     input, select { border: 1px solid #4b505c; background: #101218; color: #fff; }
     button { margin-top: 12px; border: 0; background: #efc75e; color: #17140b; font-weight: 750; cursor: pointer; }
     button.secondary { background: #4d586b; color: #fff; }
-    button:disabled { opacity: .45; cursor: not-allowed; }
+    button.danger { background: #b94848; color: #fff; }
+    button:disabled { opacity: .42; cursor: not-allowed; }
     .hidden { display: none !important; }
-    .room-id { margin: 4px 0 16px; font-size: 36px; font-weight: 800; color: #efc75e; }
-    .player { display: flex; align-items: center; gap: 10px; min-height: 42px; border-bottom: 1px solid #30343d; }
+    .room-id { margin: 4px 0 14px; font-size: 36px; font-weight: 800; color: #efc75e; letter-spacing: 3px; }
+    .player { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 46px; padding: 5px 0; border-bottom: 1px solid #30343d; }
     .player:last-child { border-bottom: 0; }
-    .seat { width: 28px; color: #efc75e; font-weight: 700; }
-    .status { margin-top: 12px; padding: 10px; border-left: 3px solid #efc75e; background: #12151b; line-height: 1.5; }
-    .connection-status { margin: -8px 0 14px; color: #8fdbac; font-size: 14px; }
+    .seat { width: 32px; color: #efc75e; font-weight: 700; }
+    .player-name-label { flex: 1; min-width: 120px; }
+    .player-actions { display: flex; gap: 6px; margin-left: auto; }
+    .player-actions button { width: auto; min-height: 34px; margin: 0; padding: 6px 9px; font-size: 12px; }
+    .status { margin-top: 12px; padding: 11px; border-left: 3px solid #efc75e; background: #12151b; line-height: 1.5; }
+    .connection-status { margin: -7px 0 12px; color: #8fdbac; font-size: 14px; }
     .connection-status.reconnecting { color: #efc75e; }
-    .connection-status.replaced { color: #ff8d8d; }
+    .connection-status.replaced, .error { color: #ff8d8d; }
+    .error { min-height: 22px; }
     .muted { color: #aeb2bc; font-size: 14px; }
-    .error { color: #ff8d8d; min-height: 22px; }
+    .role-card { padding: 22px 16px; border: 1px solid #806b35; border-radius: 12px; background: linear-gradient(145deg, #28251e, #17191f); text-align: center; }
+    .role-name { margin: 8px 0; color: #efc75e; font-size: 34px; font-weight: 850; }
+    .waiting { padding: 22px 12px; text-align: center; }
+    .waiting-icon { font-size: 42px; }
+    .target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .target-grid button { min-height: 62px; margin-top: 0; }
+    .target-grid button:last-child:nth-child(odd) { grid-column: 1 / -1; }
+    .action-title { color: #efc75e; font-size: 25px; text-align: center; }
+    .attacked { margin: 16px 0; padding: 16px; border: 1px solid #8c4141; border-radius: 8px; background: #2b181b; text-align: center; font-size: 19px; }
+    .result { margin: 18px 0; padding: 20px; border-radius: 8px; text-align: center; font-size: 24px; font-weight: 800; }
+    .result.werewolf { background: #481e22; color: #ff9393; }
+    .result.good { background: #173728; color: #9be0b5; }
+    .death-list { margin: 14px 0; padding: 16px; border-radius: 8px; background: #12151b; font-size: 19px; text-align: center; }
     .overlay { position: fixed; inset: 0; z-index: 10; display: grid; align-content: center; padding: 24px; background: #111318; }
     .overlay-inner { width: min(100%, 480px); margin: auto; text-align: center; }
     .overlay h2 { font-size: 28px; }
@@ -42,7 +61,7 @@
       <h2>创建房间</h2>
       <label for="host-name">房主名字</label>
       <input id="host-name" maxlength="20" value="房主">
-      <button id="create-room">创建房间</button>
+      <button id="create-room">创建5人房间</button>
     </section>
     <section class="panel">
       <h2>加入房间</h2>
@@ -64,16 +83,83 @@
     </section>
 
     <section id="host-controls" class="panel hidden">
-      <h2>震动闭环测试</h2>
-      <label for="target-player">选择接收提醒的玩家</label>
-      <select id="target-player"></select>
-      <button id="send-prompt">发送测试提醒</button>
-      <div id="prompt-status" class="status">尚未发送提醒</div>
+      <h2>房主控制</h2>
+      <button id="start-game" disabled>等待5名玩家加入</button>
+      <div id="game-progress" class="status">大厅等待中</div>
+      <div id="test-controls">
+        <h3>开发测试</h3>
+        <label for="target-player">选择接收测试震动的玩家</label>
+        <select id="target-player"></select>
+        <button id="send-prompt" class="secondary">发送测试提醒</button>
+        <div id="prompt-status" class="status">尚未发送提醒</div>
+      </div>
+    </section>
+
+    <section id="game-panel" class="panel">
+      <div id="lobby-view">
+        <h2>等待游戏开始</h2>
+        <p class="muted">本局配置：1狼人、1预言家、1女巫、2平民。</p>
+      </div>
+
+      <div id="role-view" class="hidden">
+        <div class="role-card">
+          <div class="muted">你的身份是</div>
+          <div id="role-name" class="role-name"></div>
+          <p id="role-description"></p>
+        </div>
+        <button id="confirm-role">我已确认身份</button>
+      </div>
+
+      <div id="waiting-view" class="hidden waiting">
+        <div class="waiting-icon">☾</div>
+        <h2>请保持安静并等待</h2>
+        <p>尚未轮到你行动。请握住手机，收到震动后再查看屏幕。</p>
+        <p id="waiting-role" class="muted"></p>
+      </div>
+
+      <div id="wolf-view" class="hidden">
+        <h2 class="action-title">狼人行动</h2>
+        <p>选择今晚要击杀的目标。提交后不能修改。</p>
+        <div id="wolf-targets" class="target-grid"></div>
+      </div>
+
+      <div id="witch-view" class="hidden">
+        <h2 class="action-title">女巫行动</h2>
+        <div id="attacked-player" class="attacked"></div>
+        <p>同一晚只能使用一瓶药，也可以不使用药物。</p>
+        <button id="use-antidote">使用解药</button>
+        <button id="show-poison" class="danger">使用毒药</button>
+        <button id="use-no-potion" class="secondary">都不使用</button>
+        <div id="poison-picker" class="hidden">
+          <h3>选择毒杀目标</h3>
+          <div id="poison-targets" class="target-grid"></div>
+          <button id="cancel-poison" class="secondary">返回</button>
+        </div>
+      </div>
+
+      <div id="seer-view" class="hidden">
+        <h2 class="action-title">预言家行动</h2>
+        <p>选择一名玩家查验其阵营。</p>
+        <div id="seer-targets" class="target-grid"></div>
+      </div>
+
+      <div id="seer-result-view" class="hidden">
+        <h2 class="action-title">查验结果</h2>
+        <div id="seer-result" class="result"></div>
+        <button id="confirm-seer-result">我已记住结果</button>
+      </div>
+
+      <div id="night-complete-view" class="hidden">
+        <h2 class="action-title">天亮了</h2>
+        <div id="night-deaths" class="death-list"></div>
+        <p class="muted">本阶段暂不公布死亡玩家身份。白天投票将在后续版本实现。</p>
+      </div>
     </section>
 
     <section class="panel">
       <button id="vibration-test" class="secondary">测试本机震动</button>
-      <p class="muted">夜间请手持手机，并保持此页面在前台。</p>
+      <button id="leave-room" class="danger">退出房间</button>
+      <p class="muted">夜间请手持手机并保持此页面在前台。推荐使用 Android Chrome。</p>
     </section>
     <p id="room-error" class="error"></p>
   </main>
@@ -81,7 +167,7 @@
   <section id="prompt-overlay" class="overlay hidden">
     <div class="overlay-inner">
       <div id="prompt-received">
-        <h2>轮到你行动</h2>
+        <h2>收到测试提醒</h2>
         <p>请先确认已经感受到震动。</p>
         <button id="ack-prompt">我已收到</button>
       </div>
@@ -99,10 +185,15 @@
   <script>
     const SESSION_KEY = "werewolfSession";
     const socket = io();
+    const gameViewIds = [
+      "lobby-view", "role-view", "waiting-view", "wolf-view", "witch-view",
+      "seer-view", "seer-result-view", "night-complete-view",
+    ];
     let currentRoomId = "";
     let currentPlayerId = "";
     let isHost = false;
     let activePromptId = "";
+    let currentGameState = null;
     let membershipActive = false;
     let resumeInProgress = false;
     let sessionReplaced = false;
@@ -132,16 +223,12 @@
           resumeToken: result.resumeToken,
         }));
       } catch {
-        setError("浏览器无法保存恢复凭证，刷新或关闭页面后将不能恢复");
+        setError("浏览器无法保存恢复凭证，刷新或关闭页面后将不能恢复身份。");
       }
     }
 
     function clearSession() {
-      try {
-        localStorage.removeItem(SESSION_KEY);
-      } catch {
-        // 浏览器可能禁用了本地存储，不影响当前连接。
-      }
+      try { localStorage.removeItem(SESSION_KEY); } catch { /* 当前连接仍可继续 */ }
     }
 
     function setConnectionStatus(message, kind = "") {
@@ -149,9 +236,9 @@
       $("connection-status").className = `connection-status${kind ? ` ${kind}` : ""}`;
     }
 
-    function vibrate() {
+    function vibrate(pattern = [300, 150, 300]) {
       if (!("vibrate" in navigator)) return false;
-      return navigator.vibrate([220, 120, 220]);
+      return navigator.vibrate(pattern);
     }
 
     function enterRoom(result) {
@@ -170,6 +257,7 @@
       currentPlayerId = "";
       isHost = false;
       activePromptId = "";
+      currentGameState = null;
       membershipActive = false;
       $("room").classList.add("hidden");
       $("prompt-overlay").classList.add("hidden");
@@ -181,30 +269,111 @@
       if (resumeInProgress || membershipActive || sessionReplaced) return;
       resumeInProgress = true;
       $("entry-error").textContent = "正在恢复上次房间……";
-
       socket.timeout(5000).emit("player:resume", session, (error, result) => {
         resumeInProgress = false;
-        if (error) {
-          $("entry-error").textContent = "连接服务器超时，正在重试……";
-          return;
-        }
+        if (error) return $("entry-error").textContent = "连接服务器超时，正在重试……";
         if (!result?.ok) {
           clearSession();
           returnToEntry(result?.message || "无法恢复上次房间，请重新加入");
           return;
         }
-
         $("entry-error").textContent = "";
         enterRoom(result);
       });
     }
 
     function emitWithAck(event, data, onSuccess) {
-      socket.emit(event, data, result => {
+      socket.timeout(5000).emit(event, data, (error, result) => {
+        if (error) return setError("服务器响应超时，请重试");
         if (!result?.ok) return setError(result?.message || "操作失败，请重试");
         setError("");
         onSuccess?.(result);
       });
+    }
+
+    function showGameView(id) {
+      for (const viewId of gameViewIds) $(viewId).classList.toggle("hidden", viewId !== id);
+    }
+
+    function playerButton(player, onClick, className = "") {
+      const button = document.createElement("button");
+      button.textContent = `${player.seat}号 ${player.name}`;
+      button.className = className;
+      button.addEventListener("click", onClick);
+      return button;
+    }
+
+    function renderTargets(containerId, targets, onSelect, className = "") {
+      $(containerId).replaceChildren(...targets.map(player =>
+        playerButton(player, () => onSelect(player), className)
+      ));
+    }
+
+    function renderGameState(state) {
+      currentGameState = state;
+      if (state.mode === "lobby") return showGameView("lobby-view");
+
+      $("role-name").textContent = state.roleName;
+      $("role-description").textContent = state.roleDescription;
+      $("waiting-role").textContent = `你的身份：${state.roleName}`;
+
+      if (state.mode === "role_reveal") return showGameView("role-view");
+      if (state.mode === "waiting") return showGameView("waiting-view");
+      if (state.mode === "wolf_action") {
+        showGameView("wolf-view");
+        renderTargets("wolf-targets", state.targets, target => {
+          if (!confirm(`确定击杀 ${target.seat}号 ${target.name}？提交后不能修改。`)) return;
+          emitWithAck("player:submit-wolf-target", {
+            actionId: state.actionId,
+            targetPlayerId: target.id,
+          });
+        }, "danger");
+        return;
+      }
+      if (state.mode === "witch_action") {
+        showGameView("witch-view");
+        $("poison-picker").classList.add("hidden");
+        $("use-antidote").classList.remove("hidden");
+        $("show-poison").classList.remove("hidden");
+        $("use-no-potion").classList.remove("hidden");
+        const attacked = state.attackedPlayer;
+        $("attacked-player").textContent = attacked
+          ? `今晚 ${attacked.seat}号 ${attacked.name} 被狼人袭击`
+          : "今晚没有玩家被狼人袭击";
+        renderTargets("poison-targets", state.poisonTargets, target => {
+          if (!confirm(`确定使用毒药毒杀 ${target.seat}号 ${target.name}？`)) return;
+          emitWithAck("player:submit-witch-action", {
+            actionId: state.actionId,
+            useAntidote: false,
+            poisonTargetId: target.id,
+          });
+        }, "danger");
+        return;
+      }
+      if (state.mode === "seer_action") {
+        showGameView("seer-view");
+        renderTargets("seer-targets", state.targets, target => {
+          if (!confirm(`确定查验 ${target.seat}号 ${target.name}？`)) return;
+          emitWithAck("player:submit-seer-target", {
+            actionId: state.actionId,
+            targetPlayerId: target.id,
+          });
+        });
+        return;
+      }
+      if (state.mode === "seer_result") {
+        showGameView("seer-result-view");
+        const isWolf = state.checkedAlignment === "werewolf";
+        $("seer-result").className = `result ${isWolf ? "werewolf" : "good"}`;
+        $("seer-result").textContent = `${state.checkedPlayer.seat}号 ${state.checkedPlayer.name} 是${isWolf ? "狼人" : "好人"}`;
+        return;
+      }
+      if (state.mode === "night_complete") {
+        showGameView("night-complete-view");
+        $("night-deaths").textContent = state.deaths.length
+          ? `昨夜死亡：${state.deaths.map(player => `${player.seat}号 ${player.name}`).join("、")}`
+          : "昨夜是平安夜，没有玩家死亡";
+      }
     }
 
     $("create-room").addEventListener("click", () => {
@@ -234,14 +403,12 @@
       if (reason === "io server disconnect" && sessionReplaced) return;
       if (currentRoomId) {
         setConnectionStatus("网络连接中……", "reconnecting");
-        setError("连接暂时中断，恢复网络后会自动回到当前座位");
+        setError("连接暂时中断，恢复网络后会自动回到当前身份和操作界面");
       }
     });
 
     socket.on("connect_error", () => {
-      if (!currentRoomId && readSession()) {
-        $("entry-error").textContent = "正在等待服务器，以恢复上次房间……";
-      }
+      if (!currentRoomId && readSession()) $("entry-error").textContent = "正在等待服务器以恢复上次房间……";
     });
 
     socket.on("session:replaced", () => {
@@ -249,7 +416,7 @@
       membershipActive = false;
       clearSession();
       setConnectionStatus("身份已在另一台设备恢复", "replaced");
-      setError("你的身份已在另一台设备恢复，本设备已断开连接");
+      setError("你的身份已在另一台设备恢复，本设备连接已断开");
       $("prompt-overlay").classList.add("hidden");
     });
 
@@ -267,36 +434,128 @@
         seat.className = "seat";
         seat.textContent = player.seat;
         const name = document.createElement("span");
+        name.className = "player-name-label";
         name.textContent = `${player.name}${player.isHost ? "（房主）" : ""}${player.connected ? "" : "（离线）"}`;
         row.append(seat, name);
+        if (isHost && player.id !== currentPlayerId) {
+          const actions = document.createElement("span");
+          actions.className = "player-actions";
+          const transfer = document.createElement("button");
+          transfer.className = "secondary";
+          transfer.textContent = "设为房主";
+          transfer.disabled = !player.connected;
+          transfer.addEventListener("click", () => {
+            if (!confirm(`确定将房主转让给 ${player.seat}号 ${player.name}？`)) return;
+            emitWithAck("host:transfer-host", { targetPlayerId: player.id });
+          });
+          const remove = document.createElement("button");
+          remove.className = "danger";
+          remove.textContent = "移除";
+          remove.disabled = state.game.phase !== "lobby";
+          remove.addEventListener("click", () => {
+            if (!confirm(`确定将 ${player.seat}号 ${player.name} 移出房间？`)) return;
+            emitWithAck("host:remove-player", { targetPlayerId: player.id });
+          });
+          actions.append(transfer, remove);
+          row.append(actions);
+        }
         return row;
       }));
 
-      if (isHost) {
-        const select = $("target-player");
-        const selected = select.value;
-        const candidates = state.players.filter(player => !player.isHost && player.connected);
-        select.replaceChildren(...candidates.map(player => new Option(`${player.seat}号 ${player.name}`, player.id)));
-        if (candidates.some(player => player.id === selected)) select.value = selected;
-        $("send-prompt").disabled = candidates.length === 0;
+      $("leave-room").disabled = state.game.phase !== "lobby";
 
-        const prompt = state.testPrompt;
-        if (prompt) {
-          const target = state.players.find(player => player.id === prompt.targetPlayerId);
-          const labels = { sent: "已发送，等待玩家确认", acknowledged: "玩家已确认，等待提交", submitted: `玩家已提交：${prompt.choice}` };
-          $("prompt-status").textContent = `${target?.seat || "?"}号 ${target?.name || "玩家"}：${labels[prompt.status]}`;
-        }
+      if (!isHost) return;
+      const game = state.game;
+      $("start-game").disabled = !game.canStart;
+      $("start-game").textContent = game.phase === "lobby"
+        ? game.canStart ? "开始游戏并随机发牌" : `等待玩家（${state.players.length}/5）`
+        : "游戏已开始";
+      $("test-controls").classList.toggle("hidden", game.phase !== "lobby");
+
+      const progressLabels = {
+        lobby: "大厅等待中",
+        role_reveal: `等待玩家确认身份（${game.confirmedRoles}/5）`,
+        night_werewolf: "夜间流程进行中（0/3）",
+        night_witch: "夜间流程进行中（1/3）",
+        night_seer: "夜间流程进行中（2/3）",
+        night_complete: "第一晚已经完成",
+      };
+      $("game-progress").textContent = progressLabels[game.phase] || "游戏进行中";
+
+      const select = $("target-player");
+      const selected = select.value;
+      const candidates = state.players.filter(player => !player.isHost && player.connected);
+      select.replaceChildren(...candidates.map(player => new Option(`${player.seat}号 ${player.name}`, player.id)));
+      if (candidates.some(player => player.id === selected)) select.value = selected;
+      $("send-prompt").disabled = candidates.length === 0;
+
+      const prompt = state.testPrompt;
+      if (prompt) {
+        const target = state.players.find(player => player.id === prompt.targetPlayerId);
+        const labels = {
+          sent: "已发送，等待玩家确认",
+          acknowledged: "玩家已确认，等待提交",
+          submitted: `玩家已提交：${prompt.choice}`,
+        };
+        $("prompt-status").textContent = `${target?.seat || "?"}号 ${target?.name || "玩家"}：${labels[prompt.status]}`;
       }
+    });
+
+    socket.on("player:game-state", renderGameState);
+    socket.on("player:action-alert", () => vibrate([300, 150, 300]));
+    socket.on("game:night-complete", () => vibrate([160, 100, 160, 100, 500]));
+    socket.on("room:removed", () => {
+      clearSession();
+      returnToEntry("你已被房主移出房间");
+    });
+
+    $("start-game").addEventListener("click", () => {
+      if (!confirm("确定开始游戏并随机分配身份？开始后不能再加入玩家。")) return;
+      emitWithAck("host:start-game", {});
+    });
+    $("confirm-role").addEventListener("click", () => {
+      emitWithAck("player:confirm-role", { actionId: currentGameState?.actionId });
+    });
+    $("use-antidote").addEventListener("click", () => {
+      if (!confirm("确定使用解药？本晚将不能再使用毒药。")) return;
+      emitWithAck("player:submit-witch-action", {
+        actionId: currentGameState?.actionId,
+        useAntidote: true,
+        poisonTargetId: null,
+      });
+    });
+    $("show-poison").addEventListener("click", () => {
+      $("use-antidote").classList.add("hidden");
+      $("show-poison").classList.add("hidden");
+      $("use-no-potion").classList.add("hidden");
+      $("poison-picker").classList.remove("hidden");
+    });
+    $("cancel-poison").addEventListener("click", () => renderGameState(currentGameState));
+    $("use-no-potion").addEventListener("click", () => {
+      if (!confirm("确定本晚不使用任何药物？")) return;
+      emitWithAck("player:submit-witch-action", {
+        actionId: currentGameState?.actionId,
+        useAntidote: false,
+        poisonTargetId: null,
+      });
+    });
+    $("confirm-seer-result").addEventListener("click", () => {
+      emitWithAck("player:confirm-seer-result", { actionId: currentGameState?.actionId });
+    });
+    $("leave-room").addEventListener("click", () => {
+      if (!confirm("确定退出当前房间？")) return;
+      emitWithAck("player:leave-room", {}, () => {
+        clearSession();
+        returnToEntry("你已退出房间");
+      });
     });
 
     $("send-prompt").addEventListener("click", () => {
       emitWithAck("host:send-test-prompt", { targetPlayerId: $("target-player").value });
     });
-
     $("vibration-test").addEventListener("click", () => {
       setError(vibrate() ? "" : "当前浏览器不支持震动，请使用 Android Chrome 测试");
     });
-
     socket.on("player:test-prompt", ({ promptId }) => {
       activePromptId = promptId;
       $("prompt-received").classList.remove("hidden");
@@ -304,30 +563,18 @@
       $("prompt-overlay").classList.remove("hidden");
       vibrate();
     });
-
-    socket.on("player:test-prompt-state", prompt => {
-      activePromptId = prompt.promptId;
-      if (prompt.status === "submitted") {
-        $("prompt-overlay").classList.add("hidden");
-        activePromptId = "";
-        return;
-      }
-
-      $("prompt-overlay").classList.remove("hidden");
-      $("prompt-received").classList.toggle("hidden", prompt.status === "acknowledged");
-      $("prompt-choice").classList.toggle("hidden", prompt.status !== "acknowledged");
-    });
-
     $("ack-prompt").addEventListener("click", () => {
       emitWithAck("player:ack-test-prompt", { promptId: activePromptId }, () => {
         $("prompt-received").classList.add("hidden");
         $("prompt-choice").classList.remove("hidden");
       });
     });
-
     document.querySelectorAll("[data-choice]").forEach(button => {
       button.addEventListener("click", () => {
-        emitWithAck("player:submit-test-choice", { promptId: activePromptId, choice: button.dataset.choice }, () => {
+        emitWithAck("player:submit-test-choice", {
+          promptId: activePromptId,
+          choice: button.dataset.choice,
+        }, () => {
           $("prompt-overlay").classList.add("hidden");
           activePromptId = "";
         });
