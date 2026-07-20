@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>对局实验室 · 无法官狼人杀助手</title>
+  <link rel="stylesheet" href="/dev/assets/lab.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">开发工具</p>
+      <h1>对局实验室</h1>
+    </div>
+    <a href="/" class="back-link">返回玩家端</a>
+  </header>
+
+  <main>
+    <section class="toolbar" aria-label="添加虚拟玩家">
+      <label for="room-input">房间号</label>
+      <input id="room-input" class="room-input" inputmode="numeric" maxlength="6" autocomplete="off">
+      <label for="player-name">玩家名称</label>
+      <input id="player-name" class="name-input" maxlength="20" value="虚拟玩家 2 号">
+      <button id="add-player" class="primary">添加虚拟玩家</button>
+      <div class="room-summary">
+        <span>当前房间</span>
+        <strong id="room-id">未选择</strong>
+      </div>
+    </section>
+
+    <section class="summary compact-summary" aria-label="虚拟玩家摘要">
+      <div><span>已添加</span><strong id="client-count">0</strong></div>
+      <div><span>在线</span><strong id="online-count">0</strong></div>
+    </section>
+
+    <div id="notice" class="notice" role="status">先在玩家端创建房间，再输入房间号添加虚拟玩家。</div>
+
+    <section class="workspace">
+      <div class="players-area">
+        <div class="section-heading">
+          <h2>虚拟玩家</h2>
+          <span id="run-state">等待添加</span>
+        </div>
+        <div id="players" class="player-grid">
+          <div class="empty-state">尚无虚拟玩家</div>
+        </div>
+      </div>
+
+      <aside class="event-area">
+        <div class="section-heading">
+          <h2>加入日志</h2>
+          <button id="clear-log" class="compact">清空日志</button>
+        </div>
+        <ol id="event-log" class="event-log" aria-live="polite"></ol>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/dev/assets/lab.js"></script>
+</body>
+</html>

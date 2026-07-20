@@ -22,6 +22,9 @@
     .player:last-child { border-bottom: 0; }
     .seat { width: 28px; color: #efc75e; font-weight: 700; }
     .status { margin-top: 12px; padding: 10px; border-left: 3px solid #efc75e; background: #12151b; line-height: 1.5; }
+    .connection-status { margin: -8px 0 14px; color: #8fdbac; font-size: 14px; }
+    .connection-status.reconnecting { color: #efc75e; }
+    .connection-status.replaced { color: #ff8d8d; }
     .muted { color: #aeb2bc; font-size: 14px; }
     .error { color: #ff8d8d; min-height: 22px; }
     .overlay { position: fixed; inset: 0; z-index: 10; display: grid; align-content: center; padding: 24px; background: #111318; }
@@ -56,6 +59,7 @@
     <section class="panel">
       <div class="muted">房间号</div>
       <div id="room-id" class="room-id"></div>
+      <div id="connection-status" class="connection-status">已连接</div>
       <div id="players"></div>
     </section>
 
@@ -93,14 +97,57 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    const SESSION_KEY = "werewolfSession";
     const socket = io();
     let currentRoomId = "";
     let currentPlayerId = "";
     let isHost = false;
     let activePromptId = "";
+    let membershipActive = false;
+    let resumeInProgress = false;
+    let sessionReplaced = false;
 
     const $ = id => document.getElementById(id);
     const setError = message => { $("room-error").textContent = message || ""; };
+
+    function readSession() {
+      try {
+        const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+        if (
+          typeof session?.roomId !== "string" ||
+          typeof session?.playerId !== "string" ||
+          typeof session?.resumeToken !== "string"
+        ) return null;
+        return session;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveSession(result) {
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({
+          roomId: result.roomId,
+          playerId: result.playerId,
+          resumeToken: result.resumeToken,
+        }));
+      } catch {
+        setError("浏览器无法保存恢复凭证，刷新或关闭页面后将不能恢复");
+      }
+    }
+
+    function clearSession() {
+      try {
+        localStorage.removeItem(SESSION_KEY);
+      } catch {
+        // 浏览器可能禁用了本地存储，不影响当前连接。
+      }
+    }
+
+    function setConnectionStatus(message, kind = "") {
+      $("connection-status").textContent = message;
+      $("connection-status").className = `connection-status${kind ? ` ${kind}` : ""}`;
+    }
 
     function vibrate() {
       if (!("vibrate" in navigator)) return false;
@@ -110,9 +157,46 @@
     function enterRoom(result) {
       currentRoomId = result.roomId;
       currentPlayerId = result.playerId;
+      membershipActive = true;
+      sessionReplaced = false;
       $("entry").classList.add("hidden");
       $("room").classList.remove("hidden");
       $("room-id").textContent = currentRoomId;
+      setConnectionStatus("已连接");
+    }
+
+    function returnToEntry(message) {
+      currentRoomId = "";
+      currentPlayerId = "";
+      isHost = false;
+      activePromptId = "";
+      membershipActive = false;
+      $("room").classList.add("hidden");
+      $("prompt-overlay").classList.add("hidden");
+      $("entry").classList.remove("hidden");
+      $("entry-error").textContent = message || "";
+    }
+
+    function resumeSession(session) {
+      if (resumeInProgress || membershipActive || sessionReplaced) return;
+      resumeInProgress = true;
+      $("entry-error").textContent = "正在恢复上次房间……";
+
+      socket.timeout(5000).emit("player:resume", session, (error, result) => {
+        resumeInProgress = false;
+        if (error) {
+          $("entry-error").textContent = "连接服务器超时，正在重试……";
+          return;
+        }
+        if (!result?.ok) {
+          clearSession();
+          returnToEntry(result?.message || "无法恢复上次房间，请重新加入");
+          return;
+        }
+
+        $("entry-error").textContent = "";
+        enterRoom(result);
+      });
     }
 
     function emitWithAck(event, data, onSuccess) {
@@ -126,6 +210,7 @@
     $("create-room").addEventListener("click", () => {
       socket.emit("host:create-room", { name: $("host-name").value }, result => {
         if (!result?.ok) return $("entry-error").textContent = result?.message || "创建失败";
+        saveSession(result);
         enterRoom(result);
       });
     });
@@ -133,12 +218,46 @@
     $("join-room").addEventListener("click", () => {
       socket.emit("player:join-room", { roomId: $("room-input").value, name: $("player-name").value }, result => {
         if (!result?.ok) return $("entry-error").textContent = result?.message || "加入失败";
+        saveSession(result);
         enterRoom(result);
       });
     });
 
+    socket.on("connect", () => {
+      setConnectionStatus("已连接");
+      const session = readSession();
+      if (!membershipActive && session && !sessionReplaced) resumeSession(session);
+    });
+
+    socket.on("disconnect", reason => {
+      membershipActive = false;
+      if (reason === "io server disconnect" && sessionReplaced) return;
+      if (currentRoomId) {
+        setConnectionStatus("网络连接中……", "reconnecting");
+        setError("连接暂时中断，恢复网络后会自动回到当前座位");
+      }
+    });
+
+    socket.on("connect_error", () => {
+      if (!currentRoomId && readSession()) {
+        $("entry-error").textContent = "正在等待服务器，以恢复上次房间……";
+      }
+    });
+
+    socket.on("session:replaced", () => {
+      sessionReplaced = true;
+      membershipActive = false;
+      clearSession();
+      setConnectionStatus("身份已在另一台设备恢复", "replaced");
+      setError("你的身份已在另一台设备恢复，本设备已断开连接");
+      $("prompt-overlay").classList.add("hidden");
+    });
+
     socket.on("room:state", state => {
       if (state.roomId !== currentRoomId) return;
+      membershipActive = true;
+      setConnectionStatus("已连接");
+      setError("");
       isHost = state.viewer.playerId === currentPlayerId && state.viewer.isHost;
       $("host-controls").classList.toggle("hidden", !isHost);
       $("players").replaceChildren(...state.players.map(player => {
@@ -184,6 +303,19 @@
       $("prompt-choice").classList.add("hidden");
       $("prompt-overlay").classList.remove("hidden");
       vibrate();
+    });
+
+    socket.on("player:test-prompt-state", prompt => {
+      activePromptId = prompt.promptId;
+      if (prompt.status === "submitted") {
+        $("prompt-overlay").classList.add("hidden");
+        activePromptId = "";
+        return;
+      }
+
+      $("prompt-overlay").classList.remove("hidden");
+      $("prompt-received").classList.toggle("hidden", prompt.status === "acknowledged");
+      $("prompt-choice").classList.toggle("hidden", prompt.status !== "acknowledged");
     });
 
     $("ack-prompt").addEventListener("click", () => {
