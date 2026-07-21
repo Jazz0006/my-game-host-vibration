@@ -102,6 +102,9 @@ main { padding: 18px clamp(18px, 4vw, 52px) 40px; }
 .player-name { flex: 1; min-width: 0; font-weight: 650; overflow-wrap: anywhere; }
 .connection { color: #72d39d; font-size: 12px; }
 .offline .connection { color: #ef8881; }
+.vitality { font-size: 12px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+.vitality.alive { background: #1a3a28; color: #72d39d; }
+.vitality.dead { background: #3a1a1a; color: #ef8881; }
 .player-body { padding: 11px 12px 12px; }
 .player-status { min-height: 40px; margin-bottom: 9px; color: #c7cad1; font-size: 14px; line-height: 1.4; }
 .player-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }

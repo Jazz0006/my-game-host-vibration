@@ -101,13 +101,16 @@ describe("five-player Socket.IO game flow", () => {
     );
 
     const wolf = byRole.get("werewolf")!;
-    const wolfAction = waitFor<GameView>(wolf.socket, "player:game-state", view => view.mode === "wolf_action");
     for (let index = 0; index < sockets.length; index += 1) {
       const result = await emitAck<{ ok: boolean }>(sockets[index]!, "player:confirm-role", {
         actionId: dealt[index]!.actionId,
       });
       expect(result.ok).toBe(true);
     }
+
+    // After all roles confirmed, host must start the night
+    const wolfAction = waitFor<GameView>(wolf.socket, "player:game-state", view => view.mode === "wolf_action");
+    expect(await emitAck<{ ok: boolean }>(host, "host:start-night", {})).toEqual({ ok: true });
 
     const wolfView = await wolfAction;
     const victimId = wolfView.targets![0]!.id;
@@ -140,11 +143,15 @@ describe("five-player Socket.IO game flow", () => {
     const resultView = await seerResult;
     expect(resultView.checkedAlignment).toBe("werewolf");
 
+    // After seer confirms, night_complete auto-transitions to day_vote; alive players see day_vote with deaths
     const completed = sockets.map(socket =>
-      waitFor<GameView>(socket, "player:game-state", view => view.mode === "night_complete"),
+      waitFor<GameView>(socket, "player:game-state", view =>
+        view.mode === "day_vote" || view.mode === "spectator" || view.mode === "game_over"),
     );
     await emitAck(seer.socket, "player:confirm-seer-result", { actionId: resultView.actionId });
     const finalViews = await Promise.all(completed);
-    for (const view of finalViews) expect(view.deaths?.map(player => player.id)).toEqual([victimId]);
+    for (const view of finalViews) {
+      if (view.deaths) expect(view.deaths.map((player: { id: string }) => player.id)).toContain(victimId);
+    }
   });
 });

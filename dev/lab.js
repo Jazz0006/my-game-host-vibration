@@ -221,10 +221,52 @@ function renderGameControls(player) {
         { actionId: game.actionId },
         "已确认查验结果",
       ), "primary wide"));
+    } else if (game.mode === "guard_action") {
+      status.textContent = "守卫行动：选择今晚保护的玩家";
+      const select = createTargetSelect(game.targets, `${player.name}的保护目标`);
+      body.append(select);
+      actions.append(createButton("确认保护", () => void performAction(
+        player,
+        "player:submit-guard-target",
+        { actionId: game.actionId, targetPlayerId: select.value },
+        `已保护 ${select.selectedOptions[0]?.textContent || "目标"}`,
+      ), "primary wide"));
+    } else if (game.mode === "hunter_execution") {
+      status.textContent = "猎人技能：选择带走的玩家";
+      const select = createTargetSelect(game.targets, `${player.name}的猎人目标`);
+      body.append(select);
+      actions.append(createButton("确认射击", () => void performAction(
+        player,
+        "player:submit-hunter-execution",
+        { actionId: game.actionId, targetPlayerId: select.value },
+        `已射击 ${select.selectedOptions[0]?.textContent || "目标"}`,
+      ), "danger wide"));
     } else if (game.mode === "night_complete") {
       status.textContent = game.deaths.length
         ? `天亮：${game.deaths.map(target => `${target.seat}号 ${target.name}`).join("、")} 死亡`
         : "天亮：昨夜是平安夜";
+    } else if (game.mode === "day_announce") {
+      status.textContent = game.deaths.length
+        ? `白天公告：${game.deaths.map(target => `${target.seat}号 ${target.name}`).join("、")} 昨夜死亡`
+        : "白天公告：昨夜平安夜";
+    } else if (game.mode === "day_vote") {
+      if (game.myVote) {
+        status.textContent = `已投票，等待房主关闭投票`;
+      } else {
+        status.textContent = "投票：选择要放逐的玩家";
+        const select = createTargetSelect(game.targets, `${player.name}的投票目标`);
+        body.append(select);
+        actions.append(createButton("投票放逐", () => void performAction(
+          player,
+          "player:submit-vote",
+          { actionId: game.actionId, targetId: select.value },
+          `已投票放逐 ${select.selectedOptions[0]?.textContent || "目标"}`,
+        ), "danger wide"));
+      }
+    } else if (game.mode === "spectator") {
+      status.textContent = "已出局，旁观中";
+    } else if (game.mode === "game_over") {
+      status.textContent = game.winner === "wolf" ? "游戏结束：狼人胜利" : "游戏结束：好人胜利";
     } else {
       status.textContent = "等待游戏状态更新";
     }
@@ -280,7 +322,11 @@ function render() {
     const connection = document.createElement("span");
     connection.className = "connection";
     connection.textContent = player.connected ? "在线" : "连接已断开";
-    head.append(seat, name, connection);
+    const vitality = document.createElement("span");
+    const isDead = player.gameState?.deadPlayerIds?.includes(player.playerId);
+    vitality.className = `vitality ${isDead ? "dead" : "alive"}`;
+    vitality.textContent = isDead ? "已出局" : "存活";
+    head.append(seat, name, vitality, connection);
 
     const detail = document.createElement("div");
     detail.className = "player-detail";
