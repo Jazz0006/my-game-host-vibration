@@ -22,9 +22,9 @@ const setError = message => { $("room-error").textContent = message || ""; };
 // ── Phase theming ──────────────────────────────────────────────────────────
 const NIGHT_PHASES = [
   "night_start", "night_werewolf", "night_guard", "night_witch",
-  "night_seer", "night_hunter", "night_complete", "role_reveal",
+  "night_seer", "night_complete", "role_reveal",
 ];
-const DAY_PHASES = ["day_vote", "day_pk", "day_result", "day_hunter"];
+const DAY_PHASES = ["day_announce", "day_vote", "day_pk", "day_result", "day_hunter"];
 
 function setBodyPhase(phase) {
   document.body.classList.remove("phase-night", "phase-day");
@@ -160,7 +160,7 @@ function renderTargets(containerId, targets, onSelect, className = "") {
 // ── Game state rendering ───────────────────────────────────────────────────
 function renderGameState(state) {
   currentGameState = state;
-  setBodyPhase(state.mode);
+  setBodyPhase(state.phase);
 
   if (state.mode === "lobby") return showGameView("lobby-view");
 
@@ -263,9 +263,19 @@ function renderGameState(state) {
 
   if (state.mode === "night_complete") {
     showGameView("night-complete-view");
+    $("night-next-status").textContent = "正在进入白天投票……";
     $("night-deaths").textContent = state.deaths?.length
       ? `昨夜死亡：${state.deaths.map(p => `${p.seat}号 ${p.name}`).join("、")}`
       : "昨夜是平安夜，没有玩家死亡";
+    return;
+  }
+
+  if (state.mode === "day_announce") {
+    showGameView("night-complete-view");
+    $("night-deaths").textContent = state.deaths?.length
+      ? `昨夜死亡：${state.deaths.map(p => `${p.seat}号 ${p.name}`).join("、")}`
+      : "昨夜是平安夜，没有玩家死亡";
+    $("night-next-status").textContent = "猎人正在决定是否开枪……";
     return;
   }
 
@@ -463,7 +473,7 @@ socket.on("room:state", state => {
             return `${player?.seat || "?"}号 ${player?.name || ""}：${count}票`;
           })
           .join("　")
-      : `已投票：${game.votesCast || 0}/${game.aliveCount || 0}人`;
+      : `已投票：${game.votesCast || 0}/${game.votesRequired || 0}人`;
     $("vote-tally").textContent = tallyText;
   }
 
@@ -478,12 +488,11 @@ socket.on("room:state", state => {
     night_guard: `第${n}夜：守卫行动中`,
     night_witch: `第${n}夜：女巫行动中`,
     night_seer: `第${n}夜：预言家行动中`,
-    night_hunter: `第${n}夜：猎人技能触发`,
     night_complete: `第${n}夜结束，进入白天`,
-    day_vote: `第${d}天：投票中（${game.votesCast || 0}/${game.aliveCount || 0}人已投）`,
+    day_vote: `第${d}天：投票中（${game.votesCast || 0}/${game.votesRequired || 0}人已投）`,
     day_pk: `第${d}天：平票，重新投票`,
     day_result: `第${d}天：结果已出`,
-    day_hunter: `第${d}天：猎人技能触发`,
+    day_hunter: "天亮/白天：猎人技能触发",
     game_over: `游戏结束 — ${game.winner === "wolf" ? "狼人胜利" : "好人胜利"}`,
   };
   $("game-progress").textContent = progressLabels[game.phase] || "游戏进行中";
@@ -587,6 +596,27 @@ $("use-no-potion").addEventListener("click", () => {
 });
 $("confirm-seer-result").addEventListener("click", () => {
   emitWithAck("player:confirm-seer-result", { actionId: currentGameState?.actionId });
+});
+$("wolf-no-kill").addEventListener("click", () => {
+  if (!confirm("确定今晚不击杀任何玩家？")) return;
+  emitWithAck("player:submit-wolf-target", {
+    actionId: currentGameState?.actionId,
+    targetPlayerId: null,
+  });
+});
+$("guard-no-protection").addEventListener("click", () => {
+  if (!confirm("确定今晚不守护任何玩家？")) return;
+  emitWithAck("player:submit-guard-target", {
+    actionId: currentGameState?.actionId,
+    targetPlayerId: null,
+  });
+});
+$("hunter-no-shot").addEventListener("click", () => {
+  if (!confirm("确定放弃开枪？")) return;
+  emitWithAck("player:submit-hunter-execution", {
+    actionId: currentGameState?.actionId,
+    targetPlayerId: null,
+  });
 });
 $("leave-room").addEventListener("click", () => {
   if (!confirm("确定退出当前房间？")) return;

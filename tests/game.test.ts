@@ -87,6 +87,72 @@ describe("five-player game", () => {
     expect(new Set(state.deaths)).toEqual(new Set([candidates[0], candidates[1]]));
   });
 
+  it("allows the werewolf to target itself", () => {
+    const state = beginNight();
+    const wolf = playerIdForRole(state, "werewolf");
+    const witch = playerIdForRole(state, "witch");
+    const seer = playerIdForRole(state, "seer");
+
+    submitWolfTarget(state, wolf, wolf, state.actionId);
+    submitWitchAction(state, witch, {}, state.actionId);
+    submitSeerTarget(state, seer, wolf, state.actionId);
+    confirmSeerResult(state, seer, state.actionId);
+
+    expect(state.deadPlayerIds).toContain(wolf);
+    expect(state.winner).toBe("village");
+  });
+
+  it("allows the werewolf to leave the night without a kill", () => {
+    const state = beginNight();
+    const wolf = playerIdForRole(state, "werewolf");
+    const witch = playerIdForRole(state, "witch");
+    const seer = playerIdForRole(state, "seer");
+
+    submitWolfTarget(state, wolf, null, state.actionId);
+    submitWitchAction(state, witch, {}, state.actionId);
+    submitSeerTarget(state, seer, wolf, state.actionId);
+    confirmSeerResult(state, seer, state.actionId);
+
+    expect(state.wolfTargetId).toBeUndefined();
+    expect(state.deaths).toEqual([]);
+  });
+
+  it("does not allow the witch to spend antidote after an empty wolf kill", () => {
+    const state = beginNight();
+    const wolf = playerIdForRole(state, "werewolf");
+    const witch = playerIdForRole(state, "witch");
+
+    submitWolfTarget(state, wolf, null, state.actionId);
+
+    expect(() =>
+      submitWitchAction(state, witch, { useAntidote: true }, state.actionId),
+    ).toThrow("今晚没有狼人击杀目标");
+    expect(state.witchAntidoteSpent).toBe(false);
+  });
+
+  it("skips witch action after both potions have been spent", () => {
+    const state = beginNight();
+    const wolf = playerIdForRole(state, "werewolf");
+    const witch = playerIdForRole(state, "witch");
+    const victim = PLAYERS.find(id => id !== wolf && id !== witch)!;
+    state.witchAntidoteSpent = true;
+    state.witchPoisonSpent = true;
+
+    submitWolfTarget(state, wolf, victim, state.actionId);
+
+    expect(state.phase).toBe("night_seer");
+  });
+
+  it("skips witch action when only antidote remains after an empty wolf kill", () => {
+    const state = beginNight();
+    const wolf = playerIdForRole(state, "werewolf");
+    state.witchPoisonSpent = true;
+
+    submitWolfTarget(state, wolf, null, state.actionId);
+
+    expect(state.phase).toBe("night_seer");
+  });
+
   it("rejects invalid actors, stale actions, and using both potions", () => {
     const state = beginNight();
     const wolf = playerIdForRole(state, "werewolf");
@@ -136,6 +202,38 @@ describe("five-player game", () => {
     expect(submitSeerTarget(state, seer, wolf, seerActionId)).toBe("werewolf");
     confirmSeerResult(state, seer, seerActionId);
     expect(() => confirmSeerResult(state, seer, seerActionId)).not.toThrow();
+  });
+
+  it("skips dead night roles and still settles the night", () => {
+    const state = beginNight();
+    const wolf = playerIdForRole(state, "werewolf");
+    const witch = playerIdForRole(state, "witch");
+    const seer = playerIdForRole(state, "seer");
+    const victim = PLAYERS.find(
+      playerId => ![wolf, witch, seer].includes(playerId),
+    )!;
+    state.deadPlayerIds.push(seer);
+
+    submitWolfTarget(state, wolf, victim, state.actionId);
+    expect(state.phase).toBe("night_witch");
+    submitWitchAction(state, witch, {}, state.actionId);
+
+    expect(state.phase).toBe("night_complete");
+    expect(state.deadPlayerIds).toContain(victim);
+    expect(state.deaths).toEqual([victim]);
+  });
+
+  it("rejects a night action submitted by a dead role", () => {
+    const state = beginNight();
+    const seer = playerIdForRole(state, "seer");
+    const wolf = playerIdForRole(state, "werewolf");
+    state.deadPlayerIds.push(seer);
+    state.phase = "night_seer";
+    state.actionId = "dead-seer-action";
+
+    expect(() => submitSeerTarget(state, seer, wolf, state.actionId)).toThrow(
+      "已出局的玩家不能执行夜间行动",
+    );
   });
 });
 
@@ -189,14 +287,16 @@ function nonWolves(state: ReturnType<typeof startGame>, ...exclude: string[]) {
 describe("guard role", () => {
   const config8 = configFromPlayerCount(8);
 
-  it("night queue includes guard between wolf and witch", () => {
+  it("runs guard before wolf and witch", () => {
     const state = beginNightWith(P8, config8);
-    expect(state.phase).toBe("night_werewolf");
+    expect(state.phase).toBe("night_guard");
     const wolf = playerIdForRole(state, "werewolf");
     const guard = playerIdForRole(state, "guard");
     const target = nonWolves(state, guard)[0]!;
+    submitGuardTarget(state, guard, target, state.actionId);
+    expect(state.phase).toBe("night_werewolf");
     submitWolfTarget(state, wolf, target, state.actionId);
-    expect(state.phase).toBe("night_guard");
+    expect(state.phase).toBe("night_witch");
   });
 
   it("guard protection blocks the wolf kill", () => {
@@ -207,8 +307,8 @@ describe("guard role", () => {
     const seer = playerIdForRole(state, "seer");
     const victim = nonWolves(state, guard, witch, seer)[0]!;
 
-    submitWolfTarget(state, wolf, victim, state.actionId);
     submitGuardTarget(state, guard, victim, state.actionId);
+    submitWolfTarget(state, wolf, victim, state.actionId);
     submitWitchAction(state, witch, {}, state.actionId);
     submitSeerTarget(state, seer, wolf, state.actionId);
     confirmSeerResult(state, seer, state.actionId);
@@ -226,8 +326,8 @@ describe("guard role", () => {
     const victim = candidates[0]!;
     const other = candidates[1]!;
 
-    submitWolfTarget(state, wolf, victim, state.actionId);
     submitGuardTarget(state, guard, other, state.actionId);
+    submitWolfTarget(state, wolf, victim, state.actionId);
     submitWitchAction(state, witch, {}, state.actionId);
     submitSeerTarget(state, seer, wolf, state.actionId);
     confirmSeerResult(state, seer, state.actionId);
@@ -235,13 +335,37 @@ describe("guard role", () => {
     expect(state.deaths).toContain(victim);
   });
 
-  it("guard cannot protect self", () => {
+  it("same guard and antidote protection still kills the wolf target", () => {
     const state = beginNightWith(P8, config8);
     const wolf = playerIdForRole(state, "werewolf");
     const guard = playerIdForRole(state, "guard");
-    const nonWolfTarget = nonWolves(state, guard)[0]!;
-    submitWolfTarget(state, wolf, nonWolfTarget, state.actionId);
-    expect(() => submitGuardTarget(state, guard, guard, state.actionId)).toThrow("守卫不能保护自己");
+    const witch = playerIdForRole(state, "witch");
+    const seer = playerIdForRole(state, "seer");
+    const victim = nonWolves(state, guard, witch, seer)[0]!;
+
+    submitGuardTarget(state, guard, victim, state.actionId);
+    submitWolfTarget(state, wolf, victim, state.actionId);
+    submitWitchAction(state, witch, { useAntidote: true }, state.actionId);
+    submitSeerTarget(state, seer, wolf, state.actionId);
+    confirmSeerResult(state, seer, state.actionId);
+
+    expect(state.deaths).toContain(victim);
+  });
+
+  it("guard can protect self", () => {
+    const state = beginNightWith(P8, config8);
+    const guard = playerIdForRole(state, "guard");
+    expect(submitGuardTarget(state, guard, guard, state.actionId)).toBe(true);
+    expect(state.guardProtectedId).toBe(guard);
+    expect(state.phase).toBe("night_werewolf");
+  });
+
+  it("guard can leave the night unprotected", () => {
+    const state = beginNightWith(P8, config8);
+    const guard = playerIdForRole(state, "guard");
+    expect(submitGuardTarget(state, guard, null, state.actionId)).toBe(true);
+    expect(state.guardProtectedId).toBeUndefined();
+    expect(state.phase).toBe("night_werewolf");
   });
 
   it("guard cannot protect same player two nights in a row", () => {
@@ -253,8 +377,8 @@ describe("guard role", () => {
     const target = nonWolves(state, guard, witch, seer)[0]!;
 
     // First night: guard protects target
-    submitWolfTarget(state, wolf, target, state.actionId);
     submitGuardTarget(state, guard, target, state.actionId);
+    submitWolfTarget(state, wolf, target, state.actionId);
     submitWitchAction(state, witch, {}, state.actionId);
     submitSeerTarget(state, seer, wolf, state.actionId);
     confirmSeerResult(state, seer, state.actionId);
@@ -270,7 +394,7 @@ describe("guard role", () => {
 describe("hunter role", () => {
   const config10 = configFromPlayerCount(10);
 
-  it("triggers night_hunter phase when hunter is wolf-killed", () => {
+  it("announces a wolf-killed hunter before the hunter acts during the day", () => {
     const state = beginNightWith(P10, config10);
     const wolf = playerIdForRole(state, "werewolf");
     const guard = playerIdForRole(state, "guard");
@@ -278,14 +402,36 @@ describe("hunter role", () => {
     const seer = playerIdForRole(state, "seer");
     const hunter = playerIdForRole(state, "hunter");
 
-    submitWolfTarget(state, wolf, hunter, state.actionId);
     submitGuardTarget(state, guard, wolf, state.actionId); // guard protects wolf, not hunter
+    submitWolfTarget(state, wolf, hunter, state.actionId);
     submitWitchAction(state, witch, {}, state.actionId);
     submitSeerTarget(state, seer, wolf, state.actionId);
     confirmSeerResult(state, seer, state.actionId);
 
-    expect(state.phase).toBe("night_hunter");
+    expect(state.phase).toBe("day_hunter");
+    expect(state.hunterTrigger).toBe("night");
     expect(state.deaths).toContain(hunter);
+  });
+
+  it("lets a night-killed hunter shoot before a parity victory is decided", () => {
+    const state = beginNightWith(P10, config10);
+    const hunter = playerIdForRole(state, "hunter");
+    const seer = playerIdForRole(state, "seer");
+    const wolf = playerIdForRole(state, "werewolf");
+    const villagers = Object.keys(state.roles).filter(
+      playerId => state.roles[playerId] === "villager",
+    );
+    state.deadPlayerIds.push(...villagers);
+    state.phase = "night_seer";
+    state.wolfTargetId = hunter;
+    state.actionId = "hunter-parity";
+
+    submitSeerTarget(state, seer, wolf, state.actionId);
+    confirmSeerResult(state, seer, state.actionId);
+
+    expect(state.phase).toBe("day_hunter");
+    expect(state.hunterTrigger).toBe("night");
+    expect(state.winner).toBeUndefined();
   });
 
   it("hunter execution adds target to deaths and advances to night_complete", () => {
@@ -298,8 +444,8 @@ describe("hunter role", () => {
     const wolves = new Set(Object.entries(state.roles).filter(([,r]) => r === "werewolf").map(([id]) => id));
     const bystander = P10.find(id => !wolves.has(id) && ![guard, witch, seer, hunter].includes(id))!;
 
-    submitWolfTarget(state, wolf, hunter, state.actionId);
     submitGuardTarget(state, guard, wolf, state.actionId);
+    submitWolfTarget(state, wolf, hunter, state.actionId);
     submitWitchAction(state, witch, {}, state.actionId);
     submitSeerTarget(state, seer, wolf, state.actionId);
     confirmSeerResult(state, seer, state.actionId);
@@ -308,6 +454,68 @@ describe("hunter role", () => {
 
     expect(["night_complete", "game_over"]).toContain(state.phase);
     expect(state.deadPlayerIds).toContain(bystander);
+  });
+
+  it("hunter can decline to shoot", () => {
+    const state = beginNightWith(P10, config10);
+    const wolf = playerIdForRole(state, "werewolf");
+    const guard = playerIdForRole(state, "guard");
+    const witch = playerIdForRole(state, "witch");
+    const seer = playerIdForRole(state, "seer");
+    const hunter = playerIdForRole(state, "hunter");
+
+    submitGuardTarget(state, guard, null, state.actionId);
+    submitWolfTarget(state, wolf, hunter, state.actionId);
+    submitWitchAction(state, witch, {}, state.actionId);
+    submitSeerTarget(state, seer, wolf, state.actionId);
+    confirmSeerResult(state, seer, state.actionId);
+
+    expect(state.phase).toBe("day_hunter");
+    expect(submitHunterExecution(state, hunter, null, state.actionId)).toBe(true);
+    expect(state.hunterExecutionTargetId).toBeUndefined();
+    expect(["night_complete", "game_over"]).toContain(state.phase);
+  });
+
+  it("returns to the day result after a voted-out hunter acts", () => {
+    const state = beginNightWith(P10, config10);
+    const wolf = playerIdForRole(state, "werewolf");
+    const guard = playerIdForRole(state, "guard");
+    const witch = playerIdForRole(state, "witch");
+    const seer = playerIdForRole(state, "seer");
+    const hunter = playerIdForRole(state, "hunter");
+    const victim = P10.find(id => ![wolf, guard, witch, seer, hunter].includes(id))!;
+
+    submitGuardTarget(state, guard, wolf, state.actionId);
+    submitWolfTarget(state, wolf, victim, state.actionId);
+    submitWitchAction(state, witch, { useAntidote: true }, state.actionId);
+    submitSeerTarget(state, seer, wolf, state.actionId);
+    confirmSeerResult(state, seer, state.actionId);
+    startDayVote(state);
+    voteOut(state, hunter);
+
+    expect(state.phase).toBe("day_hunter");
+    expect(state.hunterTrigger).toBe("day");
+    submitHunterExecution(state, hunter, null, state.actionId);
+    expect(state.phase).toBe("day_result");
+  });
+
+  it("does not let a poisoned hunter shoot", () => {
+    const state = beginNightWith(P10, config10);
+    const wolf = playerIdForRole(state, "werewolf");
+    const guard = playerIdForRole(state, "guard");
+    const witch = playerIdForRole(state, "witch");
+    const seer = playerIdForRole(state, "seer");
+    const hunter = playerIdForRole(state, "hunter");
+    const wolfVictim = P10.find(id => ![wolf, guard, witch, seer, hunter].includes(id))!;
+
+    submitGuardTarget(state, guard, null, state.actionId);
+    submitWolfTarget(state, wolf, wolfVictim, state.actionId);
+    submitWitchAction(state, witch, { poisonTargetId: hunter }, state.actionId);
+    submitSeerTarget(state, seer, wolf, state.actionId);
+    confirmSeerResult(state, seer, state.actionId);
+
+    expect(state.deadPlayerIds).toContain(hunter);
+    expect(state.phase).not.toBe("day_hunter");
   });
 
   it("hunter cannot target a dead player", () => {
@@ -321,17 +529,17 @@ describe("hunter role", () => {
     const victim = P10.find(id => !wolves.has(id) && ![guard, witch, seer, hunter].includes(id))!;
 
     // Wolf kills both hunter and victim via poison
-    submitWolfTarget(state, wolf, hunter, state.actionId);
     submitGuardTarget(state, guard, wolf, state.actionId);
+    submitWolfTarget(state, wolf, hunter, state.actionId);
     submitWitchAction(state, witch, { poisonTargetId: victim }, state.actionId);
     submitSeerTarget(state, seer, wolf, state.actionId);
     confirmSeerResult(state, seer, state.actionId);
 
-    expect(state.phase).toBe("night_hunter");
+    expect(state.phase).toBe("day_hunter");
     expect(() => submitHunterExecution(state, hunter, victim, state.actionId)).toThrow("不能选择已死亡的玩家");
   });
 
-  it("skips night_hunter when hunter is not killed", () => {
+  it("skips hunter action when hunter is not killed", () => {
     const state = beginNightWith(P10, config10);
     const wolf = playerIdForRole(state, "werewolf");
     const guard = playerIdForRole(state, "guard");
@@ -341,8 +549,8 @@ describe("hunter role", () => {
     const wolves = new Set(Object.entries(state.roles).filter(([,r]) => r === "werewolf").map(([id]) => id));
     const victim = P10.find(id => !wolves.has(id) && ![guard, witch, seer, hunter].includes(id))!;
 
-    submitWolfTarget(state, wolf, victim, state.actionId); // wolf kills non-hunter
     submitGuardTarget(state, guard, wolf, state.actionId);
+    submitWolfTarget(state, wolf, victim, state.actionId); // wolf kills non-hunter
     submitWitchAction(state, witch, {}, state.actionId);
     submitSeerTarget(state, seer, wolf, state.actionId);
     confirmSeerResult(state, seer, state.actionId);
@@ -494,15 +702,39 @@ describe("day phase", () => {
       if (voter !== target) submitVote(state, voter, target, voteId);
     }
     closeDayVote(state); // enters day_pk
-    // Now vote everyone against pkCandidateIds[0]
+    // Only non-PK alive players vote against pkCandidateIds[0]
     const pkTarget = state.pkCandidateIds[0]!;
     const pkVoteId = state.actionId;
-    for (const voter of Object.keys(state.roles).filter(id => !state.deadPlayerIds.includes(id))) {
-      if (voter !== pkTarget) submitVote(state, voter, pkTarget, pkVoteId);
+    const eligibleVoters = Object.keys(state.roles).filter(
+      id => !state.deadPlayerIds.includes(id) && !state.pkCandidateIds.includes(id),
+    );
+    for (const voter of eligibleVoters) {
+      submitVote(state, voter, pkTarget, pkVoteId);
     }
+    expect(allAliveVoted(state)).toBe(true);
     closeDayVote(state);
     expect(state.deadPlayerIds).toContain(pkTarget);
     expect(["day_result", "game_over"]).toContain(state.phase);
+  });
+
+  it("day_pk excludes PK candidates from voting", () => {
+    const { state } = completeFivePlayerNight();
+    const alive = Object.keys(state.roles).filter(id => !state.deadPlayerIds.includes(id));
+    const [candidateA, candidateB] = alive;
+    state.phase = "day_pk";
+    state.pkCandidateIds = [candidateA!, candidateB!];
+    state.votes = {};
+    state.actionId = "pk-candidates-cannot-vote";
+
+    expect(() => submitVote(state, candidateA!, candidateB!, state.actionId)).toThrow(
+      "PK玩家不能参与PK投票",
+    );
+
+    const eligibleVoters = alive.filter(playerId => !state.pkCandidateIds.includes(playerId));
+    for (const voter of eligibleVoters) {
+      submitVote(state, voter, candidateA!, state.actionId);
+    }
+    expect(allAliveVoted(state)).toBe(true);
   });
 
   it("day_pk still tied → no kill, day_result", () => {
@@ -515,21 +747,16 @@ describe("day phase", () => {
       if (voter !== target) submitVote(state, voter, target, state.actionId);
     }
     closeDayVote(state); // day_pk
-    // Tie again in PK: all vote for first candidate, but first candidate votes for second
+    // Tie again in PK: the two eligible non-PK voters split their votes
     const [cand0, cand1] = state.pkCandidateIds;
     const pkVoteId = state.actionId;
-    const pkVoters = Object.keys(state.roles).filter(id => !state.deadPlayerIds.includes(id));
-    for (const voter of pkVoters) {
-      if (voter !== cand0 && voter !== cand1) submitVote(state, voter, cand0!, pkVoteId);
-    }
-    // Make it a tie in pk too — don't vote with anyone else, leaving a tie
-    // Reset votes to force a tie scenario: just two voters, each votes for the other
-    state.votes = {};
-    state.actionId = pkVoteId; // keep same actionId
-    if (cand0 && cand1) {
-      submitVote(state, cand0, cand1, pkVoteId);
-      submitVote(state, cand1, cand0, pkVoteId);
-    }
+    const pkVoters = Object.keys(state.roles).filter(
+      id => !state.deadPlayerIds.includes(id) && !state.pkCandidateIds.includes(id),
+    );
+    expect(pkVoters).toHaveLength(2);
+    submitVote(state, pkVoters[0]!, cand0!, pkVoteId);
+    submitVote(state, pkVoters[1]!, cand1!, pkVoteId);
+    expect(allAliveVoted(state)).toBe(true);
     closeDayVote(state);
     expect(state.noKillToday).toBe(true);
     expect(state.phase).toBe("day_result");
@@ -594,8 +821,8 @@ describe("game loop", () => {
     const seer = playerIdForRole(state, "seer");
     const target = nonWolves(state, guard, witch, seer)[0]!;
 
-    submitWolfTarget(state, wolf, target, state.actionId);
     submitGuardTarget(state, guard, target, state.actionId);
+    submitWolfTarget(state, wolf, target, state.actionId);
     submitWitchAction(state, witch, {}, state.actionId);
     submitSeerTarget(state, seer, wolf, state.actionId);
     confirmSeerResult(state, seer, state.actionId);
@@ -610,9 +837,6 @@ describe("game loop", () => {
     }
     expect(state.guardLastProtectedId).toBe(target);
     // Night 2: guard cannot protect same target again
-    const wolf2 = playerIdForRole(state, "werewolf");
-    const newTarget = nonWolves(state, guard, witch, seer)[0]!;
-    submitWolfTarget(state, wolf2, newTarget, state.actionId);
     expect(() => submitGuardTarget(state, guard, target, state.actionId)).toThrow("不能连续两晚");
   });
 });

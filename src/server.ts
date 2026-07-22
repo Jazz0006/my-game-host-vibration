@@ -61,11 +61,11 @@ const __dirname = path.dirname(__filename);
 const devDirectory = path.join(__dirname, "../dev");
 
 const ROLE_INFO: Record<Role, { name: string; description: string }> = {
-  werewolf: { name: "狼人", description: "夜间选择一名玩家击杀。隐藏身份直到游戏结束。" },
+  werewolf: { name: "狼人", description: "夜间可以击杀任意一名存活玩家（包括狼人）或选择空刀。" },
   seer: { name: "预言家", description: "每晚可以查验一名其他玩家的阵营。" },
   witch: { name: "女巫", description: "拥有一瓶解药和一瓶毒药，同一晚只能使用一瓶。" },
-  guard: { name: "守卫", description: "每晚保护一名玩家，不能连续两晚保护同一人，不能保护自己。" },
-  hunter: { name: "猎人", description: "死亡时可以带走一名其他玩家。" },
+  guard: { name: "守卫", description: "每晚可以保护一名玩家（包括自己）或空守，但不能连续两晚保护同一人。" },
+  hunter: { name: "猎人", description: "被狼刀或放逐出局时可以开枪带走一人，也可以不开枪；被毒死不能开枪。" },
   villager: { name: "平民", description: "没有夜间技能，请观察发言并找出狼人。" },
 };
 
@@ -128,6 +128,13 @@ function roomView(room: Room, viewer: Player) {
   const aliveCount = game
     ? Object.keys(game.roles).filter(id => !game.deadPlayerIds.includes(id)).length
     : 0;
+  const votesRequired = game
+    ? Object.keys(game.roles).filter(
+        playerId =>
+          !game.deadPlayerIds.includes(playerId) &&
+          (game.phase !== "day_pk" || !game.pkCandidateIds.includes(playerId)),
+      ).length
+    : 0;
   return {
     roomId: room.id,
     viewer: { playerId: viewer.id, isHost: viewer.isHost },
@@ -142,12 +149,13 @@ function roomView(room: Room, viewer: Player) {
       maxPlayers: MAX_PLAYERS,
       confirmedRoles: game?.confirmedRolePlayerIds.length ?? 0,
       completedNightSteps: game
-        ? (["night_werewolf", "night_guard", "night_witch", "night_seer", "night_hunter", "night_complete"] as const)
-            .indexOf(game.phase as "night_werewolf" | "night_guard" | "night_witch" | "night_seer" | "night_hunter" | "night_complete")
+        ? (["night_guard", "night_werewolf", "night_witch", "night_seer", "night_complete"] as const)
+            .indexOf(game.phase as "night_werewolf" | "night_guard" | "night_witch" | "night_seer" | "night_complete")
         : 0,
       dayNumber: game?.dayNumber ?? 0,
       nightNumber: game?.nightNumber ?? 0,
       aliveCount,
+      votesRequired,
       votesCast: game ? Object.keys(game.votes).length : 0,
       // Tally shown to host during day_vote, day_pk, and day_result
       voteTally: viewer.isHost && game &&
@@ -183,6 +191,7 @@ function playerGameView(room: Room, player: Player) {
     roleName: ROLE_INFO[role].name,
     roleDescription: ROLE_INFO[role].description,
     actionId: game.actionId,
+    deadPlayerIds: game.deadPlayerIds,
   };
 
   if (game.phase === "role_reveal") {
@@ -192,37 +201,36 @@ function playerGameView(room: Room, player: Player) {
 
   const targetViews = room.players.map(publicPlayer);
   const alive = (t: ReturnType<typeof publicPlayer>) => !game.deadPlayerIds.includes(t.id);
+  const isDead = game.deadPlayerIds.includes(player.id);
 
-  if (game.phase === "night_werewolf" && role === "werewolf") {
+  if (game.phase === "night_werewolf" && role === "werewolf" && !isDead) {
     return {
       ...base,
       mode: "wolf_action",
-      targets: targetViews.filter(t => alive(t) && t.id !== player.id && game.roles[t.id] !== "werewolf"),
+      targets: targetViews.filter(alive),
     };
   }
 
-  if (game.phase === "night_guard" && role === "guard") {
+  if (game.phase === "night_guard" && role === "guard" && !isDead) {
     return {
       ...base,
       mode: "guard_action",
-      targets: targetViews.filter(
-        t => alive(t) && t.id !== player.id && t.id !== game.guardLastProtectedId,
-      ),
+      targets: targetViews.filter(t => alive(t) && t.id !== game.guardLastProtectedId),
     };
   }
 
-  if (game.phase === "night_witch" && role === "witch") {
+  if (game.phase === "night_witch" && role === "witch" && !isDead) {
     return {
       ...base,
       mode: "witch_action",
       attackedPlayer: targetViews.find(target => target.id === game.wolfTargetId),
       poisonTargets: targetViews.filter(t => alive(t) && t.id !== player.id),
-      antidoteAvailable: !game.witchAntidoteSpent,
+      antidoteAvailable: !game.witchAntidoteSpent && Boolean(game.wolfTargetId),
       poisonAvailable: !game.witchPoisonSpent,
     };
   }
 
-  if (game.phase === "night_seer" && role === "seer") {
+  if (game.phase === "night_seer" && role === "seer" && !isDead) {
     const checkedPlayer = targetViews.find(target => target.id === game.seerTargetId);
     return {
       ...base,
@@ -241,14 +249,6 @@ function playerGameView(room: Room, player: Player) {
     return { ...base, mode: "night_start" };
   }
 
-  if (game.phase === "night_hunter" && role === "hunter") {
-    return {
-      ...base,
-      mode: "hunter_execution",
-      targets: targetViews.filter(target => !game.deaths.includes(target.id)),
-    };
-  }
-
   if (game.phase === "night_complete") {
     return {
       ...base,
@@ -257,7 +257,6 @@ function playerGameView(room: Room, player: Player) {
     };
   }
 
-  const isDead = game.deadPlayerIds.includes(player.id);
   const deathViews = targetViews.filter(target => game.deaths.includes(target.id));
 
   if (game.phase === "day_vote") {
@@ -274,12 +273,17 @@ function playerGameView(room: Room, player: Player) {
 
   if (game.phase === "day_pk") {
     if (isDead) return { ...base, mode: "spectator", deaths: deathViews };
+    if (game.pkCandidateIds.includes(player.id)) {
+      return { ...base, mode: "waiting", deaths: deathViews };
+    }
     const myVote = game.votes[player.id];
     return {
       ...base,
       mode: "day_pk",
       deaths: deathViews,
-      targets: targetViews.filter(t => game.pkCandidateIds.includes(t.id)),
+      targets: targetViews.filter(
+        target => alive(target) && target.id !== player.id && game.pkCandidateIds.includes(target.id),
+      ),
       myVote,
     };
   }
@@ -297,12 +301,18 @@ function playerGameView(room: Room, player: Player) {
     };
   }
 
-  if (game.phase === "day_hunter" && role === "hunter") {
-    return {
-      ...base,
-      mode: "hunter_execution",
-      targets: targetViews.filter(target => !game.deadPlayerIds.includes(target.id)),
-    };
+  if (game.phase === "day_hunter") {
+    if (role === "hunter") {
+      return {
+        ...base,
+        mode: "hunter_execution",
+        targets: targetViews.filter(target => !game.deadPlayerIds.includes(target.id)),
+      };
+    }
+    if (game.hunterTrigger === "night") {
+      return { ...base, mode: "day_announce", deaths: deathViews };
+    }
+    return { ...base, mode: "waiting" };
   }
 
   if (game.phase === "game_over") {
@@ -310,7 +320,6 @@ function playerGameView(room: Room, player: Player) {
       ...base,
       mode: "game_over",
       winner: game.winner,
-      deadPlayerIds: game.deadPlayerIds,
     };
   }
 
@@ -344,8 +353,13 @@ function broadcastRoom(io: Server, room: Room): void {
 }
 
 function actingPlayerIds(game: GameState): string[] {
-  if (game.phase === "day_vote" || game.phase === "day_pk") {
+  if (game.phase === "day_vote") {
     return Object.keys(game.roles).filter(id => !game.deadPlayerIds.includes(id));
+  }
+  if (game.phase === "day_pk") {
+    return Object.keys(game.roles).filter(
+      id => !game.deadPlayerIds.includes(id) && !game.pkCandidateIds.includes(id),
+    );
   }
   if (game.phase === "day_hunter") {
     return Object.entries(game.roles)
@@ -357,11 +371,13 @@ function actingPlayerIds(game: GameState): string[] {
     : game.phase === "night_guard" ? "guard"
     : game.phase === "night_witch" ? "witch"
     : game.phase === "night_seer" ? "seer"
-    : game.phase === "night_hunter" ? "hunter"
     : undefined;
   return role
     ? Object.entries(game.roles)
-        .filter(([, assignedRole]) => assignedRole === role)
+        .filter(
+          ([playerId, assignedRole]) =>
+            assignedRole === role && !game.deadPlayerIds.includes(playerId),
+        )
         .map(([playerId]) => playerId)
     : [];
 }
@@ -380,6 +396,33 @@ function alertCurrentActors(io: Server, room: Room, resumed = false): void {
   }
 }
 
+function afterNightAction(io: Server, room: Room): void {
+  const game = room.game;
+  if (!game) return;
+
+  if (game.phase === "game_over") {
+    broadcastRoom(io, room);
+    io.to(room.id).emit("game:over", { winner: game.winner });
+    return;
+  }
+  if (game.phase === "night_complete") {
+    io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
+    startDayVote(game);
+    broadcastRoom(io, room);
+    alertCurrentActors(io, room);
+    return;
+  }
+  if (game.phase === "day_hunter" && game.hunterTrigger === "night") {
+    io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
+    broadcastRoom(io, room);
+    alertCurrentActors(io, room);
+    return;
+  }
+
+  broadcastRoom(io, room);
+  alertCurrentActors(io, room);
+}
+
 function afterCloseDayVote(io: Server, room: Room, result: string): void {
   if (!room.game) return;
   const { phase } = room.game;
@@ -388,7 +431,7 @@ function afterCloseDayVote(io: Server, room: Room, result: string): void {
   } else if (phase === "day_hunter") {
     alertCurrentActors(io, room);
   } else if (phase === "day_pk") {
-    alertCurrentActors(io, room); // alert all alive for PK vote
+    alertCurrentActors(io, room); // alert eligible non-PK voters
   }
   // "no_kill" and "day_result" just need the broadcast already done
 }
@@ -639,7 +682,7 @@ export function createGameServer() {
 
     socket.on(
       "player:submit-wolf-target",
-      (data: { actionId?: string; targetPlayerId?: string }, ack: BasicAck) => {
+      (data: { actionId?: string; targetPlayerId?: string | null }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
         try {
@@ -650,8 +693,7 @@ export function createGameServer() {
             data.actionId,
           );
           if (advanced) {
-            broadcastRoom(io, membership.room);
-            alertCurrentActors(io, membership.room);
+            afterNightAction(io, membership.room);
           }
           ack({ ok: true });
         } catch (error) {
@@ -679,8 +721,7 @@ export function createGameServer() {
             data.actionId,
           );
           if (advanced) {
-            broadcastRoom(io, membership.room);
-            alertCurrentActors(io, membership.room);
+            afterNightAction(io, membership.room);
           }
           ack({ ok: true });
         } catch (error) {
@@ -719,20 +760,7 @@ export function createGameServer() {
           data.actionId,
         );
         if (advanced) {
-          const { game } = membership.room;
-          if (game.phase === "night_hunter") {
-            broadcastRoom(io, membership.room);
-            alertCurrentActors(io, membership.room);
-          } else if (game.phase === "game_over") {
-            broadcastRoom(io, membership.room);
-            io.to(membership.room.id).emit("game:over", { winner: game.winner });
-          } else {
-            // night_complete → vibrate all, then auto-start day vote
-            io.to(membership.room.id).emit("game:night-complete", { actionId: game.actionId });
-            startDayVote(game);
-            broadcastRoom(io, membership.room);
-            alertCurrentActors(io, membership.room); // alert all alive for day_vote
-          }
+          afterNightAction(io, membership.room);
         }
         ack({ ok: true });
       } catch (error) {
@@ -742,7 +770,7 @@ export function createGameServer() {
 
     socket.on(
       "player:submit-guard-target",
-      (data: { actionId?: string; targetPlayerId?: string }, ack: BasicAck) => {
+      (data: { actionId?: string; targetPlayerId?: string | null }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
         try {
@@ -753,8 +781,7 @@ export function createGameServer() {
             data.actionId,
           );
           if (advanced) {
-            broadcastRoom(io, membership.room);
-            alertCurrentActors(io, membership.room);
+            afterNightAction(io, membership.room);
           }
           ack({ ok: true });
         } catch (error) {
@@ -765,7 +792,7 @@ export function createGameServer() {
 
     socket.on(
       "player:submit-hunter-execution",
-      (data: { actionId?: string; targetPlayerId?: string }, ack: BasicAck) => {
+      (data: { actionId?: string; targetPlayerId?: string | null }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
         try {
@@ -781,8 +808,7 @@ export function createGameServer() {
               broadcastRoom(io, membership.room);
               io.to(membership.room.id).emit("game:over", { winner: game.winner });
             } else if (game.phase === "night_complete") {
-              // Night hunter executed → auto-start day vote
-              io.to(membership.room.id).emit("game:night-complete", { actionId: game.actionId });
+              // The night death was already announced before the hunter acted.
               startDayVote(game);
               broadcastRoom(io, membership.room);
               alertCurrentActors(io, membership.room);
@@ -804,8 +830,7 @@ export function createGameServer() {
       if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
       try {
         startNight(membership.room.game);
-        broadcastRoom(io, membership.room);
-        alertCurrentActors(io, membership.room);
+        afterNightAction(io, membership.room);
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);

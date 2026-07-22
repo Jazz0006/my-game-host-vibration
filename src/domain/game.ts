@@ -8,7 +8,6 @@ export type GamePhase =
   | "night_guard"
   | "night_witch"
   | "night_seer"
-  | "night_hunter"
   | "night_complete"
   | "day_vote"          // first vote — targets: all alive except self
   | "day_pk"            // tie-break vote — targets: pkCandidateIds only
@@ -62,6 +61,7 @@ export type GameState = {
   seerTargetId?: string;
   seerResultConfirmed: boolean;
   hunterExecutionTargetId?: string;
+  hunterTrigger?: "night" | "day";
   deaths: string[];              // died last night (persists through day for display)
   // Day state
   votes: Record<string, string>; // voterId → targetId (reused for day_pk)
@@ -75,17 +75,30 @@ export type GameState = {
 
 export class GameRuleError extends Error {}
 
-const NIGHT_ORDER: readonly Role[] = ["werewolf", "guard", "witch", "seer"];
+const NIGHT_ORDER: readonly Role[] = ["guard", "werewolf", "witch", "seer"];
 
-function nightQueueFromConfig(config: GameConfig): Role[] {
-  const inDeck = new Set(config.roleDeck);
-  return NIGHT_ORDER.filter(r => inDeck.has(r));
+function hasLivingRole(state: GameState, role: Role): boolean {
+  return Object.entries(state.roles).some(
+    ([playerId, assignedRole]) =>
+      assignedRole === role && !state.deadPlayerIds.includes(playerId),
+  );
+}
+
+function shouldRunNightRole(state: GameState, role: Role): boolean {
+  if (!hasLivingRole(state, role)) return false;
+  if (role !== "witch") return true;
+  const canUseAntidote = !state.witchAntidoteSpent && Boolean(state.wolfTargetId);
+  const canUsePoison = !state.witchPoisonSpent;
+  return canUseAntidote || canUsePoison;
+}
+
+function nightQueue(state: GameState): Role[] {
+  return NIGHT_ORDER.filter(role => shouldRunNightRole(state, role));
 }
 
 function nextNightPhase(state: GameState, currentRole: Role): GamePhase {
-  const queue = nightQueueFromConfig(state.config);
-  const idx = queue.indexOf(currentRole);
-  const next = queue[idx + 1];
+  const currentIndex = NIGHT_ORDER.indexOf(currentRole);
+  const next = NIGHT_ORDER.slice(currentIndex + 1).find(role => shouldRunNightRole(state, role));
   return next ? (`night_${next}` as GamePhase) : "night_complete";
 }
 
@@ -95,12 +108,11 @@ function nextActionId(): string {
 
 function resolveNightDeaths(state: GameState): Set<string> {
   const deaths = new Set<string>();
-  const guardBlocked =
-    state.wolfTargetId &&
-    state.wolfTargetId === state.guardProtectedId &&
-    !state.witchUsedAntidote;
-  if (state.wolfTargetId && !state.witchUsedAntidote && !guardBlocked) {
-    deaths.add(state.wolfTargetId);
+  if (state.wolfTargetId) {
+    const guarded = state.wolfTargetId === state.guardProtectedId;
+    const saved = state.witchUsedAntidote;
+    // Exactly one protection saves the target. Guard + antidote together cancel out (同守同救).
+    if (guarded === saved) deaths.add(state.wolfTargetId);
   }
   if (state.witchPoisonTargetId) deaths.add(state.witchPoisonTargetId);
   return deaths;
@@ -123,6 +135,7 @@ function applyElimination(state: GameState, targetId: string): boolean {
   delete state.noKillToday;
 
   if (state.roles[targetId] === "hunter") {
+    state.hunterTrigger = "day";
     state.phase = "day_hunter";
     state.actionId = nextActionId();
     return false;
@@ -198,8 +211,57 @@ function assertRole(state: GameState, playerId: string, role: Role): void {
   if (state.roles[playerId] !== role) throw new GameRuleError("当前不是你的行动阶段");
 }
 
+function assertLivingRole(state: GameState, playerId: string, role: Role): void {
+  assertRole(state, playerId, role);
+  if (state.deadPlayerIds.includes(playerId)) {
+    throw new GameRuleError("已出局的玩家不能执行夜间行动");
+  }
+}
+
 function assertKnownPlayer(state: GameState, playerId: string | undefined): asserts playerId is string {
   if (!playerId || !state.roles[playerId]) throw new GameRuleError("请选择有效玩家");
+}
+
+function settleNight(state: GameState): void {
+  const deaths = resolveNightDeaths(state);
+  state.deaths = [...deaths];
+
+  for (const id of deaths) {
+    if (!state.deadPlayerIds.includes(id)) state.deadPlayerIds.push(id);
+  }
+
+  const hunterPlayerId = Object.entries(state.roles).find(([, role]) => role === "hunter")?.[0];
+  const hunterCanShoot =
+    hunterPlayerId !== undefined &&
+    deaths.has(hunterPlayerId) &&
+    state.witchPoisonTargetId !== hunterPlayerId &&
+    Object.keys(state.roles).some(playerId => !state.deadPlayerIds.includes(playerId));
+
+  if (hunterCanShoot) {
+    state.hunterTrigger = "night";
+    state.phase = "day_hunter";
+    state.actionId = nextActionId();
+    return;
+  }
+
+  const victory = checkVictory(state);
+  if (victory) {
+    state.phase = "game_over";
+    state.winner = victory;
+  } else {
+    state.phase = "night_complete";
+  }
+  state.actionId = nextActionId();
+}
+
+function advanceAfterNightRole(state: GameState, currentRole: Role): void {
+  const nextPhase = nextNightPhase(state, currentRole);
+  if (nextPhase === "night_complete") {
+    settleNight(state);
+    return;
+  }
+  state.phase = nextPhase;
+  state.actionId = nextActionId();
 }
 
 // ── Night phase functions ────────────────────────────────────────────────────
@@ -224,12 +286,14 @@ export function startNight(state: GameState): void {
     throw new GameRuleError("当前不能开始夜晚流程");
   }
   if (state.guardProtectedId) state.guardLastProtectedId = state.guardProtectedId;
+  else delete state.guardLastProtectedId;
 
   delete state.wolfTargetId;
   delete state.guardProtectedId;
   delete state.witchPoisonTargetId;
   delete state.seerTargetId;
   delete state.hunterExecutionTargetId;
+  delete state.hunterTrigger;
   delete state.eliminatedTodayId;
   delete state.noKillToday;
   state.witchUsedAntidote = false;
@@ -241,57 +305,65 @@ export function startNight(state: GameState): void {
   // Increment night number on subsequent nights (not the first)
   if (state.dayNumber > 0) state.nightNumber += 1;
 
-  const firstNightRole = nightQueueFromConfig(state.config)[0];
-  state.phase = firstNightRole ? (`night_${firstNightRole}` as GamePhase) : "night_complete";
-  state.actionId = nextActionId();
+  const firstNightRole = nightQueue(state)[0];
+  if (firstNightRole) {
+    state.phase = `night_${firstNightRole}` as GamePhase;
+    state.actionId = nextActionId();
+  } else {
+    settleNight(state);
+  }
 }
 
 export function submitWolfTarget(
   state: GameState,
   actorPlayerId: string,
-  targetPlayerId: string | undefined,
+  targetPlayerId: string | null | undefined,
   actionId?: string,
 ): boolean {
+  const requestedTargetId = targetPlayerId ?? undefined;
   if (
-    state.wolfTargetId === targetPlayerId &&
+    state.wolfTargetId === requestedTargetId &&
     state.roles[actorPlayerId] === "werewolf" &&
     state.phase !== "night_werewolf"
   ) return false;
   assertAction(state, actionId, "night_werewolf");
-  assertRole(state, actorPlayerId, "werewolf");
-  assertKnownPlayer(state, targetPlayerId);
-  if (targetPlayerId === actorPlayerId || state.roles[targetPlayerId] === "werewolf") {
-    throw new GameRuleError("狼人不能选择狼人作为击杀目标");
+  assertLivingRole(state, actorPlayerId, "werewolf");
+  if (requestedTargetId) {
+    assertKnownPlayer(state, requestedTargetId);
+    if (state.deadPlayerIds.includes(requestedTargetId)) throw new GameRuleError("不能击杀已出局的玩家");
   }
 
-  state.wolfTargetId = targetPlayerId;
-  state.phase = nextNightPhase(state, "werewolf");
-  state.actionId = nextActionId();
+  if (requestedTargetId) state.wolfTargetId = requestedTargetId;
+  else delete state.wolfTargetId;
+  advanceAfterNightRole(state, "werewolf");
   return true;
 }
 
 export function submitGuardTarget(
   state: GameState,
   actorPlayerId: string,
-  targetPlayerId: string | undefined,
+  targetPlayerId: string | null | undefined,
   actionId?: string,
 ): boolean {
+  const requestedTargetId = targetPlayerId ?? undefined;
   if (
-    state.guardProtectedId === targetPlayerId &&
+    state.guardProtectedId === requestedTargetId &&
     state.roles[actorPlayerId] === "guard" &&
     state.phase !== "night_guard"
   ) return false;
   assertAction(state, actionId, "night_guard");
-  assertRole(state, actorPlayerId, "guard");
-  assertKnownPlayer(state, targetPlayerId);
-  if (targetPlayerId === actorPlayerId) throw new GameRuleError("守卫不能保护自己");
-  if (targetPlayerId === state.guardLastProtectedId) {
-    throw new GameRuleError("不能连续两晚保护同一名玩家");
+  assertLivingRole(state, actorPlayerId, "guard");
+  if (requestedTargetId) {
+    assertKnownPlayer(state, requestedTargetId);
+    if (state.deadPlayerIds.includes(requestedTargetId)) throw new GameRuleError("不能保护已出局的玩家");
+    if (requestedTargetId === state.guardLastProtectedId) {
+      throw new GameRuleError("不能连续两晚保护同一名玩家");
+    }
   }
 
-  state.guardProtectedId = targetPlayerId;
-  state.phase = nextNightPhase(state, "guard");
-  state.actionId = nextActionId();
+  if (requestedTargetId) state.guardProtectedId = requestedTargetId;
+  else delete state.guardProtectedId;
+  advanceAfterNightRole(state, "guard");
   return true;
 }
 
@@ -310,10 +382,11 @@ export function submitWitchAction(
     state.witchPoisonTargetId === requestedPoison
   ) return false;
   assertAction(state, actionId, "night_witch");
-  assertRole(state, actorPlayerId, "witch");
+  assertLivingRole(state, actorPlayerId, "witch");
 
   if (requestedAntidote && requestedPoison) throw new GameRuleError("同一晚只能使用一瓶药");
   if (requestedAntidote && state.witchAntidoteSpent) throw new GameRuleError("解药已经使用过了");
+  if (requestedAntidote && !state.wolfTargetId) throw new GameRuleError("今晚没有狼人击杀目标，不能使用解药");
   if (requestedPoison && state.witchPoisonSpent) throw new GameRuleError("毒药已经使用过了");
   if (requestedPoison) {
     assertKnownPlayer(state, requestedPoison);
@@ -328,8 +401,7 @@ export function submitWitchAction(
   } else {
     delete state.witchPoisonTargetId;
   }
-  state.phase = nextNightPhase(state, "witch");
-  state.actionId = nextActionId();
+  advanceAfterNightRole(state, "witch");
   return true;
 }
 
@@ -347,7 +419,7 @@ export function submitSeerTarget(
     return state.roles[state.seerTargetId]!;
   }
   assertAction(state, actionId, "night_seer");
-  assertRole(state, actorPlayerId, "seer");
+  assertLivingRole(state, actorPlayerId, "seer");
   assertKnownPlayer(state, targetPlayerId);
   if (targetPlayerId === actorPlayerId) throw new GameRuleError("预言家不能查验自己");
   if (state.seerTargetId) throw new GameRuleError("查验目标已经提交，请确认查验结果");
@@ -362,78 +434,51 @@ export function confirmSeerResult(
   actionId?: string,
 ): boolean {
   if (
-    (state.phase === "night_complete" || state.phase === "night_hunter" || state.phase === "game_over") &&
+    (state.phase === "night_complete" || state.phase === "day_hunter" || state.phase === "game_over") &&
     state.seerResultConfirmed &&
     state.roles[actorPlayerId] === "seer"
   ) return false;
   assertAction(state, actionId, "night_seer");
-  assertRole(state, actorPlayerId, "seer");
+  assertLivingRole(state, actorPlayerId, "seer");
   if (!state.seerTargetId) throw new GameRuleError("请先选择查验目标");
 
   state.seerResultConfirmed = true;
-  const deaths = resolveNightDeaths(state);
-  state.deaths = [...deaths];
-
-  for (const id of deaths) {
-    if (!state.deadPlayerIds.includes(id)) state.deadPlayerIds.push(id);
-  }
-
-  const victory = checkVictory(state);
-  if (victory) {
-    state.phase = "game_over";
-    state.winner = victory;
-    state.actionId = nextActionId();
-    return true;
-  }
-
-  const hunterPlayerId = Object.entries(state.roles).find(([, r]) => r === "hunter")?.[0];
-  if (hunterPlayerId && deaths.has(hunterPlayerId)) {
-    state.phase = "night_hunter";
-  } else {
-    state.phase = "night_complete";
-  }
-  state.actionId = nextActionId();
+  settleNight(state);
   return true;
 }
 
 export function submitHunterExecution(
   state: GameState,
   actorPlayerId: string,
-  targetPlayerId: string | undefined,
+  targetPlayerId: string | null | undefined,
   actionId?: string,
 ): boolean {
-  const hunterPhases: GamePhase[] = ["night_hunter", "day_hunter"];
+  const requestedTargetId = targetPlayerId ?? undefined;
   if (
-    state.hunterExecutionTargetId === targetPlayerId &&
+    state.hunterExecutionTargetId === requestedTargetId &&
     state.roles[actorPlayerId] === "hunter" &&
-    !hunterPhases.includes(state.phase)
+    state.phase !== "day_hunter"
   ) return false;
-  assertActionPhases(state, actionId, hunterPhases);
+  assertAction(state, actionId, "day_hunter");
   assertRole(state, actorPlayerId, "hunter");
   if (!state.deadPlayerIds.includes(actorPlayerId)) throw new GameRuleError("猎人尚未死亡");
-  assertKnownPlayer(state, targetPlayerId);
-  if (state.deadPlayerIds.includes(targetPlayerId)) throw new GameRuleError("不能选择已死亡的玩家");
-
-  state.hunterExecutionTargetId = targetPlayerId;
-  if (!state.deadPlayerIds.includes(targetPlayerId)) state.deadPlayerIds.push(targetPlayerId);
-
-  const victory = checkVictory(state);
-  if (state.phase === "day_hunter") {
-    // Day hunter — after execution, go to day_result or game_over
-    if (victory) {
-      state.phase = "game_over";
-      state.winner = victory;
-    } else {
-      state.phase = "day_result";
-    }
+  if (requestedTargetId) {
+    assertKnownPlayer(state, requestedTargetId);
+    if (state.deadPlayerIds.includes(requestedTargetId)) throw new GameRuleError("不能选择已死亡的玩家");
+    state.hunterExecutionTargetId = requestedTargetId;
+    state.deadPlayerIds.push(requestedTargetId);
   } else {
-    // Night hunter — after execution, go to night_complete or game_over
-    if (victory) {
-      state.phase = "game_over";
-      state.winner = victory;
-    } else {
-      state.phase = "night_complete";
-    }
+    delete state.hunterExecutionTargetId;
+  }
+
+  const triggeredAtNight = state.hunterTrigger === "night";
+  delete state.hunterTrigger;
+  const victory = checkVictory(state);
+  if (victory) {
+    state.phase = "game_over";
+    state.winner = victory;
+  } else {
+    state.phase = triggeredAtNight ? "night_complete" : "day_result";
   }
   state.actionId = nextActionId();
   return true;
@@ -467,6 +512,9 @@ export function submitVote(
   assertKnownPlayer(state, targetId);
   if (state.deadPlayerIds.includes(voterId)) throw new GameRuleError("已出局的玩家不能投票");
   if (state.deadPlayerIds.includes(targetId)) throw new GameRuleError("不能投票给已出局的玩家");
+  if (state.phase === "day_pk" && state.pkCandidateIds.includes(voterId)) {
+    throw new GameRuleError("PK玩家不能参与PK投票");
+  }
   if (voterId === targetId) throw new GameRuleError("不能投票给自己");
   // In PK phase, only pkCandidateIds are valid targets
   if (state.phase === "day_pk" && !state.pkCandidateIds.includes(targetId)) {
@@ -478,8 +526,12 @@ export function submitVote(
 }
 
 export function allAliveVoted(state: GameState): boolean {
-  const aliveIds = Object.keys(state.roles).filter(id => !state.deadPlayerIds.includes(id));
-  return aliveIds.length > 0 && aliveIds.every(id => id in state.votes);
+  const eligibleVoterIds = Object.keys(state.roles).filter(
+    playerId =>
+      !state.deadPlayerIds.includes(playerId) &&
+      (state.phase !== "day_pk" || !state.pkCandidateIds.includes(playerId)),
+  );
+  return eligibleVoterIds.length > 0 && eligibleVoterIds.every(id => id in state.votes);
 }
 
 // Closes voting and resolves outcome. Works for both day_vote and day_pk.

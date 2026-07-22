@@ -166,39 +166,49 @@ function renderGameControls(player) {
       status.textContent = "狼人行动：选择今晚的击杀目标";
       const select = createTargetSelect(game.targets, `${player.name}的狼人击杀目标`);
       body.append(select);
-      actions.append(createButton("确认击杀", () => void performAction(
-        player,
-        "player:submit-wolf-target",
-        { actionId: game.actionId, targetPlayerId: select.value },
-        `已选择击杀 ${select.selectedOptions[0]?.textContent || "目标"}`,
-      ), "danger wide"));
+      actions.append(
+        createButton("确认击杀", () => void performAction(
+          player,
+          "player:submit-wolf-target",
+          { actionId: game.actionId, targetPlayerId: select.value },
+          `已选择击杀 ${select.selectedOptions[0]?.textContent || "目标"}`,
+        ), "danger wide"),
+        createButton("本晚不击杀", () => void performAction(
+          player,
+          "player:submit-wolf-target",
+          { actionId: game.actionId, targetPlayerId: null },
+          "本晚选择空刀",
+        )),
+      );
     } else if (game.mode === "witch_action") {
       const attacked = game.attackedPlayer;
       status.textContent = attacked
         ? `女巫行动：${attacked.seat}号 ${attacked.name} 被狼人袭击`
         : "女巫行动：今晚无人被袭击";
       const poisonSelect = createTargetSelect(game.poisonTargets, `${player.name}的毒药目标`);
-      body.append(poisonSelect);
-      actions.append(
-        createButton("使用解药", () => void performAction(
+      actions.append(createButton("跳过（本晚不用药）", () => void performAction(
+        player,
+        "player:submit-witch-action",
+        { actionId: game.actionId, useAntidote: false, poisonTargetId: null },
+        "本晚不使用药物",
+      )));
+      if (game.antidoteAvailable) {
+        actions.append(createButton("使用解药", () => void performAction(
           player,
           "player:submit-witch-action",
           { actionId: game.actionId, useAntidote: true, poisonTargetId: null },
           "已使用解药",
-        ), "primary"),
-        createButton("不使用药", () => void performAction(
-          player,
-          "player:submit-witch-action",
-          { actionId: game.actionId, useAntidote: false, poisonTargetId: null },
-          "本晚不使用药物",
-        )),
-        createButton("毒杀所选玩家", () => void performAction(
+        ), "primary"));
+      }
+      if (game.poisonAvailable) {
+        body.append(poisonSelect);
+        actions.append(createButton("毒杀所选玩家", () => void performAction(
           player,
           "player:submit-witch-action",
           { actionId: game.actionId, useAntidote: false, poisonTargetId: poisonSelect.value },
           `已毒杀 ${poisonSelect.selectedOptions[0]?.textContent || "目标"}`,
-        ), "danger wide"),
-      );
+        ), "danger wide"));
+      }
     } else if (game.mode === "seer_action") {
       status.textContent = "预言家行动：选择一名玩家查验阵营";
       const select = createTargetSelect(game.targets, `${player.name}的查验目标`);
@@ -225,22 +235,38 @@ function renderGameControls(player) {
       status.textContent = "守卫行动：选择今晚保护的玩家";
       const select = createTargetSelect(game.targets, `${player.name}的保护目标`);
       body.append(select);
-      actions.append(createButton("确认保护", () => void performAction(
-        player,
-        "player:submit-guard-target",
-        { actionId: game.actionId, targetPlayerId: select.value },
-        `已保护 ${select.selectedOptions[0]?.textContent || "目标"}`,
-      ), "primary wide"));
+      actions.append(
+        createButton("跳过（本晚不守护）", () => void performAction(
+          player,
+          "player:submit-guard-target",
+          { actionId: game.actionId, targetPlayerId: null },
+          "本晚选择空守",
+        )),
+        createButton("确认保护", () => void performAction(
+          player,
+          "player:submit-guard-target",
+          { actionId: game.actionId, targetPlayerId: select.value },
+          `已保护 ${select.selectedOptions[0]?.textContent || "目标"}`,
+        ), "primary wide"),
+      );
     } else if (game.mode === "hunter_execution") {
       status.textContent = "猎人技能：选择带走的玩家";
       const select = createTargetSelect(game.targets, `${player.name}的猎人目标`);
       body.append(select);
-      actions.append(createButton("确认射击", () => void performAction(
-        player,
-        "player:submit-hunter-execution",
-        { actionId: game.actionId, targetPlayerId: select.value },
-        `已射击 ${select.selectedOptions[0]?.textContent || "目标"}`,
-      ), "danger wide"));
+      actions.append(
+        createButton("确认射击", () => void performAction(
+          player,
+          "player:submit-hunter-execution",
+          { actionId: game.actionId, targetPlayerId: select.value },
+          `已射击 ${select.selectedOptions[0]?.textContent || "目标"}`,
+        ), "danger wide"),
+        createButton("不开枪", () => void performAction(
+          player,
+          "player:submit-hunter-execution",
+          { actionId: game.actionId, targetPlayerId: null },
+          "已放弃开枪",
+        )),
+      );
     } else if (game.mode === "night_complete") {
       status.textContent = game.deaths.length
         ? `天亮：${game.deaths.map(target => `${target.seat}号 ${target.name}`).join("、")} 死亡`
@@ -249,11 +275,13 @@ function renderGameControls(player) {
       status.textContent = game.deaths.length
         ? `白天公告：${game.deaths.map(target => `${target.seat}号 ${target.name}`).join("、")} 昨夜死亡`
         : "白天公告：昨夜平安夜";
-    } else if (game.mode === "day_vote") {
+    } else if (game.mode === "day_vote" || game.mode === "day_pk") {
       if (game.myVote) {
         status.textContent = `已投票，等待房主关闭投票`;
       } else {
-        status.textContent = "投票：选择要放逐的玩家";
+        status.textContent = game.mode === "day_pk"
+          ? "PK投票：从平票玩家中选择放逐目标"
+          : "投票：选择要放逐的玩家";
         const select = createTargetSelect(game.targets, `${player.name}的投票目标`);
         body.append(select);
         actions.append(createButton("投票放逐", () => void performAction(
