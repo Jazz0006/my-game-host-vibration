@@ -4,6 +4,7 @@ import {
   beginNightStart,
   checkVictory,
   closeDayVote,
+  configFromRoleDeck,
   configFromPlayerCount,
   confirmRole,
   confirmSeerResult,
@@ -22,6 +23,21 @@ import {
 } from "../src/domain/game.js";
 
 const PLAYERS = ["p1", "p2", "p3", "p4", "p5"];
+
+describe("editable role configuration", () => {
+  it("accepts a balanced custom deck", () => {
+    expect(configFromRoleDeck(5, ["werewolf", "seer", "guard", "villager", "villager"])).toEqual({
+      playerCount: 5,
+      roleDeck: ["werewolf", "seer", "guard", "villager", "villager"],
+    });
+  });
+
+  it("rejects mismatched, duplicate-special, and immediately-winning decks", () => {
+    expect(() => configFromRoleDeck(5, ["werewolf", "villager"])).toThrow("身份数量");
+    expect(() => configFromRoleDeck(5, ["werewolf", "seer", "seer", "villager", "villager"])).toThrow("最多各一名");
+    expect(() => configFromRoleDeck(5, ["werewolf", "werewolf", "werewolf", "villager", "villager"])).toThrow("少于好人");
+  });
+});
 
 function beginNight() {
   const state = startGame(PLAYERS);

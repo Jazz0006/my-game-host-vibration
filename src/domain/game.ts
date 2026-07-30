@@ -36,10 +36,35 @@ const PRESET_DECKS: Record<number, readonly Role[]> = {
   12: ["werewolf", "werewolf", "werewolf", "werewolf", "seer", "witch", "guard", "hunter", "villager", "villager", "villager", "villager"],
 };
 
+export const CONFIGURABLE_ROLES: readonly Role[] = [
+  "werewolf", "seer", "witch", "guard", "hunter", "villager",
+];
+
 export function configFromPlayerCount(playerCount: number): GameConfig {
   const deck = PRESET_DECKS[playerCount];
   if (!deck) throw new GameRuleError(`不支持${playerCount}人局，请选择5到12人`);
   return { playerCount, roleDeck: deck };
+}
+
+export function configFromRoleDeck(playerCount: number, roleDeck: readonly Role[]): GameConfig {
+  if (!Number.isInteger(playerCount) || playerCount < 5 || playerCount > 12) {
+    throw new GameRuleError("仅支持5到12人局");
+  }
+  if (roleDeck.length !== playerCount) {
+    throw new GameRuleError(`身份数量必须与${playerCount}名玩家一致`);
+  }
+  if (roleDeck.some(role => !CONFIGURABLE_ROLES.includes(role))) {
+    throw new GameRuleError("配置中包含暂不支持的身份");
+  }
+
+  const count = (role: Role) => roleDeck.filter(item => item === role).length;
+  const wolves = count("werewolf");
+  if (wolves < 1) throw new GameRuleError("至少需要一名狼人");
+  if (wolves >= playerCount - wolves) throw new GameRuleError("开局时狼人数量必须少于好人");
+  for (const role of ["seer", "witch", "guard", "hunter"] as const) {
+    if (count(role) > 1) throw new GameRuleError("预言家、女巫、守卫和猎人每局最多各一名");
+  }
+  return { playerCount, roleDeck: [...roleDeck] };
 }
 
 export type GameState = {

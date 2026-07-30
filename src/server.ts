@@ -8,6 +8,7 @@ import {
   allAliveVoted,
   beginNightStart,
   closeDayVote,
+  configFromRoleDeck,
   configFromPlayerCount,
   confirmRole,
   confirmSeerResult,
@@ -97,19 +98,45 @@ function publicPlayer(player: Player) {
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 12;
+const PLAYER_NUMBER_LABELS = [
+  "一", "二", "三", "四", "五", "六",
+  "七", "八", "九", "十", "十一", "十二",
+];
 
-function nextAvailableSeat(room: Room): number {
-  const occupied = new Set(room.players.map(player => player.seat));
-  for (let seat = 1; seat <= MAX_PLAYERS; seat += 1) {
-    if (!occupied.has(seat)) return seat;
+function playerNameExists(room: Room, name: string, exceptPlayerId?: string): boolean {
+  const normalized = name.toLocaleLowerCase();
+  return room.players.some(player =>
+    player.id !== exceptPlayerId && player.name.toLocaleLowerCase() === normalized
+  );
+}
+
+function nextDefaultPlayerName(room?: Room): string {
+  for (let index = 0; index < MAX_PLAYERS; index += 1) {
+    const number = PLAYER_NUMBER_LABELS[index] ?? String(index + 1);
+    const candidate = `新玩家${number}号`;
+    if (!room || !playerNameExists(room, candidate)) return candidate;
   }
-  throw new Error("房间没有可用座位");
+  return `新玩家${Date.now().toString().slice(-4)}号`;
+}
+
+function requestedPlayerName(room: Room | undefined, value?: string): string {
+  const requested = value?.trim().slice(0, 20);
+  if (!requested) return nextDefaultPlayerName(room);
+  if (room && playerNameExists(room, requested)) return nextDefaultPlayerName(room);
+  return requested;
+}
+
+function normalizeSeats(room: Room): void {
+  room.players.forEach((player, index) => {
+    player.seat = index + 1;
+  });
 }
 
 function removePlayer(room: Room, playerId: string): Player | undefined {
   const index = room.players.findIndex(player => player.id === playerId);
   if (index < 0) return undefined;
   const [removed] = room.players.splice(index, 1);
+  normalizeSeats(room);
   if (room.activePrompt?.targetPlayerId === playerId) delete room.activePrompt;
   return removed;
 }
@@ -139,6 +166,14 @@ function roomView(room: Room, viewer: Player) {
     roomId: room.id,
     viewer: { playerId: viewer.id, isHost: viewer.isHost },
     players: room.players.map(publicPlayer),
+    defaultRoleDeck: !game
+      ? (room.players.length >= MIN_PLAYERS
+          ? configFromPlayerCount(room.players.length).roleDeck
+          : room.config.roleDeck)
+      : undefined,
+    roleCatalog: !game
+      ? Object.entries(ROLE_INFO).map(([id, info]) => ({ id, name: info.name }))
+      : undefined,
     game: {
       phase: game?.phase ?? "lobby",
       canStart:
@@ -471,7 +506,7 @@ export function createGameServer() {
         const session = createSessionToken();
         const host: Player = {
           id: crypto.randomUUID(),
-          name: data.name?.trim() || "房主",
+          name: requestedPlayerName(undefined, data.name),
           seat: 1,
           socketId: socket.id,
           connected: true,
@@ -481,7 +516,14 @@ export function createGameServer() {
         const room: Room = { id: roomId, players: [host], createdAt: Date.now(), config: DEFAULT_GAME_CONFIG };
         rooms.set(roomId, room);
         void socket.join(roomId);
-        ack({ ok: true, roomId, playerId: host.id, seat: host.seat, resumeToken: session.token });
+        ack({
+          ok: true,
+          roomId,
+          playerId: host.id,
+          seat: host.seat,
+          name: host.name,
+          resumeToken: session.token,
+        });
         broadcastRoom(io, room);
       } catch {
         ack({ ok: false, message: "创建房间失败" });
@@ -492,9 +534,8 @@ export function createGameServer() {
       "player:join-room",
       (data: { roomId?: string; name?: string }, ack: ClientAck<unknown>) => {
         const roomId = data.roomId?.trim();
-        const name = data.name?.trim();
         const room = roomId ? rooms.get(roomId) : undefined;
-        if (!roomId || !name) return ack({ ok: false, message: "请输入房间号和玩家名字" });
+        if (!roomId) return ack({ ok: false, message: "请输入房间号" });
         if (findMembership(rooms, socket.id)) {
           return ack({ ok: false, message: "当前连接已经加入房间" });
         }
@@ -504,11 +545,12 @@ export function createGameServer() {
           return ack({ ok: false, message: `房间最多${MAX_PLAYERS}人` });
         }
 
+        const name = requestedPlayerName(room, data.name);
         const session = createSessionToken();
         const player: Player = {
           id: crypto.randomUUID(),
           name,
-          seat: nextAvailableSeat(room),
+          seat: room.players.length + 1,
           socketId: socket.id,
           connected: true,
           isHost: false,
@@ -521,6 +563,7 @@ export function createGameServer() {
           roomId,
           playerId: player.id,
           seat: player.seat,
+          name: player.name,
           resumeToken: session.token,
         });
         broadcastRoom(io, room);
@@ -565,6 +608,7 @@ export function createGameServer() {
           roomId: room.id,
           playerId: player.id,
           seat: player.seat,
+          name: player.name,
           isHost: player.isHost,
         });
         broadcastRoom(io, room);
@@ -575,7 +619,7 @@ export function createGameServer() {
       },
     );
 
-    socket.on("host:start-game", (_data: unknown, ack: BasicAck) => {
+    socket.on("host:start-game", (data: { roleDeck?: Role[] } | undefined, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以开始游戏" });
       const { room } = membership;
@@ -587,13 +631,66 @@ export function createGameServer() {
         return ack({ ok: false, message: "所有玩家在线后才能开始" });
       }
 
-      const gameConfig = configFromPlayerCount(room.players.length);
-      room.config = gameConfig;
-      room.game = startGame(room.players.map(player => player.id), gameConfig);
-      delete room.activePrompt;
-      broadcastRoom(io, room);
-      ack({ ok: true });
+      try {
+        const gameConfig = data?.roleDeck
+          ? configFromRoleDeck(room.players.length, data.roleDeck)
+          : configFromPlayerCount(room.players.length);
+        room.config = gameConfig;
+        room.game = startGame(room.players.map(player => player.id), gameConfig);
+        delete room.activePrompt;
+        broadcastRoom(io, room);
+        ack({ ok: true });
+      } catch (error) {
+        ruleError(ack, error);
+      }
     });
+
+    socket.on(
+      "host:move-player-seat",
+      (data: { targetPlayerId?: string; insertIndex?: number }, ack: BasicAck) => {
+        const membership = findMembership(rooms, socket.id);
+        if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以调整座位" });
+        if (membership.room.game) return ack({ ok: false, message: "游戏开始后不能调整座位" });
+        const { room } = membership;
+        const originalIndex = room.players.findIndex(player => player.id === data.targetPlayerId);
+        if (originalIndex < 0) return ack({ ok: false, message: "玩家不存在" });
+        if (
+          !Number.isInteger(data.insertIndex) ||
+          data.insertIndex! < 0 ||
+          data.insertIndex! > room.players.length
+        ) return ack({ ok: false, message: "目标座位无效" });
+
+        const target = room.players[originalIndex]!;
+        room.players.splice(originalIndex, 1);
+        const adjustedIndex = data.insertIndex! > originalIndex
+          ? data.insertIndex! - 1
+          : data.insertIndex!;
+        room.players.splice(adjustedIndex, 0, target);
+        normalizeSeats(room);
+        broadcastRoom(io, room);
+        ack({ ok: true });
+      },
+    );
+
+    socket.on(
+      "player:update-name",
+      (
+        data: { name?: string },
+        ack: ClientAck<{ ok: true; name: string } | { ok: false; message: string }>,
+      ) => {
+        const membership = findMembership(rooms, socket.id);
+        if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
+        const name = data.name?.trim();
+        if (!name) return ack({ ok: false, message: "名字不能为空" });
+        if (name.length > 20) return ack({ ok: false, message: "名字最多20个字符" });
+        if (playerNameExists(membership.room, name, membership.player.id)) {
+          return ack({ ok: false, message: "这个名字已被房间里的其他玩家使用" });
+        }
+        membership.player.name = name;
+        broadcastRoom(io, membership.room);
+        ack({ ok: true, name });
+      },
+    );
 
     socket.on(
       "host:remove-player",
@@ -646,6 +743,45 @@ export function createGameServer() {
         ack({ ok: true });
       },
     );
+
+    socket.on(
+      "host:leave-and-transfer",
+      (data: { targetPlayerId?: string }, ack: BasicAck) => {
+        const membership = findMembership(rooms, socket.id);
+        if (!membership?.player.isHost) {
+          return ack({ ok: false, message: "只有房主可以转让后退出" });
+        }
+        if (membership.room.game) {
+          return ack({ ok: false, message: "游戏开始后不能单独退出；如需中断游戏，请关闭房间" });
+        }
+        const target = membership.room.players.find(player => player.id === data.targetPlayerId);
+        if (!target || target.id === membership.player.id) {
+          return ack({ ok: false, message: "请选择一名其他玩家" });
+        }
+        if (!target.connected || !target.socketId) {
+          return ack({ ok: false, message: "只能将房主转让给在线玩家" });
+        }
+
+        membership.player.isHost = false;
+        target.isHost = true;
+        removePlayer(membership.room, membership.player.id);
+        void socket.leave(membership.room.id);
+        broadcastRoom(io, membership.room);
+        ack({ ok: true });
+      },
+    );
+
+    socket.on("host:close-room", (_data: unknown, ack: BasicAck) => {
+      const membership = findMembership(rooms, socket.id);
+      if (!membership?.player.isHost) {
+        return ack({ ok: false, message: "只有房主可以关闭房间" });
+      }
+      const roomId = membership.room.id;
+      rooms.delete(roomId);
+      io.to(roomId).emit("room:closed", { roomId, reason: "host_closed" });
+      io.in(roomId).socketsLeave(roomId);
+      ack({ ok: true });
+    });
 
     socket.on("player:leave-room", (_data: unknown, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
@@ -897,7 +1033,9 @@ export function createGameServer() {
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以重新开始游戏" });
       if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
       const { room } = membership;
-      const gameConfig = configFromPlayerCount(room.players.length);
+      const gameConfig = room.config.playerCount === room.players.length
+        ? room.config
+        : configFromPlayerCount(room.players.length);
       room.config = gameConfig;
       room.game = startGame(room.players.map(player => player.id), gameConfig);
       delete room.activePrompt;

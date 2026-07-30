@@ -66,7 +66,7 @@ main { padding: 18px clamp(18px, 4vw, 52px) 40px; }
   color: #fff;
 }
 .toolbar input.room-input { width: 112px; }
-.toolbar input.name-input { width: 190px; }
+.server-name-hint { color: #777e8a; font-size: 13px; }
 
 .room-summary { display: flex; align-items: baseline; gap: 8px; margin-left: auto; color: #9fa5b0; }
 .room-summary strong { color: #f0c957; font-size: 22px; }
@@ -136,7 +136,7 @@ main { padding: 18px clamp(18px, 4vw, 52px) 40px; }
   .toolbar > * { flex: 1 1 140px; }
   .toolbar label { flex: 0 0 100%; }
   .toolbar input { width: auto; }
-  .toolbar input.room-input, .toolbar input.name-input { width: auto; }
+  .toolbar input.room-input { width: auto; }
   .room-summary { flex: 0 0 100%; margin: 4px 0 0; }
   .summary { grid-template-columns: repeat(5, minmax(58px, 1fr)); }
   .summary.compact-summary { grid-template-columns: repeat(2, minmax(90px, 1fr)); }

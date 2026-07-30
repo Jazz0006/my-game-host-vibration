@@ -3,12 +3,10 @@ const state = {
   players: [],
   adding: false,
   confirmingAll: false,
-  nextPlayerNumber: 2,
 };
 
 const elements = {
   roomInput: document.querySelector("#room-input"),
-  playerName: document.querySelector("#player-name"),
   addPlayer: document.querySelector("#add-player"),
   roomId: document.querySelector("#room-id"),
   clientCount: document.querySelector("#client-count"),
@@ -318,7 +316,6 @@ function render() {
       : "等待添加";
   elements.addPlayer.disabled = state.adding;
   elements.roomInput.disabled = Boolean(state.roomId);
-  elements.playerName.disabled = state.adding;
   const confirmablePlayers = state.players.filter(player =>
     player.connected && player.gameState?.mode === "role_reveal" && !player.actionPending
   );
@@ -368,7 +365,6 @@ function render() {
 
 async function addVirtualPlayer() {
   const requestedRoomId = elements.roomInput.value.trim();
-  const name = elements.playerName.value.trim();
   if (!/^\d{6}$/u.test(requestedRoomId)) {
     showNotice("请输入正确的 6 位房间号。", "error");
     return;
@@ -377,27 +373,21 @@ async function addVirtualPlayer() {
     showNotice(`当前实验室已经连接房间 ${state.roomId}，请刷新页面后再连接其他房间。`, "error");
     return;
   }
-  if (!name) {
-    showNotice("请输入虚拟玩家名称。", "error");
-    return;
-  }
-
   state.adding = true;
   render();
-  showNotice(`正在将 ${name} 加入房间 ${requestedRoomId}……`);
+  showNotice(`正在请求服务器为房间 ${requestedRoomId} 添加虚拟玩家……`);
   const socket = createSocket();
 
   try {
-    await waitForConnection(socket, name);
+    await waitForConnection(socket, "虚拟玩家");
     const joined = await emitAck(socket, "player:join-room", {
       roomId: requestedRoomId,
-      name,
     });
     const player = {
       socket,
       playerId: joined.playerId,
       seat: joined.seat,
-      name,
+      name: joined.name,
       connected: true,
       removed: false,
       gameState: null,
@@ -416,6 +406,18 @@ async function addVirtualPlayer() {
     socket.on("room:removed", () => {
       removeVirtualPlayer(player, `${player.name} 已被房主移出房间。`);
     });
+    socket.on("room:closed", ({ roomId }) => {
+      if (roomId !== state.roomId) return;
+      for (const virtualPlayer of state.players) {
+        virtualPlayer.removed = true;
+        virtualPlayer.socket.disconnect();
+      }
+      state.players.length = 0;
+      state.roomId = "";
+      showNotice("房主已关闭房间，所有虚拟玩家均已退出。", "warn");
+      log("房主关闭了房间", "warn");
+      render();
+    });
     socket.on("disconnect", () => {
       if (player.removed) return;
       player.connected = false;
@@ -425,10 +427,8 @@ async function addVirtualPlayer() {
 
     state.roomId = requestedRoomId;
     state.players.push(player);
-    state.nextPlayerNumber += 1;
-    elements.playerName.value = `虚拟玩家 ${state.nextPlayerNumber} 号`;
-    showNotice(`${name} 已加入房间 ${requestedRoomId}，座位号为 ${joined.seat}。`, "success");
-    log(`${name} 加入房间，座位 ${joined.seat}`, "ok");
+    showNotice(`${joined.name} 已加入房间 ${requestedRoomId}，座位号为 ${joined.seat}。`, "success");
+    log(`${joined.name} 加入房间，座位 ${joined.seat}`, "ok");
   } catch (error) {
     socket.disconnect();
     const message = error instanceof Error ? error.message : String(error);
@@ -469,7 +469,7 @@ async function confirmAllRoles() {
 }
 
 elements.addPlayer.addEventListener("click", addVirtualPlayer);
-elements.playerName.addEventListener("keydown", event => {
+elements.roomInput.addEventListener("keydown", event => {
   if (event.key === "Enter") void addVirtualPlayer();
 });
 elements.clearLog.addEventListener("click", () => elements.eventLog.replaceChildren());

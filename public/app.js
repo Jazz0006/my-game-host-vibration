@@ -1,4 +1,5 @@
 const SESSION_KEY = "werewolfSession";
+const PLAYER_NAME_KEY = "werewolfPlayerName";
 const socket = io();
 const gameViewIds = [
   "lobby-view", "role-view", "waiting-view", "night-start-view",
@@ -15,6 +16,11 @@ let currentGameState = null;
 let membershipActive = false;
 let resumeInProgress = false;
 let sessionReplaced = false;
+let currentRoomState = null;
+let configCounts = {};
+let configPlayerCount = 0;
+let savedPlayerName = "";
+let currentPlayerName = "";
 
 const $ = id => document.getElementById(id);
 const setError = message => { $("room-error").textContent = message || ""; };
@@ -63,6 +69,34 @@ function clearSession() {
   try { localStorage.removeItem(SESSION_KEY); } catch { /* 当前连接仍可继续 */ }
 }
 
+function readSavedPlayerName() {
+  try {
+    return (localStorage.getItem(PLAYER_NAME_KEY)?.trim() || "").slice(0, 20);
+  } catch {
+    return "";
+  }
+}
+
+function savePlayerName(name) {
+  const normalized = name.trim().slice(0, 20);
+  if (!normalized) return;
+  savedPlayerName = normalized;
+  currentPlayerName = normalized;
+  try {
+    localStorage.setItem(PLAYER_NAME_KEY, normalized);
+  } catch {
+    setError("浏览器无法保存玩家名字，下次进入时需要重新设置。");
+  }
+  renderPlayerProfiles();
+}
+
+function renderPlayerProfiles() {
+  const entryName = savedPlayerName || "新玩家";
+  $("entry-welcome-text").textContent = savedPlayerName ? "欢迎回来，" : "欢迎你，";
+  $("entry-player-name").textContent = entryName;
+  $("room-player-name").textContent = currentPlayerName || entryName;
+}
+
 // ── Connection status ──────────────────────────────────────────────────────
 function setConnectionStatus(message, kind = "") {
   $("connection-status").textContent = message;
@@ -78,11 +112,14 @@ function vibrate(pattern = [300, 150, 300]) {
 function enterRoom(result) {
   currentRoomId = result.roomId;
   currentPlayerId = result.playerId;
+  if (result.name) savePlayerName(result.name);
   membershipActive = true;
   sessionReplaced = false;
   $("entry").classList.add("hidden");
   $("room").classList.remove("hidden");
   $("room-id").textContent = currentRoomId;
+  renderPlayerProfiles();
+  showRoomScreen("management");
   setConnectionStatus("已连接");
 }
 
@@ -93,11 +130,24 @@ function returnToEntry(message) {
   activePromptId = "";
   currentGameState = null;
   membershipActive = false;
+  currentRoomState = null;
+  configCounts = {};
+  configPlayerCount = 0;
   document.body.classList.remove("phase-night", "phase-day");
   $("room").classList.add("hidden");
   $("prompt-overlay").classList.add("hidden");
+  $("exit-room-dialog").classList.add("hidden");
+  $("player-name-dialog").classList.add("hidden");
   $("entry").classList.remove("hidden");
   $("entry-error").textContent = message || "";
+  renderPlayerProfiles();
+}
+
+function showRoomScreen(screen) {
+  $("management-screen").classList.toggle("hidden", screen !== "management");
+  $("config-screen").classList.toggle("hidden", screen !== "config");
+  $("game-screen").classList.toggle("hidden", screen !== "game");
+  $("room").dataset.screen = screen;
 }
 
 function resumeSession(session) {
@@ -117,10 +167,20 @@ function resumeSession(session) {
   });
 }
 
-function emitWithAck(event, data, onSuccess) {
+function emitWithAck(event, data, onSuccess, onFailure) {
   socket.timeout(5000).emit(event, data, (error, result) => {
-    if (error) return setError("服务器响应超时，请重试");
-    if (!result?.ok) return setError(result?.message || "操作失败，请重试");
+    if (error) {
+      const message = "服务器响应超时，请重试";
+      setError(message);
+      onFailure?.(message);
+      return;
+    }
+    if (!result?.ok) {
+      const message = result?.message || "操作失败，请重试";
+      setError(message);
+      onFailure?.(message);
+      return;
+    }
     setError("");
     onSuccess?.(result);
   });
@@ -163,11 +223,13 @@ function renderGameState(state) {
   setBodyPhase(state.phase);
 
   if (state.mode === "lobby") return showGameView("lobby-view");
+  showRoomScreen("game");
 
   if (state.roleName) {
     $("role-name").textContent = state.roleName;
     $("role-description").textContent = state.roleDescription;
-    $("waiting-role").textContent = `你的身份：${state.roleName}`;
+    $("waiting-role").textContent = "需要时可点击右上角再次查看身份";
+    $("peek-role").classList.toggle("hidden", state.mode === "role_reveal");
   }
 
   if (state.mode === "role_reveal") {
@@ -257,7 +319,7 @@ function renderGameState(state) {
 
   if (state.mode === "night_start") {
     showGameView("night-start-view");
-    $("night-start-role").textContent = `你的身份：${state.roleName}`;
+    $("night-start-role").textContent = "需要时可点击右上角再次查看身份";
     return;
   }
 
@@ -350,7 +412,7 @@ function renderGameState(state) {
 
 // ── Entry actions ──────────────────────────────────────────────────────────
 $("create-room").addEventListener("click", () => {
-  socket.emit("host:create-room", { name: $("host-name").value }, result => {
+  socket.emit("host:create-room", { name: savedPlayerName || undefined }, result => {
     if (!result?.ok) return $("entry-error").textContent = result?.message || "创建失败";
     saveSession(result);
     enterRoom(result);
@@ -358,7 +420,10 @@ $("create-room").addEventListener("click", () => {
 });
 
 $("join-room").addEventListener("click", () => {
-  socket.emit("player:join-room", { roomId: $("room-input").value, name: $("player-name").value }, result => {
+  socket.emit("player:join-room", {
+    roomId: $("room-input").value,
+    name: savedPlayerName || undefined,
+  }, result => {
     if (!result?.ok) return $("entry-error").textContent = result?.message || "加入失败";
     saveSession(result);
     enterRoom(result);
@@ -395,124 +460,398 @@ socket.on("session:replaced", () => {
 });
 
 // ── Room state ─────────────────────────────────────────────────────────────
-socket.on("room:state", state => {
-  if (state.roomId !== currentRoomId) return;
-  membershipActive = true;
-  setConnectionStatus("已连接");
-  setError("");
-  isHost = state.viewer.playerId === currentPlayerId && state.viewer.isHost;
-  $("host-controls").classList.toggle("hidden", !isHost);
+const roleIcons = { werewolf: "🐺", seer: "◉", witch: "⚗", guard: "♢", hunter: "⌖", villager: "●" };
 
-  $("players").replaceChildren(...state.players.map(player => {
+function defaultSeatPosition(index, total) {
+  const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(total, 1);
+  return { x: 0.5 + Math.cos(angle) * 0.39, y: 0.5 + Math.sin(angle) * 0.36 };
+}
+
+function rectangularSideCounts(count) {
+  const layouts = {
+    9: [3, 2, 2, 2],
+    10: [3, 2, 3, 2],
+    11: [3, 3, 3, 2],
+    12: [4, 2, 4, 2],
+  };
+  return layouts[count] || [4, 3, 4, Math.max(2, count - 11)];
+}
+
+function rectangularSeatPosition(index, total) {
+  const [topCount, rightCount, bottomCount, leftCount] = rectangularSideCounts(total);
+  let remaining = index;
+  if (remaining < topCount) {
+    return { x: 0.13 + 0.74 * (remaining + 1) / (topCount + 1), y: 0.12 };
+  }
+  remaining -= topCount;
+  if (remaining < rightCount) {
+    return { x: 0.89, y: 0.12 + 0.76 * (remaining + 1) / (rightCount + 1) };
+  }
+  remaining -= rightCount;
+  if (remaining < bottomCount) {
+    return { x: 0.87 - 0.74 * (remaining + 1) / (bottomCount + 1), y: 0.88 };
+  }
+  remaining -= bottomCount;
+  return { x: 0.11, y: 0.88 - 0.76 * (remaining + 1) / (leftCount + 1) };
+}
+
+function seatPosition(index, total) {
+  return total > 8
+    ? rectangularSeatPosition(index, total)
+    : defaultSeatPosition(index, total);
+}
+
+function insertMarkerPosition(insertIndex, total) {
+  if (total === 0) return { x: 0.5, y: 0.5 };
+  if (total <= 8) {
+    const angle = -Math.PI / 2 + Math.PI * 2 * (insertIndex - 0.5) / total;
+    return { x: 0.5 + Math.cos(angle) * 0.39, y: 0.5 + Math.sin(angle) * 0.36 };
+  }
+  const current = seatPosition(insertIndex === total ? 0 : insertIndex, total);
+  const previous = seatPosition((insertIndex - 1 + total) % total, total);
+  return { x: (previous.x + current.x) / 2, y: (previous.y + current.y) / 2 };
+}
+
+function nearestInsertIndex(point, total, rect) {
+  if (total <= 8) {
+    const angle = Math.atan2(
+      (point.y - 0.5) * rect.height,
+      (point.x - 0.5) * rect.width,
+    );
+    const normalized = (angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
+    return Math.max(0, Math.min(total, Math.round(normalized / (Math.PI * 2) * total)));
+  }
+  let nearest = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index <= total; index += 1) {
+    const marker = insertMarkerPosition(index, total);
+    const distance = Math.hypot(
+      (marker.x - point.x) * rect.width,
+      (marker.y - point.y) * rect.height,
+    );
+    if (distance < nearestDistance) {
+      nearest = index;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
+function insertIndexChangesOrder(insertIndex, originalIndex) {
+  const adjustedIndex = insertIndex > originalIndex ? insertIndex - 1 : insertIndex;
+  return adjustedIndex !== originalIndex;
+}
+
+function previewSeatIndex(index, draggedIndex, insertIndex) {
+  const adjustedIndex = insertIndex > draggedIndex ? insertIndex - 1 : insertIndex;
+  if (index === draggedIndex) return adjustedIndex;
+  const indexAfterRemoval = index > draggedIndex ? index - 1 : index;
+  return indexAfterRemoval >= adjustedIndex ? indexAfterRemoval + 1 : indexAfterRemoval;
+}
+
+function setSeatNodePosition(node, position) {
+  node.style.left = `${position.x * 100}%`;
+  node.style.top = `${position.y * 100}%`;
+}
+
+function makeSeatNode(player, index, total) {
+  const node = document.createElement("div");
+  node.className = `seat-player${isHost ? " movable" : ""}${player.connected ? "" : " offline"}${player.id === currentPlayerId ? " self" : ""}`;
+  setSeatNodePosition(node, seatPosition(index, total));
+  node.innerHTML = `<span class="seat-number">${player.seat}</span><span class="seat-player-name"></span>`;
+  node.querySelector(".seat-player-name").textContent = player.name;
+  node.title = isHost ? "长按并拖动调整座位顺序" : `${player.seat}号 ${player.name}`;
+  node.setAttribute("aria-label", `${player.seat}号 ${player.name}${player.isHost ? "，房主" : ""}`);
+  return node;
+}
+
+function enableSeatReordering(players, nodes) {
+  const map = $("seat-map");
+  const marker = document.createElement("div");
+  marker.className = "seat-insert-marker hidden";
+  marker.textContent = "+";
+  map.append(marker);
+
+  function resetPreview() {
+    nodes.forEach((node, index) => setSeatNodePosition(node, seatPosition(index, players.length)));
+    marker.classList.add("hidden");
+  }
+
+  nodes.forEach((node, draggedIndex) => {
+    let holdTimer = 0;
+    let dragging = false;
+    let insertIndex = null;
+    let startPoint = null;
+
+    function pointFromEvent(event) {
+      const rect = map.getBoundingClientRect();
+      return {
+        rect,
+        point: {
+          x: (event.clientX - rect.left) / rect.width,
+          y: (event.clientY - rect.top) / rect.height,
+        },
+      };
+    }
+
+    function beginDrag(event) {
+      dragging = true;
+      node.classList.add("dragging");
+      map.classList.add("reordering");
+      updateDrag(event);
+    }
+
+    function updateDrag(event) {
+      if (!dragging) return;
+      const { rect, point } = pointFromEvent(event);
+      setSeatNodePosition(node, point);
+      const insideMap = point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1;
+      insertIndex = insideMap ? nearestInsertIndex(point, players.length, rect) : null;
+      if (insertIndex === null || !insertIndexChangesOrder(insertIndex, draggedIndex)) {
+        nodes.forEach((otherNode, index) => {
+          if (index !== draggedIndex) setSeatNodePosition(otherNode, seatPosition(index, players.length));
+        });
+        marker.classList.add("hidden");
+        return;
+      }
+
+      nodes.forEach((otherNode, index) => {
+        if (index === draggedIndex) return;
+        setSeatNodePosition(
+          otherNode,
+          seatPosition(previewSeatIndex(index, draggedIndex, insertIndex), players.length),
+        );
+      });
+      setSeatNodePosition(marker, insertMarkerPosition(insertIndex, players.length));
+      marker.classList.remove("hidden");
+    }
+
+    function finishDrag(event, cancelled = false) {
+      window.clearTimeout(holdTimer);
+      if (!dragging) return;
+      const destination = insertIndex;
+      dragging = false;
+      if (event && node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId);
+      node.classList.remove("dragging");
+      map.classList.remove("reordering");
+      insertIndex = null;
+      resetPreview();
+      if (!cancelled && destination !== null && insertIndexChangesOrder(destination, draggedIndex)) {
+        emitWithAck("host:move-player-seat", {
+          targetPlayerId: players[draggedIndex].id,
+          insertIndex: destination,
+        });
+      }
+    }
+
+    node.addEventListener("pointerdown", event => {
+      if (event.pointerType !== "touch" && event.button !== 0) return;
+      startPoint = { x: event.clientX, y: event.clientY };
+      node.setPointerCapture(event.pointerId);
+      if (event.pointerType !== "touch") {
+        event.preventDefault();
+        beginDrag(event);
+      } else {
+        holdTimer = window.setTimeout(() => beginDrag(event), 260);
+      }
+    });
+    node.addEventListener("pointermove", event => {
+      if (event.pointerType === "touch" && !dragging && startPoint && Math.hypot(
+        event.clientX - startPoint.x,
+        event.clientY - startPoint.y,
+      ) > 10) {
+        window.clearTimeout(holdTimer);
+      }
+      updateDrag(event);
+    });
+    node.addEventListener("pointerup", event => finishDrag(event));
+    node.addEventListener("pointercancel", event => finishDrag(event, true));
+    node.addEventListener("lostpointercapture", () => {
+      if (dragging) finishDrag(null, true);
+      else window.clearTimeout(holdTimer);
+    });
+  });
+}
+
+function renderManagement(state) {
+  const orderedPlayers = [...state.players].sort((left, right) => left.seat - right.seat);
+  const center = document.createElement("div");
+  center.className = "table-center";
+  center.innerHTML = `<span>游戏桌</span><small>${orderedPlayers.length} 人已入座</small>`;
+  const seatNodes = orderedPlayers.map((player, index) => makeSeatNode(player, index, orderedPlayers.length));
+  $("seat-map").classList.toggle("rectangular", orderedPlayers.length > 8);
+  $("seat-map").replaceChildren(center, ...seatNodes);
+  if (isHost) enableSeatReordering(orderedPlayers, seatNodes);
+  $("player-count").textContent = `${state.players.filter(player => player.connected).length}/${state.players.length} 在线`;
+  $("seat-hint").textContent = isHost ? "拖动头像调整顺序（手机请长按）" : "座位由房主按照现场顺序排列";
+
+  $("players").replaceChildren(...orderedPlayers.map(player => {
     const row = document.createElement("div");
-    row.className = "player";
-
-    const seat = document.createElement("span");
-    seat.className = "seat";
-    seat.textContent = player.seat;
-
-    const name = document.createElement("span");
-    name.className = "player-name-label";
-    name.textContent = `${player.name}${player.isHost ? "（房主）" : ""}${player.connected ? "" : "（离线）"}`;
-
-    row.append(seat, name);
-
+    row.className = "player compact-player";
+    const identity = document.createElement("div");
+    identity.className = "compact-player-identity";
+    identity.innerHTML = `<span class="seat">${player.seat}</span><span class="player-name-label"></span>`;
+    identity.querySelector(".player-name-label").textContent = `${player.name}${player.isHost ? " · 房主" : ""}${player.connected ? "" : " · 离线"}`;
+    row.append(identity);
     if (isHost && player.id !== currentPlayerId) {
       const actions = document.createElement("span");
       actions.className = "player-actions";
-
       const transfer = document.createElement("button");
       transfer.className = "secondary";
       transfer.textContent = "设为房主";
       transfer.disabled = !player.connected;
       transfer.addEventListener("click", () => {
-        if (!confirm(`确定将房主转让给 ${player.seat}号 ${player.name}？`)) return;
-        emitWithAck("host:transfer-host", { targetPlayerId: player.id });
+        if (confirm(`确定将房主转让给 ${player.seat}号 ${player.name}？`)) {
+          emitWithAck("host:transfer-host", { targetPlayerId: player.id });
+        }
       });
-
       const remove = document.createElement("button");
       remove.className = "danger";
       remove.textContent = "移除";
-      remove.disabled = state.game.phase !== "lobby";
       remove.addEventListener("click", () => {
-        if (!confirm(`确定将 ${player.seat}号 ${player.name} 移出房间？`)) return;
-        emitWithAck("host:remove-player", { targetPlayerId: player.id });
+        if (confirm(`确定将 ${player.seat}号 ${player.name} 移出房间？`)) {
+          emitWithAck("host:remove-player", { targetPlayerId: player.id });
+        }
       });
-
       actions.append(transfer, remove);
       row.append(actions);
     }
     return row;
   }));
 
-  $("leave-room").disabled = state.game.phase !== "lobby";
+  $("open-config").classList.toggle("hidden", !isHost);
+  $("open-config").disabled = !state.game.canStart;
+  $("open-config").textContent = state.game.canStart
+    ? "进入游戏配置"
+    : `等待玩家（至少 ${state.game.minPlayers} 人且全部在线）`;
+  $("leave-room").textContent = "退出房间";
+  $("leave-room").title = "";
+  $("dev-tools").classList.toggle("hidden", !isHost);
 
-  if (!isHost) return;
+  const select = $("target-player");
+  const selected = select.value;
+  const candidates = state.players.filter(player => !player.isHost && player.connected);
+  select.replaceChildren(...candidates.map(player => new Option(`${player.seat}号 ${player.name}`, player.id)));
+  if (candidates.some(player => player.id === selected)) select.value = selected;
+  $("send-prompt").disabled = candidates.length === 0;
+  if (state.testPrompt) {
+    const target = state.players.find(player => player.id === state.testPrompt.targetPlayerId);
+    const labels = {
+      sent: "已发送，等待玩家确认",
+      acknowledged: "玩家已确认，等待提交",
+      submitted: `玩家已提交：${state.testPrompt.choice}`,
+    };
+    $("prompt-status").textContent = `${target?.seat || "?"}号 ${target?.name || "玩家"}：${labels[state.testPrompt.status]}`;
+  }
+}
 
+function loadDefaultConfig(state) {
+  configPlayerCount = state.players.length;
+  configCounts = Object.fromEntries(state.roleCatalog.map(role => [role.id, 0]));
+  for (const role of state.defaultRoleDeck) configCounts[role] = (configCounts[role] || 0) + 1;
+  renderRoleConfig(state);
+}
+
+function configValidation() {
+  const total = Object.values(configCounts).reduce((sum, value) => sum + value, 0);
+  const wolves = configCounts.werewolf || 0;
+  const good = total - wolves;
+  if (total !== configPlayerCount) return {
+    ok: false,
+    message: total < configPlayerCount
+      ? `还需配置 ${configPlayerCount - total} 个身份`
+      : `多配置了 ${total - configPlayerCount} 个身份`,
+    total, wolves, good,
+  };
+  if (wolves < 1) return { ok: false, message: "至少需要一名狼人", total, wolves, good };
+  if (wolves >= good) return { ok: false, message: "开局时狼人数量必须少于好人", total, wolves, good };
+  return { ok: true, message: "配置有效，可以发送身份", total, wolves, good };
+}
+
+function renderRoleConfig(state) {
+  $("config-player-count").textContent = configPlayerCount;
+  $("role-config-list").replaceChildren(...state.roleCatalog.map(role => {
+    const row = document.createElement("article");
+    row.className = "role-config-row";
+    row.innerHTML = `<span class="role-config-icon">${roleIcons[role.id] || "◇"}</span><span class="role-config-name"></span>`;
+    row.querySelector(".role-config-name").textContent = role.name;
+    const stepper = document.createElement("div");
+    stepper.className = "role-stepper";
+    const minus = document.createElement("button");
+    minus.className = "secondary";
+    minus.textContent = "−";
+    minus.disabled = (configCounts[role.id] || 0) === 0;
+    const value = document.createElement("strong");
+    value.textContent = configCounts[role.id] || 0;
+    const plus = document.createElement("button");
+    plus.className = "secondary";
+    plus.textContent = "+";
+    const specialRole = !["werewolf", "villager"].includes(role.id);
+    plus.disabled = specialRole && (configCounts[role.id] || 0) >= 1;
+    minus.addEventListener("click", () => { configCounts[role.id] -= 1; renderRoleConfig(state); });
+    plus.addEventListener("click", () => { configCounts[role.id] += 1; renderRoleConfig(state); });
+    stepper.append(minus, value, plus);
+    row.append(stepper);
+    return row;
+  }));
+  const validation = configValidation();
+  $("config-summary").className = `config-summary ${validation.ok ? "valid" : "invalid"}`;
+  $("config-summary").innerHTML = `<strong>${validation.total}/${configPlayerCount}</strong><span>狼人 ${validation.wolves} · 好人 ${validation.good}</span><small>${validation.message}</small>`;
+  $("deal-roles").disabled = !validation.ok;
+}
+
+function renderHostGameControls(state) {
   const game = state.game;
-  $("start-game").disabled = !game.canStart;
-  $("start-game").textContent = game.phase === "lobby"
-    ? game.canStart ? "开始游戏并随机发牌" : `等待玩家（${state.players.length}/${game.maxPlayers}，至少${game.minPlayers}人）`
-    : "游戏已开始";
-  // dev-content visibility managed separately by toggle; just show/hide the whole dev section
-  // when not in lobby phase, hide it to avoid confusion mid-game
-  if (game.phase !== "lobby") $("dev-content").classList.add("hidden");
-
+  $("game-host-controls").classList.toggle("hidden", !isHost);
   const inVote = game.phase === "day_vote" || game.phase === "day_pk";
   $("start-night").classList.toggle("hidden", game.phase !== "night_start");
   $("close-voting").classList.toggle("hidden", !inVote);
   $("vote-tally").classList.toggle("hidden", !inVote && game.phase !== "day_result");
   $("begin-night-start").classList.toggle("hidden", game.phase !== "day_result");
-  $("restart-game").classList.toggle("hidden", game.phase === "lobby");
-
+  $("restart-game").classList.toggle("hidden", game.phase !== "game_over");
   if (inVote || game.phase === "day_result") {
-    const tallyText = game.voteTally
-      ? Object.entries(game.voteTally)
-          .map(([id, count]) => {
-            const player = state.players.find(p => p.id === id);
-            return `${player?.seat || "?"}号 ${player?.name || ""}：${count}票`;
-          })
-          .join("　")
+    $("vote-tally").textContent = game.voteTally
+      ? Object.entries(game.voteTally).map(([id, count]) => {
+          const player = state.players.find(item => item.id === id);
+          return `${player?.seat || "?"}号 ${player?.name || ""}：${count}票`;
+        }).join("　")
       : `已投票：${game.votesCast || 0}/${game.votesRequired || 0}人`;
-    $("vote-tally").textContent = tallyText;
   }
-
-  const d = game.dayNumber;
-  const n = game.nightNumber;
-  const total = state.players.length;
-  const progressLabels = {
-    lobby: "大厅等待中",
-    role_reveal: `等待玩家确认身份（${game.confirmedRoles}/${total}）`,
-    night_start: `第${n}夜：等待开始`,
-    night_werewolf: `第${n}夜：狼人行动中`,
-    night_guard: `第${n}夜：守卫行动中`,
-    night_witch: `第${n}夜：女巫行动中`,
-    night_seer: `第${n}夜：预言家行动中`,
-    night_complete: `第${n}夜结束，进入白天`,
-    day_vote: `第${d}天：投票中（${game.votesCast || 0}/${game.votesRequired || 0}人已投）`,
-    day_pk: `第${d}天：平票，重新投票`,
-    day_result: `第${d}天：结果已出`,
-    day_hunter: "天亮/白天：猎人技能触发",
-    game_over: `游戏结束 — ${game.winner === "wolf" ? "狼人胜利" : "好人胜利"}`,
+  const labels = {
+    role_reveal: `等待确认身份（${game.confirmedRoles}/${state.players.length}）`,
+    night_start: `第 ${game.nightNumber} 夜 · 等待开始`,
+    night_werewolf: `第 ${game.nightNumber} 夜 · 狼人行动`,
+    night_guard: `第 ${game.nightNumber} 夜 · 守卫行动`,
+    night_witch: `第 ${game.nightNumber} 夜 · 女巫行动`,
+    night_seer: `第 ${game.nightNumber} 夜 · 预言家行动`,
+    night_complete: `第 ${game.nightNumber} 夜结束`,
+    day_vote: `第 ${game.dayNumber} 天 · 投票 ${game.votesCast || 0}/${game.votesRequired || 0}`,
+    day_pk: `第 ${game.dayNumber} 天 · 平票重投`,
+    day_result: `第 ${game.dayNumber} 天 · 结果`,
+    day_hunter: "猎人技能触发",
+    game_over: `游戏结束 · ${game.winner === "wolf" ? "狼人胜利" : "好人胜利"}`,
   };
-  $("game-progress").textContent = progressLabels[game.phase] || "游戏进行中";
+  $("game-progress").textContent = labels[game.phase] || "游戏进行中";
+}
 
-  const select = $("target-player");
-  const selected = select.value;
-  const candidates = state.players.filter(p => !p.isHost && p.connected);
-  select.replaceChildren(...candidates.map(p => new Option(`${p.seat}号 ${p.name}`, p.id)));
-  if (candidates.some(p => p.id === selected)) select.value = selected;
-  $("send-prompt").disabled = candidates.length === 0;
+socket.on("room:state", state => {
+  if (state.roomId !== currentRoomId) return;
+  membershipActive = true;
+  currentRoomState = state;
+  setConnectionStatus("已连接");
+  setError("");
+  isHost = state.viewer.playerId === currentPlayerId && state.viewer.isHost;
+  const viewer = state.players.find(player => player.id === currentPlayerId);
+  if (viewer?.name && viewer.name !== currentPlayerName) savePlayerName(viewer.name);
 
-  const prompt = state.testPrompt;
-  if (prompt) {
-    const target = state.players.find(p => p.id === prompt.targetPlayerId);
-    const labels = {
-      sent: "已发送，等待玩家确认",
-      acknowledged: "玩家已确认，等待提交",
-      submitted: `玩家已提交：${prompt.choice}`,
-    };
-    $("prompt-status").textContent = `${target?.seat || "?"}号 ${target?.name || "玩家"}：${labels[prompt.status]}`;
+  if (state.game.phase === "lobby") {
+    if ($("room").dataset.screen === "game") showRoomScreen("management");
+    if (!isHost && $("room").dataset.screen === "config") showRoomScreen("management");
+    if ($("room").dataset.screen === "config" && configPlayerCount !== state.players.length) loadDefaultConfig(state);
+    renderManagement(state);
+  } else {
+    showRoomScreen("game");
+    renderHostGameControls(state);
   }
 });
 
@@ -547,11 +886,25 @@ socket.on("room:removed", () => {
   clearSession();
   returnToEntry("你已被房主移出房间");
 });
+socket.on("room:closed", () => {
+  clearSession();
+  returnToEntry("房主已关闭房间");
+});
 
 // ── Host controls ──────────────────────────────────────────────────────────
-$("start-game").addEventListener("click", () => {
-  if (!confirm("确定开始游戏并随机分配身份？开始后不能再加入玩家。")) return;
-  emitWithAck("host:start-game", {});
+$("open-config").addEventListener("click", () => {
+  if (!currentRoomState || !isHost || !currentRoomState.game.canStart) return;
+  loadDefaultConfig(currentRoomState);
+  showRoomScreen("config");
+});
+$("back-management").addEventListener("click", () => showRoomScreen("management"));
+$("deal-roles").addEventListener("click", () => {
+  if (!currentRoomState || !configValidation().ok) return;
+  const roleDeck = currentRoomState.roleCatalog.flatMap(role =>
+    Array.from({ length: configCounts[role.id] || 0 }, () => role.id)
+  );
+  if (!confirm("确定发送身份？发送后不能再调整玩家和本局配置。")) return;
+  emitWithAck("host:start-game", { roleDeck });
 });
 $("start-night").addEventListener("click", () => {
   if (!confirm("确定开始夜晚？所有玩家请闭眼。")) return;
@@ -565,6 +918,10 @@ $("begin-night-start").addEventListener("click", () => emitWithAck("host:begin-n
 $("restart-game").addEventListener("click", () => {
   if (!confirm("确定重新开始游戏？所有进度将重置，重新随机发牌。")) return;
   emitWithAck("host:restart-game", {});
+});
+$("peek-role").addEventListener("click", () => {
+  if (!currentGameState?.roleName) return;
+  alert(`你的身份：${currentGameState.roleName}\n\n${currentGameState.roleDescription}`);
 });
 
 // ── Player actions ─────────────────────────────────────────────────────────
@@ -618,12 +975,94 @@ $("hunter-no-shot").addEventListener("click", () => {
     targetPlayerId: null,
   });
 });
-$("leave-room").addEventListener("click", () => {
+function openExitRoomDialog() {
+  if (isHost) {
+    const gameInProgress = currentRoomState?.game.phase !== "lobby";
+    const candidates = gameInProgress
+      ? []
+      : currentRoomState?.players.filter(player =>
+          player.id !== currentPlayerId && player.connected
+        ) || [];
+    $("exit-successor").replaceChildren(
+      ...candidates.map(player => new Option(`${player.seat}号 ${player.name}`, player.id))
+    );
+    $("transfer-exit-option").classList.toggle("hidden", candidates.length === 0);
+    $("exit-room-description").textContent = gameInProgress
+      ? "游戏正在进行。如需中断本局并重新建房，请关闭当前房间。"
+      : candidates.length > 0
+      ? "请选择将房主交给其他玩家，或者关闭整个房间。"
+      : "当前没有其他在线玩家，只能关闭房间。";
+    $("exit-dialog-error").textContent = "";
+    $("exit-room-dialog").classList.remove("hidden");
+    return;
+  }
   if (!confirm("确定退出当前房间？")) return;
   emitWithAck("player:leave-room", {}, () => {
     clearSession();
     returnToEntry("你已退出房间");
   });
+}
+$("leave-room").addEventListener("click", openExitRoomDialog);
+$("game-exit-room").addEventListener("click", openExitRoomDialog);
+$("cancel-exit-room").addEventListener("click", () => {
+  $("exit-room-dialog").classList.add("hidden");
+});
+$("confirm-transfer-exit").addEventListener("click", () => {
+  const targetPlayerId = $("exit-successor").value;
+  if (!targetPlayerId) {
+    $("exit-dialog-error").textContent = "请选择一名在线玩家作为新房主";
+    return;
+  }
+  emitWithAck("host:leave-and-transfer", { targetPlayerId }, () => {
+    clearSession();
+    returnToEntry("你已转让房主并退出房间");
+  }, message => {
+    $("exit-dialog-error").textContent = message;
+  });
+});
+$("confirm-close-room").addEventListener("click", () => {
+  if (!confirm("确定关闭房间？所有玩家都会退出，当前游戏进度将结束。")) return;
+  emitWithAck("host:close-room", {}, () => {
+    clearSession();
+    returnToEntry("房间已关闭");
+  }, message => {
+    $("exit-dialog-error").textContent = message;
+  });
+});
+
+function openPlayerNameDialog() {
+  $("player-name-editor").value = currentRoomId ? currentPlayerName : savedPlayerName;
+  $("player-name-dialog-error").textContent = "";
+  $("player-name-dialog").classList.remove("hidden");
+  $("player-name-editor").focus();
+}
+
+$("entry-player-profile").addEventListener("click", openPlayerNameDialog);
+$("room-player-profile").addEventListener("click", openPlayerNameDialog);
+$("cancel-player-name").addEventListener("click", () => {
+  $("player-name-dialog").classList.add("hidden");
+});
+$("save-player-name").addEventListener("click", () => {
+  const name = $("player-name-editor").value.trim();
+  if (!name) {
+    $("player-name-dialog-error").textContent = "请输入玩家名字";
+    return;
+  }
+  if (!currentRoomId) {
+    savePlayerName(name);
+    $("player-name-dialog").classList.add("hidden");
+    return;
+  }
+  emitWithAck("player:update-name", { name }, result => {
+    savePlayerName(result.name);
+    $("player-name-dialog").classList.add("hidden");
+  }, message => {
+    $("player-name-dialog-error").textContent = message;
+  });
+});
+$("player-name-editor").addEventListener("keydown", event => {
+  if (event.key === "Enter") $("save-player-name").click();
+  if (event.key === "Escape") $("cancel-player-name").click();
 });
 
 // ── Dev / test prompt ──────────────────────────────────────────────────────
@@ -666,3 +1105,7 @@ document.querySelectorAll("[data-choice]").forEach(button => {
     });
   });
 });
+
+savedPlayerName = readSavedPlayerName();
+currentPlayerName = savedPlayerName;
+renderPlayerProfiles();

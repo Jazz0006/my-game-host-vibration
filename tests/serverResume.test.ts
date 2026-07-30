@@ -10,6 +10,7 @@ type AckSuccess = {
   roomId: string;
   playerId: string;
   seat: number;
+  name?: string;
   resumeToken?: string;
   isHost?: boolean;
 };
@@ -97,8 +98,12 @@ describe("server session resume", () => {
     expect(JSON.stringify(state)).not.toContain("resumeToken");
   });
 
-  it("restores the original player, seat, and pending private prompt", async () => {
+  it("restores the player at the host-assigned seat with the pending private prompt", async () => {
     const { host, player, hostSession, playerSession } = await createRoomWithPlayer();
+    expect(await emitAck<AckSuccess | AckFailure>(host, "host:move-player-seat", {
+      targetPlayerId: playerSession.playerId,
+      insertIndex: 0,
+    })).toEqual({ ok: true });
     const promptPromise = waitFor<{ promptId: string }>(player, "player:test-prompt");
     await emitAck(host, "host:send-test-prompt", { targetPlayerId: playerSession.playerId });
     const prompt = await promptPromise;
@@ -130,7 +135,8 @@ describe("server session resume", () => {
     expect(resumed).toMatchObject({
       ok: true,
       playerId: playerSession.playerId,
-      seat: playerSession.seat,
+      seat: 1,
+      name: "玩家二号",
       isHost: false,
     });
     expect(await privateState).toMatchObject({ promptId: prompt.promptId, status: "sent" });
@@ -139,7 +145,7 @@ describe("server session resume", () => {
     const room = game.rooms.get(hostSession.roomId);
     expect(room?.players).toHaveLength(2);
     expect(room?.players.find(item => item.id === playerSession.playerId)).toMatchObject({
-      seat: playerSession.seat,
+      seat: 1,
       connected: true,
     });
   });

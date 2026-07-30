@@ -14,6 +14,11 @@
       <div class="app-logo">🐺</div>
       <h1 class="app-title">无法官狼人杀</h1>
       <p class="app-subtitle">震动提醒 · 私密操作 · 无需裁判</p>
+      <button id="entry-player-profile" class="player-profile-button" type="button">
+        <span id="entry-welcome-text">欢迎你，</span>
+        <strong id="entry-player-name">新玩家</strong>
+        <small>点击名字可以修改</small>
+      </button>
     </header>
 
     <div class="tab-switcher">
@@ -22,16 +27,12 @@
     </div>
 
     <section id="form-host" class="panel">
-      <label for="host-name">你的名字</label>
-      <input id="host-name" maxlength="20" value="房主" placeholder="输入你的名字">
       <button id="create-room">创建房间</button>
     </section>
 
     <section id="form-join" class="panel hidden">
       <label for="room-input">房间号</label>
       <input id="room-input" inputmode="numeric" maxlength="6" placeholder="6位房间号">
-      <label for="player-name">你的名字</label>
-      <input id="player-name" maxlength="20" placeholder="输入你的名字">
       <button id="join-room">加入房间</button>
     </section>
 
@@ -40,46 +41,91 @@
 
   <!-- ===== ROOM SCREEN ===== -->
   <main id="room" class="hidden">
-
-    <!-- Room header -->
     <div class="room-header">
       <div>
         <div class="room-id-label">房间号</div>
         <div id="room-id" class="room-id"></div>
       </div>
-      <div id="connection-status" class="connection-status">已连接</div>
+      <div class="room-profile">
+        <div id="connection-status" class="connection-status">已连接</div>
+        <button id="room-player-profile" class="room-player-profile" type="button">
+          <span>欢迎回来，</span><strong id="room-player-name"></strong>
+          <small>点击修改</small>
+        </button>
+      </div>
     </div>
 
-    <!-- Player list -->
-    <section class="panel">
-      <div id="players"></div>
-    </section>
+    <!-- ===== PLAYER MANAGEMENT ===== -->
+    <div id="management-screen">
+      <section class="seat-section">
+        <div class="section-heading">
+          <div>
+            <h2>座位视图</h2>
+            <p id="seat-hint" class="muted">等待玩家加入房间</p>
+          </div>
+          <button id="vibration-test" class="icon-button secondary" aria-label="测试本机震动" title="测试本机震动">⌁</button>
+        </div>
+        <div id="seat-map" class="seat-map" aria-label="桌面座位视图">
+          <div class="table-center"><span>游戏桌</span></div>
+        </div>
+      </section>
 
-    <!-- Host controls -->
-    <section id="host-controls" class="panel hidden">
-      <h2>房主控制</h2>
-      <button id="start-game" disabled>等待玩家加入</button>
+      <details class="player-drawer">
+        <summary><span>玩家管理</span><span id="player-count" class="muted"></span></summary>
+        <div id="players" class="compact-player-list"></div>
+      </details>
+
+      <section class="management-actions">
+        <button id="open-config" disabled>进入游戏配置</button>
+        <button id="leave-room" class="danger-outline">退出房间</button>
+      </section>
+
+      <section id="dev-tools" class="panel hidden">
+        <button id="dev-toggle" class="dev-toggle collapsed">
+          开发者测试工具
+          <span class="dev-chevron">▼</span>
+        </button>
+        <div id="dev-content" class="hidden">
+          <label for="target-player">选择接收测试震动的玩家</label>
+          <select id="target-player"></select>
+          <button id="send-prompt" class="secondary">发送测试提醒</button>
+          <div id="prompt-status" class="status">尚未发送提醒</div>
+        </div>
+      </section>
+      <p class="bottom-note">夜间请手持手机并保持此页面在前台。推荐使用 Android Chrome。</p>
+    </div>
+
+    <!-- ===== GAME CONFIGURATION ===== -->
+    <div id="config-screen" class="hidden">
+      <section class="config-heading">
+        <button id="back-management" class="back-button secondary">← 返回座位</button>
+        <p class="eyebrow">游戏配置</p>
+        <h2><span id="config-player-count">0</span> 人身份配置</h2>
+        <p class="muted">已按照当前人数载入推荐配置，可以在发身份前调整。</p>
+      </section>
+      <section id="role-config-list" class="role-config-list"></section>
+      <div id="config-summary" class="config-summary"></div>
+      <section class="config-actions">
+        <button id="deal-roles">发送身份并进入游戏</button>
+      </section>
+    </div>
+
+    <!-- ===== ACTIVE GAME ===== -->
+    <div id="game-screen" class="hidden">
+      <div class="game-status-bar">
+        <span id="game-progress">游戏进行中</span>
+        <button id="peek-role" class="role-peek secondary hidden">查看身份</button>
+      </div>
+
+      <section id="game-host-controls" class="game-host-controls hidden">
       <button id="start-night" class="hidden">开始夜晚</button>
       <button id="close-voting" class="hidden secondary">关闭投票</button>
       <div id="vote-tally" class="hidden status"></div>
       <button id="begin-night-start" class="hidden">宣布结果，准备下一夜</button>
       <button id="restart-game" class="hidden danger">重新开始游戏</button>
-      <div id="game-progress" class="status">大厅等待中</div>
+      <button id="game-exit-room" class="danger-outline">退出或关闭房间</button>
+      </section>
 
-      <!-- Dev tools (collapsible) -->
-      <button id="dev-toggle" class="dev-toggle collapsed">
-        开发者测试工具
-        <span class="dev-chevron">▼</span>
-      </button>
-      <div id="dev-content" class="hidden">
-        <label for="target-player">选择接收测试震动的玩家</label>
-        <select id="target-player"></select>
-        <button id="send-prompt" class="secondary">发送测试提醒</button>
-        <div id="prompt-status" class="status">尚未发送提醒</div>
-      </div>
-    </section>
-
-    <!-- Game panel -->
     <section id="game-panel" class="panel">
 
       <div id="lobby-view">
@@ -201,15 +247,52 @@
 
     </section>
 
-    <!-- Bottom bar -->
-    <div class="bottom-bar">
-      <button id="vibration-test" class="secondary">测试本机震动</button>
-      <button id="leave-room" class="danger">退出房间</button>
     </div>
-    <p class="bottom-note">夜间请手持手机并保持此页面在前台。推荐使用 Android Chrome。</p>
     <p id="room-error" class="error room-error"></p>
 
   </main>
+
+  <!-- ===== PLAYER NAME DIALOG ===== -->
+  <section id="player-name-dialog" class="overlay name-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="player-name-dialog-title">
+    <div class="name-dialog-card">
+      <p class="eyebrow">本机玩家档案</p>
+      <h2 id="player-name-dialog-title">修改玩家名字</h2>
+      <p class="muted">这个名字会保存在当前设备，下次创建或加入房间时自动使用。</p>
+      <label for="player-name-editor">玩家名字</label>
+      <input id="player-name-editor" maxlength="20" placeholder="输入你的常用名字">
+      <p id="player-name-dialog-error" class="error"></p>
+      <div class="name-dialog-actions">
+        <button id="cancel-player-name" class="secondary">取消</button>
+        <button id="save-player-name">保存名字</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== EXIT ROOM DIALOG ===== -->
+  <section id="exit-room-dialog" class="overlay exit-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="exit-room-title">
+    <div class="exit-dialog-card">
+      <p class="eyebrow">房间管理</p>
+      <h2 id="exit-room-title">退出房间</h2>
+      <p id="exit-room-description" class="muted"></p>
+
+      <div id="transfer-exit-option" class="exit-option">
+        <h3>转让房主并离开</h3>
+        <p class="muted">其他玩家继续留在当前房间。</p>
+        <label for="exit-successor">指定新房主</label>
+        <select id="exit-successor"></select>
+        <button id="confirm-transfer-exit">转让并退出</button>
+      </div>
+
+      <div class="exit-option danger-zone">
+        <h3>关闭房间</h3>
+        <p class="muted">所有玩家都会退出，当前房间和游戏进度将结束。</p>
+        <button id="confirm-close-room" class="danger">关闭房间</button>
+      </div>
+
+      <p id="exit-dialog-error" class="error"></p>
+      <button id="cancel-exit-room" class="secondary">取消</button>
+    </div>
+  </section>
 
   <!-- ===== PROMPT OVERLAY ===== -->
   <section id="prompt-overlay" class="overlay hidden">
