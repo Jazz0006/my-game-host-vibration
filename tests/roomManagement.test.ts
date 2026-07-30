@@ -5,11 +5,20 @@ import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
 
-type Session = { ok: true; roomId: string; playerId: string; seat: number; name: string };
+type Session = {
+  ok: true;
+  roomId: string;
+  playerId: string;
+  seat: number;
+  name: string;
+  gameKind: "werewolf";
+};
 type Ack = { ok: true } | { ok: false; message: string };
 type RoomView = {
+  gameKind: "werewolf";
   viewer: { playerId: string; isHost: boolean };
   players: Array<{ id: string; name: string; seat: number; isHost: boolean }>;
+  game: { minPlayers: number; maxPlayers: number };
 };
 
 function waitFor<T>(
@@ -75,6 +84,42 @@ describe("room member management", () => {
     });
     return { host, player, hostSession, playerSession };
   }
+
+  it("defaults legacy room creation to werewolf and returns the kind to members", async () => {
+    const { host, hostSession, playerSession } = await createRoomWithPlayer();
+    expect(hostSession.gameKind).toBe("werewolf");
+    expect(playerSession.gameKind).toBe("werewolf");
+    expect(game.rooms.get(hostSession.roomId)?.gameKind).toBe("werewolf");
+
+    const statePromise = waitFor<RoomView>(host, "room:state");
+    const third = await connect();
+    await emitAck<Session>(third, "player:join-room", {
+      roomId: hostSession.roomId,
+      name: "玩家三号",
+    });
+    expect(await statePromise).toMatchObject({
+      gameKind: "werewolf",
+      game: { minPlayers: 5, maxPlayers: 12 },
+    });
+  });
+
+  it("rejects unknown and unavailable game kinds at room creation", async () => {
+    const unknownClient = await connect();
+    expect(await emitAck<Ack>(unknownClient, "host:create-room", {
+      gameKind: "unknown",
+    })).toEqual({ ok: false, message: "未知的游戏类型" });
+
+    const developmentClient = await connect();
+    expect(await emitAck<Ack>(developmentClient, "host:create-room", {
+      gameKind: "doudizhu",
+    })).toEqual({ ok: false, message: "斗地主暂未开放" });
+
+    const comingSoonClient = await connect();
+    expect(await emitAck<Ack>(comingSoonClient, "host:create-room", {
+      gameKind: "clocktower",
+    })).toEqual({ ok: false, message: "血染钟楼暂未开放" });
+    expect(game.rooms.size).toBe(0);
+  });
 
   it("assigns and returns unique default names when clients do not provide one", async () => {
     const host = await connect();
@@ -287,6 +332,10 @@ describe("room member management", () => {
     }
 
     expect(await emitAck<Ack>(host, "host:start-game", {})).toEqual({ ok: true });
+    expect(game.rooms.get(hostSession.roomId)?.game).toMatchObject({
+      kind: "werewolf",
+      state: { phase: "role_reveal" },
+    });
     expect(await emitAck<Ack>(host, "host:move-player-seat", {
       targetPlayerId: playerSession.playerId,
       insertIndex: 0,

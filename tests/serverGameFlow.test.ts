@@ -93,7 +93,9 @@ describe("five-player Socket.IO game flow", () => {
     );
     expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {})).toEqual({ ok: true });
     const dealt = await Promise.all(roleViews);
-    expect(JSON.stringify(await publicState)).not.toMatch(/werewolf|witch|seer|villager/);
+    const { gameKind, ...publicStateWithoutKind } = await publicState;
+    expect(gameKind).toBe("werewolf");
+    expect(JSON.stringify(publicStateWithoutKind)).not.toMatch(/werewolf|witch|seer|villager/);
 
     const byRole = new Map(dealt.map((view, index) => [view.role, { view, socket: sockets[index]!, session: sessions[index]! }]));
     expect(dealt.map(view => view.role).sort()).toEqual(

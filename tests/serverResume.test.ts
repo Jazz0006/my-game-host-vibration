@@ -13,6 +13,7 @@ type AckSuccess = {
   name?: string;
   resumeToken?: string;
   isHost?: boolean;
+  gameKind?: "werewolf";
 };
 
 type AckFailure = { ok: false; message: string };
@@ -138,6 +139,7 @@ describe("server session resume", () => {
       seat: 1,
       name: "玩家二号",
       isHost: false,
+      gameKind: "werewolf",
     });
     expect(await privateState).toMatchObject({ promptId: prompt.promptId, status: "sent" });
     expect(await resumedPrompt).toMatchObject({ promptId: prompt.promptId, resumed: true });
