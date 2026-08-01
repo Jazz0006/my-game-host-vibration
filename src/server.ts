@@ -8,7 +8,12 @@ import {
   GameRuleError,
   type GameState,
 } from "./domain/game.js";
-import { createGameEngineRegistry, GameRegistryError } from "./games/registry.js";
+import {
+  createGameEngineRegistry,
+  GameRegistryError,
+  type GameEngineRegistry,
+} from "./games/registry.js";
+import { DouDizhuRuleError } from "./games/doudizhu/errors.js";
 import type { GameTransition } from "./games/shared/engine.js";
 import type { GameKind } from "./games/shared/metadata.js";
 import type { WerewolfCommand } from "./games/werewolf/engine.js";
@@ -19,6 +24,12 @@ import {
   type TestPrompt,
 } from "./domain/testPrompt.js";
 import { createSessionToken, verifySessionToken } from "./domain/sessionToken.js";
+import {
+  ROOM_SNAPSHOT_SCHEMA_VERSION,
+  SqliteRoomStore,
+  type PersistedRoom,
+  type RoomStore,
+} from "./infrastructure/roomStore.js";
 
 export type Player = {
   id: string;
@@ -35,13 +46,20 @@ export type Room = {
   gameKind: GameKind;
   players: Player[];
   createdAt: number;
+  updatedAt: number;
   config: unknown;
+  engineRegistry: GameEngineRegistry;
+  roomStore?: RoomStore;
   activePrompt?: TestPrompt;
   game?: { kind: GameKind; state: unknown };
 };
 
 type ClientAck<T> = (response: T) => void;
 type BasicAck = ClientAck<{ ok: true } | { ok: false; message: string }>;
+type GameCommandAck = ClientAck<
+  | { ok: true; changed: boolean; revision?: number | undefined; actionId?: string | undefined }
+  | { ok: false; message: string }
+>;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +80,45 @@ function findMembership(rooms: Map<string, Room>, socketId: string) {
     if (player) return { room, player };
   }
   return null;
+}
+
+function persistedRoom(room: Room): PersistedRoom {
+  return {
+    schemaVersion: ROOM_SNAPSHOT_SCHEMA_VERSION,
+    id: room.id,
+    gameKind: room.gameKind,
+    players: room.players.map(player => ({
+      id: player.id,
+      name: player.name,
+      seat: player.seat,
+      isHost: player.isHost,
+      resumeTokenHash: player.resumeTokenHash,
+    })),
+    createdAt: room.createdAt,
+    updatedAt: room.updatedAt,
+    config: room.config,
+    ...(room.activePrompt ? { activePrompt: room.activePrompt } : {}),
+    ...(room.game ? { game: room.game } : {}),
+  };
+}
+
+function persistRoom(room: Room): void {
+  if (!room.roomStore) return;
+  room.updatedAt = Date.now();
+  room.roomStore.saveRoom(persistedRoom(room));
+}
+
+function appendRoomEvent(
+  room: Room,
+  eventType: string,
+  options: { actorPlayerId?: string; payload?: unknown } = {},
+): void {
+  room.roomStore?.appendEvent({
+    roomId: room.id,
+    eventType,
+    ...(options.actorPlayerId ? { actorPlayerId: options.actorPlayerId } : {}),
+    ...(options.payload === undefined ? {} : { payload: options.payload }),
+  });
 }
 
 function publicPlayer(player: Player) {
@@ -130,12 +187,17 @@ function handleWerewolfCommand(
 ): GameTransition<GameState> {
   const game = activeWerewolfGame(room);
   if (!game) throw new GameRuleError("当前房间不支持狼人杀命令");
-  const transition = GAME_REGISTRY.handleCommand(
+  const transition = room.engineRegistry.handleCommand(
     room.gameKind,
     game,
     command,
   ) as GameTransition<GameState>;
   room.game = { kind: room.gameKind, state: transition.state };
+  if (transition.changed) {
+    appendRoomEvent(room, `werewolf:${command.type}`, {
+      ...("playerId" in command ? { actorPlayerId: command.playerId } : {}),
+    });
+  }
   return transition;
 }
 
@@ -164,16 +226,16 @@ type LegacyLobbyView = {
 function roomView(room: Room, viewer: Player) {
   const prompt = room.activePrompt;
   const game = room.game;
-  const metadata = GAME_REGISTRY.getMetadata(room.gameKind);
+  const metadata = room.engineRegistry.getMetadata(room.gameKind);
   const gameView = game
-    ? GAME_REGISTRY.projectPublicView(
+    ? room.engineRegistry.projectPublicView(
         room.gameKind,
         game.state,
         { players: room.players, viewerIsHost: viewer.isHost },
       ) as LegacyPublicGameView
     : undefined;
   const lobbyView = !game
-    ? GAME_REGISTRY.projectLobbyView(
+    ? room.engineRegistry.projectLobbyView(
         room.gameKind,
         room.players.length,
         room.config,
@@ -224,7 +286,7 @@ function roomView(room: Room, viewer: Player) {
 function sendPrivateState(io: Server, room: Room, player: Player): void {
   if (!player.socketId) return;
   const view = room.game
-    ? GAME_REGISTRY.projectPlayerView(room.gameKind, room.game.state, player.id, {
+    ? room.engineRegistry.projectPlayerView(room.gameKind, room.game.state, player.id, {
         players: room.players,
         viewerIsHost: player.isHost,
       })
@@ -246,6 +308,7 @@ function sendCurrentTestPrompt(socket: Socket, room: Room, player: Player): void
 }
 
 function broadcastRoom(io: Server, room: Room): void {
+  persistRoom(room);
   for (const player of room.players) {
     if (!player.socketId) continue;
     io.to(player.socketId).emit("room:state", roomView(room, player));
@@ -255,14 +318,17 @@ function broadcastRoom(io: Server, room: Room): void {
 
 function alertCurrentActors(io: Server, room: Room, resumed = false): void {
   if (!room.game) return;
-  const game = activeWerewolfGame(room);
-  if (!game) return;
-  for (const playerId of GAME_REGISTRY.actingPlayerIds(room.gameKind, room.game.state)) {
+  const gameView = room.engineRegistry.projectPublicView(
+    room.gameKind,
+    room.game.state,
+    { players: room.players, viewerIsHost: false },
+  ) as { actionId?: string; phase?: string };
+  for (const playerId of room.engineRegistry.actingPlayerIds(room.gameKind, room.game.state)) {
     const player = room.players.find(item => item.id === playerId);
     if (player?.socketId) {
       io.to(player.socketId).emit("player:action-alert", {
-        actionId: game.actionId,
-        phase: game.phase,
+        actionId: gameView.actionId,
+        phase: gameView.phase,
         resumed,
       });
     }
@@ -313,15 +379,55 @@ function afterCloseDayVote(io: Server, room: Room): void {
 function ruleError(ack: BasicAck, error: unknown): void {
   ack({
     ok: false,
-    message: error instanceof GameRuleError ? error.message : "操作失败，请重试",
+    message:
+      error instanceof GameRuleError ||
+      error instanceof DouDizhuRuleError ||
+      error instanceof GameRegistryError
+        ? error.message
+        : "操作失败，请重试",
   });
 }
 
-export function createGameServer() {
+export function createGameServer(options: {
+  gameRegistry?: GameEngineRegistry;
+  roomStore?: RoomStore;
+  idleRoomTtlMs?: number;
+} = {}) {
   const app = express();
   const httpServer = http.createServer(app);
   const io = new Server(httpServer);
   const rooms = new Map<string, Room>();
+  const gameRegistry = options.gameRegistry ?? GAME_REGISTRY;
+  const roomStore = options.roomStore;
+
+  if (roomStore) {
+    const idleRoomTtlMs = options.idleRoomTtlMs ?? 7 * 24 * 60 * 60 * 1000;
+    roomStore.deleteRoomsUpdatedBefore(Date.now() - idleRoomTtlMs);
+    for (const snapshot of roomStore.loadRooms()) {
+      try {
+        gameRegistry.getEngine(snapshot.gameKind);
+        const room: Room = {
+          id: snapshot.id,
+          gameKind: snapshot.gameKind,
+          players: snapshot.players.map(player => ({
+            ...player,
+            socketId: null,
+            connected: false,
+          })),
+          createdAt: snapshot.createdAt,
+          updatedAt: snapshot.updatedAt,
+          config: snapshot.config,
+          engineRegistry: gameRegistry,
+          roomStore,
+          ...(snapshot.activePrompt ? { activePrompt: snapshot.activePrompt as TestPrompt } : {}),
+          ...(snapshot.game ? { game: snapshot.game } : {}),
+        };
+        rooms.set(room.id, room);
+      } catch {
+        // Keep incompatible snapshots in SQLite for a future compatible rules engine.
+      }
+    }
+  }
 
   app.use(express.static(path.join(__dirname, "../public")));
   if (process.env.NODE_ENV !== "production") {
@@ -334,6 +440,9 @@ export function createGameServer() {
   app.get("/health", (_req, res) => {
     res.json({ ok: true, rooms: rooms.size, time: new Date().toISOString() });
   });
+  app.get("/api/games", (_req, res) => {
+    res.json({ games: gameRegistry.listMetadata() });
+  });
 
   io.on("connection", (socket: Socket) => {
     socket.on(
@@ -345,9 +454,9 @@ export function createGameServer() {
         }
         const roomId = createRoomId(rooms);
         const requestedGameKind = data?.gameKind ?? "werewolf";
-        const metadata = GAME_REGISTRY.requireAvailable(requestedGameKind);
+        const metadata = gameRegistry.requireAvailable(requestedGameKind);
         const { kind: gameKind } = metadata;
-        const config = GAME_REGISTRY.createConfig(gameKind, metadata.minPlayers);
+        const config = gameRegistry.createConfig(gameKind, metadata.minPlayers);
         const session = createSessionToken();
         const host: Player = {
           id: crypto.randomUUID(),
@@ -363,9 +472,13 @@ export function createGameServer() {
           gameKind,
           players: [host],
           createdAt: Date.now(),
+          updatedAt: Date.now(),
           config,
+          engineRegistry: gameRegistry,
+          ...(roomStore ? { roomStore } : {}),
         };
         rooms.set(roomId, room);
+        appendRoomEvent(room, "room_created", { actorPlayerId: host.id });
         void socket.join(roomId);
         ack({
           ok: true,
@@ -397,7 +510,7 @@ export function createGameServer() {
         }
         if (!room) return ack({ ok: false, message: "房间不存在" });
         if (room.game) return ack({ ok: false, message: "游戏已经开始，不能再加入" });
-        const metadata = GAME_REGISTRY.getMetadata(room.gameKind);
+        const metadata = room.engineRegistry.getMetadata(room.gameKind);
         if (room.players.length >= metadata.maxPlayers) {
           return ack({ ok: false, message: `房间最多${metadata.maxPlayers}人` });
         }
@@ -415,6 +528,7 @@ export function createGameServer() {
         };
         room.players.push(player);
         void socket.join(roomId);
+        appendRoomEvent(room, "player_joined", { actorPlayerId: player.id });
         ack({
           ok: true,
           roomId,
@@ -454,6 +568,7 @@ export function createGameServer() {
         player.socketId = socket.id;
         player.connected = true;
         void socket.join(room.id);
+        appendRoomEvent(room, "player_resumed", { actorPlayerId: player.id });
 
         if (previousSocketId && previousSocketId !== socket.id) {
           const previousSocket = io.sockets.sockets.get(previousSocketId);
@@ -474,7 +589,7 @@ export function createGameServer() {
         sendCurrentTestPrompt(socket, room, player);
         if (
           room.game &&
-          GAME_REGISTRY.actingPlayerIds(room.gameKind, room.game.state).includes(player.id)
+          room.engineRegistry.actingPlayerIds(room.gameKind, room.game.state).includes(player.id)
         ) {
           alertCurrentActors(io, room, true);
         }
@@ -486,7 +601,7 @@ export function createGameServer() {
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以开始游戏" });
       const { room } = membership;
       if (room.game) return ack({ ok: false, message: "游戏已经开始" });
-      const metadata = GAME_REGISTRY.getMetadata(room.gameKind);
+      const metadata = room.engineRegistry.getMetadata(room.gameKind);
       if (
         room.players.length < metadata.minPlayers ||
         room.players.length > metadata.maxPlayers
@@ -501,7 +616,7 @@ export function createGameServer() {
       }
 
       try {
-        const gameConfig = GAME_REGISTRY.createConfig(
+        const gameConfig = room.engineRegistry.createConfig(
           room.gameKind,
           room.players.length,
           data,
@@ -509,18 +624,83 @@ export function createGameServer() {
         room.config = gameConfig;
         room.game = {
           kind: room.gameKind,
-          state: GAME_REGISTRY.createInitialState(room.gameKind, {
+          state: room.engineRegistry.createInitialState(room.gameKind, {
             playerIds: room.players.map(player => player.id),
             config: gameConfig,
           }),
         };
         delete room.activePrompt;
+        appendRoomEvent(room, "game_started", {
+          actorPlayerId: membership.player.id,
+          payload: { gameKind: room.gameKind },
+        });
         broadcastRoom(io, room);
+        alertCurrentActors(io, room);
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);
       }
     });
+
+    socket.on(
+      "game:command",
+      (data: Record<string, unknown> | undefined, ack: GameCommandAck) => {
+        const membership = findMembership(rooms, socket.id);
+        if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
+        const { room, player } = membership;
+        if (!room.game) return ack({ ok: false, message: "游戏尚未开始" });
+        if (room.gameKind === "werewolf") {
+          return ack({ ok: false, message: "狼人杀仍使用现有命令协议" });
+        }
+        if (!data || typeof data.type !== "string") {
+          return ack({ ok: false, message: "游戏命令无效" });
+        }
+
+        try {
+          const transition = room.engineRegistry.handleCommand(
+            room.gameKind,
+            room.game.state,
+            { ...data, actorPlayerId: player.id },
+          );
+          room.game = { kind: room.gameKind, state: transition.state };
+          if (transition.changed) {
+            appendRoomEvent(room, `command:${String(data.type)}`, {
+              actorPlayerId: player.id,
+            });
+            for (const event of transition.events) {
+              appendRoomEvent(room, event.type, {
+                actorPlayerId: player.id,
+                ...(event.payload === undefined ? {} : { payload: event.payload }),
+              });
+            }
+            broadcastRoom(io, room);
+            for (const event of transition.events) {
+              io.to(room.id).emit("game:event", event);
+            }
+            alertCurrentActors(io, room);
+          }
+          const publicView = room.engineRegistry.projectPublicView(
+            room.gameKind,
+            room.game.state,
+            { players: room.players, viewerIsHost: false },
+          ) as { revision?: number; actionId?: string };
+          ack({
+            ok: true,
+            changed: transition.changed,
+            revision: publicView.revision,
+            actionId: publicView.actionId,
+          });
+        } catch (error) {
+          ack({
+            ok: false,
+            message:
+              error instanceof DouDizhuRuleError || error instanceof GameRegistryError
+                ? error.message
+                : "操作失败，请重试",
+          });
+        }
+      },
+    );
 
     socket.on(
       "host:move-player-seat",
@@ -655,6 +835,7 @@ export function createGameServer() {
       }
       const roomId = membership.room.id;
       rooms.delete(roomId);
+      membership.room.roomStore?.deleteRoom(roomId);
       io.to(roomId).emit("room:closed", { roomId, reason: "host_closed" });
       io.in(roomId).socketsLeave(roomId);
       ack({ ok: true });
@@ -672,7 +853,10 @@ export function createGameServer() {
 
       removePlayer(membership.room, membership.player.id);
       void socket.leave(membership.room.id);
-      if (membership.room.players.length === 0) rooms.delete(membership.room.id);
+      if (membership.room.players.length === 0) {
+        rooms.delete(membership.room.id);
+        membership.room.roomStore?.deleteRoom(membership.room.id);
+      }
       else broadcastRoom(io, membership.room);
       ack({ ok: true });
     });
@@ -877,7 +1061,7 @@ export function createGameServer() {
           if (changed) {
             broadcastRoom(io, membership.room);
             // Auto-close when all alive players have voted
-            const publicView = GAME_REGISTRY.projectPublicView(
+            const publicView = membership.room.engineRegistry.projectPublicView(
               membership.room.gameKind,
               membership.room.game!.state,
               { players: membership.room.players, viewerIsHost: false },
@@ -927,11 +1111,11 @@ export function createGameServer() {
     socket.on("host:restart-game", (_data: unknown, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以重新开始游戏" });
-      if (!activeWerewolfGame(membership.room)) {
+      if (!membership.room.game) {
         return ack({ ok: false, message: "游戏尚未开始" });
       }
       const { room } = membership;
-      const gameConfig = GAME_REGISTRY.createConfig(
+      const gameConfig = room.engineRegistry.createConfig(
         room.gameKind,
         room.players.length,
         room.config,
@@ -939,13 +1123,15 @@ export function createGameServer() {
       room.config = gameConfig;
       room.game = {
         kind: room.gameKind,
-        state: GAME_REGISTRY.createInitialState(room.gameKind, {
+        state: room.engineRegistry.createInitialState(room.gameKind, {
           playerIds: room.players.map(player => player.id),
           config: gameConfig,
         }),
       };
       delete room.activePrompt;
+      appendRoomEvent(room, "game_restarted", { actorPlayerId: membership.player.id });
       broadcastRoom(io, room);
+      alertCurrentActors(io, room);
       ack({ ok: true });
     });
 
@@ -1013,6 +1199,9 @@ export function createGameServer() {
       if (!membership) return;
       membership.player.connected = false;
       membership.player.socketId = null;
+      appendRoomEvent(membership.room, "player_disconnected", {
+        actorPlayerId: membership.player.id,
+      });
       broadcastRoom(io, membership.room);
     });
   });
@@ -1023,7 +1212,10 @@ export function createGameServer() {
 const port = Number(process.env.PORT ?? 3000);
 const isEntryPoint = process.argv[1] && path.resolve(process.argv[1]) === __filename;
 if (isEntryPoint) {
-  const { httpServer } = createGameServer();
+  const databasePath = process.env.ROOM_DB_PATH ?? path.join(__dirname, "../data/gamehost.sqlite");
+  const roomStore = new SqliteRoomStore(databasePath);
+  const { httpServer } = createGameServer({ roomStore });
+  httpServer.once("close", () => roomStore.close());
   httpServer.listen(port, "0.0.0.0", () => {
     console.log(`服务运行于 http://localhost:${port}`);
   });

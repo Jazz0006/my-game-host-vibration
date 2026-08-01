@@ -1,7 +1,10 @@
 {
   "name": "gamehostsystem",
   "version": "1.0.0",
-  "description": "Android-first in-person Werewolf game host using private vibration prompts",
+  "description": "Mobile-first in-person multi-game host with private player views",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",

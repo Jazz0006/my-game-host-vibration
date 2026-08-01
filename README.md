@@ -1,12 +1,13 @@
-# 无法官狼人杀助手
+# 线下多游戏主持台
 
-面向线下面杀的流程辅助系统。当前验证阶段只支持 Android 手机浏览器，玩家在夜间手持手机并保持页面在前台，通过私密震动接收行动提醒。
+面向线下聚会的多游戏流程辅助系统。狼人杀是当前正式开放游戏；标准三人斗地主已开放“测试版”创建入口，用于三台真机完整对局和恢复验证。
 
 ## 当前技术栈
 
 - Node.js + TypeScript
 - Express
 - Socket.IO
+- Node.js 内置 SQLite
 - 静态 Web 玩家端
 
 ## 本地运行
@@ -15,6 +16,8 @@
 npm.cmd install
 npm.cmd run dev
 ```
+
+需要 Node.js 22.5 或更高版本。
 
 打开 `http://localhost:3000`。健康检查地址为 `http://localhost:3000/health`。
 
@@ -77,7 +80,16 @@ http://localhost:3001/dev/lab
 player:resume { roomId, playerId, resumeToken }
 ```
 
-恢复成功时保留原座位和权限，不会创建重复玩家。同一身份仍有旧连接时，新连接会替换旧连接。当前房间和恢复凭据仅保存在服务器内存中，服务器进程重启后不会恢复。
+恢复成功时保留原座位、权限和私人游戏状态，不会创建重复玩家。同一身份仍有旧连接时，新连接会替换旧连接。
+
+正式启动入口默认把房间快照和脱敏事件日志保存在 `data/gamehost.sqlite`。服务器重启后，玩家可继续使用原来的 `resumeToken` 恢复；恢复前所有已保存玩家统一视为离线。可以通过环境变量覆盖数据库位置：
+
+```powershell
+$env:ROOM_DB_PATH='D:\gamehost-data\gamehost.sqlite'
+npm.cmd start
+```
+
+启动时会清理超过 7 天没有更新的房间；每个房间最多保留最近 1000 条事件。
 
 当 `NODE_ENV=production` 时，`/dev/lab` 和实验室静态资源不会开放。
 

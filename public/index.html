@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>无法官狼人杀</title>
+  <title>线下游戏主持台</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -11,9 +11,9 @@
   <!-- ===== ENTRY SCREEN ===== -->
   <main id="entry">
     <header class="app-header">
-      <div class="app-logo">🐺</div>
-      <h1 class="app-title">无法官狼人杀</h1>
-      <p class="app-subtitle">震动提醒 · 私密操作 · 无需裁判</p>
+      <div class="app-logo">🎲</div>
+      <h1 class="app-title">线下游戏主持台</h1>
+      <p class="app-subtitle">选择游戏 · 创建房间 · 私密操作</p>
       <button id="entry-player-profile" class="player-profile-button" type="button">
         <span id="entry-welcome-text">欢迎你，</span>
         <strong id="entry-player-name">新玩家</strong>
@@ -27,7 +27,14 @@
     </div>
 
     <section id="form-host" class="panel">
-      <button id="create-room">创建房间</button>
+      <div class="entry-section-heading">
+        <h2>选择游戏</h2>
+        <p class="muted">每个房间只能运行一种游戏</p>
+      </div>
+      <div id="game-list" class="game-list" aria-live="polite">
+        <p class="muted">正在载入游戏列表……</p>
+      </div>
+      <button id="create-room" disabled>创建狼人杀房间</button>
     </section>
 
     <section id="form-join" class="panel hidden">
@@ -43,6 +50,7 @@
   <main id="room" class="hidden">
     <div class="room-header">
       <div>
+        <div id="room-game-name" class="room-game-name">狼人杀</div>
         <div class="room-id-label">房间号</div>
         <div id="room-id" class="room-id"></div>
       </div>
@@ -237,6 +245,44 @@
         <h2>你已出局</h2>
         <div id="spectator-deaths" class="death-list"></div>
         <p class="muted">请保持安静，继续观看游戏。</p>
+      </div>
+
+      <div id="doudizhu-view" class="hidden doudizhu-board">
+        <div class="ddz-round-summary">
+          <span id="ddz-role-badge" class="ddz-role-badge">等待叫地主</span>
+          <span id="ddz-score-summary">底分 0 · 倍数 1</span>
+        </div>
+        <div id="ddz-players" class="ddz-players" aria-label="斗地主玩家状态"></div>
+        <section class="ddz-table" aria-label="当前牌桌">
+          <div>
+            <span class="ddz-table-label">桌面牌型</span>
+            <strong id="ddz-combination-label">等待首家出牌</strong>
+          </div>
+          <div id="ddz-table-cards" class="ddz-card-row compact"></div>
+          <div id="ddz-bottom-wrap" class="ddz-bottom-wrap hidden">
+            <span class="ddz-table-label">地主底牌</span>
+            <div id="ddz-bottom-cards" class="ddz-card-row compact"></div>
+          </div>
+        </section>
+        <div id="ddz-turn-message" class="ddz-turn-message" aria-live="polite"></div>
+        <div id="ddz-bidding-actions" class="ddz-actions hidden">
+          <button data-bid="0" class="secondary">不叫</button>
+          <button data-bid="1">1 分</button>
+          <button data-bid="2">2 分</button>
+          <button data-bid="3">3 分</button>
+        </div>
+        <div id="ddz-play-actions" class="ddz-actions hidden">
+          <button id="ddz-pass" class="secondary">不出</button>
+          <button id="ddz-play">出牌 <span id="ddz-selected-count"></span></button>
+        </div>
+        <div id="ddz-result" class="ddz-result hidden"></div>
+        <section class="ddz-hand-section">
+          <div class="ddz-hand-heading">
+            <strong>我的手牌</strong>
+            <span id="ddz-hand-count" class="muted"></span>
+          </div>
+          <div id="ddz-hand" class="ddz-hand" aria-label="我的手牌"></div>
+        </section>
       </div>
 
       <div id="game-over-view" class="hidden game-over-inner">

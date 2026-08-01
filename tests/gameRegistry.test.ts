@@ -18,7 +18,7 @@ describe("game engine registry", () => {
       players: [game.minPlayers, game.maxPlayers],
     }))).toEqual([
       { kind: "werewolf", availability: "available", players: [5, 12] },
-      { kind: "doudizhu", availability: "development", players: [3, 3] },
+      { kind: "doudizhu", availability: "available", players: [3, 3] },
       { kind: "clocktower", availability: "coming_soon", players: [7, 12] },
     ]);
   });
@@ -30,8 +30,13 @@ describe("game engine registry", () => {
     expect(() => registry.getEngine("missing")).toThrowError(
       new GameRegistryError("未知的游戏类型"),
     );
-    expect(() => registry.getEngine("doudizhu")).toThrow("斗地主暂未开放");
-    expect(() => registry.getEngine("clocktower")).toThrow("血染钟楼暂未开放");
+    expect(registry.getEngine("doudizhu").metadata.kind).toBe("doudizhu");
+    expect(registry.requireAvailable("doudizhu")).toMatchObject({
+      availability: "available",
+      statusLabel: "测试版",
+    });
+    expect(() => registry.getEngine("clocktower")).toThrow("血染钟楼引擎尚未注册");
+    expect(() => registry.requireAvailable("clocktower")).toThrow("血染钟楼暂未开放");
   });
 
   it("rejects duplicate engine registration", () => {

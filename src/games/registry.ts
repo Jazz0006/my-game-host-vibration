@@ -4,6 +4,7 @@ import type {
   GameTransition,
   GameViewContext,
 } from "./shared/engine.js";
+import { doudizhuEngine } from "./doudizhu/engine.js";
 import { werewolfEngine } from "./werewolf/engine.js";
 import {
   GAME_METADATA,
@@ -61,8 +62,10 @@ export class GameEngineRegistry {
   }
 
   getEngine(kind: unknown): AnyGameEngine {
-    const metadata = this.requireAvailable(kind);
-    return this.#engines.get(metadata.kind)!;
+    const metadata = this.getMetadata(kind);
+    const engine = this.#engines.get(metadata.kind);
+    if (!engine) throw new GameRegistryError(`${metadata.name}引擎尚未注册`);
+    return engine;
   }
 
   createConfig(kind: unknown, playerCount: number, input?: unknown): unknown {
@@ -99,8 +102,11 @@ export class GameEngineRegistry {
   }
 }
 
-export function createGameEngineRegistry(): GameEngineRegistry {
-  const registry = new GameEngineRegistry();
+export function createGameEngineRegistry(
+  metadata: readonly GameMetadata[] = GAME_METADATA,
+): GameEngineRegistry {
+  const registry = new GameEngineRegistry(metadata);
   registry.register(werewolfEngine);
+  registry.register(doudizhuEngine);
   return registry;
 }

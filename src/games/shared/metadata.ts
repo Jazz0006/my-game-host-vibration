@@ -9,6 +9,7 @@ export type GameMetadata = {
   minPlayers: number;
   maxPlayers: number;
   availability: GameAvailability;
+  statusLabel?: string;
 };
 
 export const GAME_METADATA: readonly GameMetadata[] = [
@@ -26,7 +27,8 @@ export const GAME_METADATA: readonly GameMetadata[] = [
     description: "标准三人斗地主",
     minPlayers: 3,
     maxPlayers: 3,
-    availability: "development",
+    availability: "available",
+    statusLabel: "测试版",
   },
   {
     kind: "clocktower",

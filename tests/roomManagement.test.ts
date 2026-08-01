@@ -11,7 +11,7 @@ type Session = {
   playerId: string;
   seat: number;
   name: string;
-  gameKind: "werewolf";
+  gameKind: "werewolf" | "doudizhu";
 };
 type Ack = { ok: true } | { ok: false; message: string };
 type RoomView = {
@@ -85,6 +85,37 @@ describe("room member management", () => {
     return { host, player, hostSession, playerSession };
   }
 
+  it("serves the game catalog with availability and player limits", async () => {
+    const response = await fetch(`${baseUrl}/api/games`);
+    expect(response.ok).toBe(true);
+    expect(await response.json()).toEqual({
+      games: [
+        expect.objectContaining({
+          kind: "werewolf",
+          name: "狼人杀",
+          minPlayers: 5,
+          maxPlayers: 12,
+          availability: "available",
+        }),
+        expect.objectContaining({
+          kind: "doudizhu",
+          name: "斗地主",
+          minPlayers: 3,
+          maxPlayers: 3,
+          availability: "available",
+          statusLabel: "测试版",
+        }),
+        expect.objectContaining({
+          kind: "clocktower",
+          name: "血染钟楼",
+          minPlayers: 7,
+          maxPlayers: 12,
+          availability: "coming_soon",
+        }),
+      ],
+    });
+  });
+
   it("defaults legacy room creation to werewolf and returns the kind to members", async () => {
     const { host, hostSession, playerSession } = await createRoomWithPlayer();
     expect(hostSession.gameKind).toBe("werewolf");
@@ -103,22 +134,22 @@ describe("room member management", () => {
     });
   });
 
-  it("rejects unknown and unavailable game kinds at room creation", async () => {
+  it("opens the doudizhu beta while rejecting unknown and unavailable games", async () => {
     const unknownClient = await connect();
     expect(await emitAck<Ack>(unknownClient, "host:create-room", {
       gameKind: "unknown",
     })).toEqual({ ok: false, message: "未知的游戏类型" });
 
-    const developmentClient = await connect();
-    expect(await emitAck<Ack>(developmentClient, "host:create-room", {
+    const betaClient = await connect();
+    expect(await emitAck<Session>(betaClient, "host:create-room", {
       gameKind: "doudizhu",
-    })).toEqual({ ok: false, message: "斗地主暂未开放" });
+    })).toMatchObject({ ok: true, gameKind: "doudizhu" });
 
     const comingSoonClient = await connect();
     expect(await emitAck<Ack>(comingSoonClient, "host:create-room", {
       gameKind: "clocktower",
     })).toEqual({ ok: false, message: "血染钟楼暂未开放" });
-    expect(game.rooms.size).toBe(0);
+    expect(game.rooms.size).toBe(1);
   });
 
   it("assigns and returns unique default names when clients do not provide one", async () => {

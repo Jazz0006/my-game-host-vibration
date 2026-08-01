@@ -6,7 +6,7 @@ const gameViewIds = [
   "wolf-view", "witch-view", "seer-view", "seer-result-view",
   "guard-view", "hunter-view", "night-complete-view",
   "day-vote-view", "day-pk-view", "day-result-view",
-  "spectator-view", "game-over-view",
+  "spectator-view", "doudizhu-view", "game-over-view",
 ];
 let currentRoomId = "";
 let currentPlayerId = "";
@@ -21,6 +21,11 @@ let configCounts = {};
 let configPlayerCount = 0;
 let savedPlayerName = "";
 let currentPlayerName = "";
+let gameCatalog = [];
+let selectedGameKind = "";
+let currentGameKind = "";
+let selectedDoudizhuCards = new Set();
+let lastDoudizhuActionId = "";
 
 const $ = id => document.getElementById(id);
 const setError = message => { $("room-error").textContent = message || ""; };
@@ -59,6 +64,7 @@ function saveSession(result) {
       roomId: result.roomId,
       playerId: result.playerId,
       resumeToken: result.resumeToken,
+      gameKind: result.gameKind,
     }));
   } catch {
     setError("浏览器无法保存恢复凭证，刷新或关闭页面后将不能恢复身份。");
@@ -97,6 +103,82 @@ function renderPlayerProfiles() {
   $("room-player-name").textContent = currentPlayerName || entryName;
 }
 
+function gameName(kind) {
+  return gameCatalog.find(game => game.kind === kind)?.name || (
+    kind === "werewolf" ? "狼人杀" : "当前游戏"
+  );
+}
+
+function playerRange(game) {
+  return game.minPlayers === game.maxPlayers
+    ? `${game.minPlayers} 人`
+    : `${game.minPlayers}–${game.maxPlayers} 人`;
+}
+
+function renderGameCatalog() {
+  const statusLabels = {
+    available: "可创建",
+    development: "开发中",
+    coming_soon: "敬请期待",
+  };
+  const cards = gameCatalog.map(game => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "game-card";
+    card.dataset.gameKind = game.kind;
+    card.disabled = game.availability !== "available";
+    card.classList.toggle("selected", game.kind === selectedGameKind);
+
+    const heading = document.createElement("span");
+    heading.className = "game-card-heading";
+    const name = document.createElement("strong");
+    name.textContent = game.name;
+    const status = document.createElement("span");
+    status.className = `game-availability ${game.availability}${game.statusLabel ? " beta" : ""}`;
+    status.textContent = game.statusLabel || statusLabels[game.availability] || game.availability;
+    heading.append(name, status);
+
+    const description = document.createElement("span");
+    description.className = "game-description";
+    description.textContent = game.description;
+    const players = document.createElement("small");
+    players.textContent = playerRange(game);
+    card.append(heading, description, players);
+
+    if (!card.disabled) {
+      card.addEventListener("click", () => {
+        selectedGameKind = game.kind;
+        renderGameCatalog();
+      });
+    }
+    return card;
+  });
+  $("game-list").replaceChildren(...cards);
+  const selected = gameCatalog.find(game => game.kind === selectedGameKind);
+  $("create-room").disabled = !selected || selected.availability !== "available";
+  $("create-room").textContent = selected
+    ? `创建${selected.name}房间`
+    : "选择可用游戏";
+}
+
+async function loadGameCatalog() {
+  try {
+    const response = await fetch("/api/games", { cache: "no-store" });
+    if (!response.ok) throw new Error("catalog unavailable");
+    const result = await response.json();
+    gameCatalog = Array.isArray(result.games) ? result.games : [];
+    selectedGameKind = gameCatalog.find(game => game.availability === "available")?.kind || "";
+    renderGameCatalog();
+    if (currentGameKind) $("room-game-name").textContent = gameName(currentGameKind);
+  } catch {
+    const error = document.createElement("p");
+    error.className = "error";
+    error.textContent = "游戏列表载入失败，请刷新页面重试。";
+    $("game-list").replaceChildren(error);
+    $("create-room").disabled = true;
+  }
+}
+
 // ── Connection status ──────────────────────────────────────────────────────
 function setConnectionStatus(message, kind = "") {
   $("connection-status").textContent = message;
@@ -112,12 +194,14 @@ function vibrate(pattern = [300, 150, 300]) {
 function enterRoom(result) {
   currentRoomId = result.roomId;
   currentPlayerId = result.playerId;
+  currentGameKind = result.gameKind || "werewolf";
   if (result.name) savePlayerName(result.name);
   membershipActive = true;
   sessionReplaced = false;
   $("entry").classList.add("hidden");
   $("room").classList.remove("hidden");
   $("room-id").textContent = currentRoomId;
+  $("room-game-name").textContent = gameName(currentGameKind);
   renderPlayerProfiles();
   showRoomScreen("management");
   setConnectionStatus("已连接");
@@ -126,9 +210,12 @@ function enterRoom(result) {
 function returnToEntry(message) {
   currentRoomId = "";
   currentPlayerId = "";
+  currentGameKind = "";
   isHost = false;
   activePromptId = "";
   currentGameState = null;
+  selectedDoudizhuCards.clear();
+  lastDoudizhuActionId = "";
   membershipActive = false;
   currentRoomState = null;
   configCounts = {};
@@ -217,6 +304,154 @@ function renderTargets(containerId, targets, onSelect, className = "") {
   ));
 }
 
+const DDZ_RANK_LABELS = {
+  11: "J", 12: "Q", 13: "K", 14: "A", 15: "2",
+};
+const DDZ_SUIT_LABELS = {
+  clubs: "♣", diamonds: "♦", hearts: "♥", spades: "♠",
+};
+const DDZ_COMBINATION_LABELS = {
+  single: "单张", pair: "对子", triple: "三张", triple_single: "三带一",
+  triple_pair: "三带一对", straight: "顺子", consecutive_pairs: "连对",
+  airplane: "飞机", airplane_singles: "飞机带单", airplane_pairs: "飞机带对",
+  four_two_singles: "四带二", four_two_pairs: "四带两对", bomb: "炸弹", rocket: "王炸",
+};
+
+function doudizhuCardInfo(cardId) {
+  if (cardId === "joker-small") return { rank: 16, suit: "joker", label: "小王" };
+  if (cardId === "joker-big") return { rank: 17, suit: "joker", label: "大王" };
+  const [suit, rankText] = cardId.split("-");
+  const rank = Number(rankText);
+  return {
+    rank,
+    suit,
+    label: `${DDZ_SUIT_LABELS[suit] || ""}${DDZ_RANK_LABELS[rank] || rank}`,
+  };
+}
+
+function sortedDoudizhuCards(cardIds) {
+  const suitOrder = { spades: 4, hearts: 3, clubs: 2, diamonds: 1, joker: 5 };
+  return [...cardIds].sort((left, right) => {
+    const leftCard = doudizhuCardInfo(left);
+    const rightCard = doudizhuCardInfo(right);
+    return rightCard.rank - leftCard.rank ||
+      (suitOrder[rightCard.suit] || 0) - (suitOrder[leftCard.suit] || 0);
+  });
+}
+
+function makeDoudizhuCard(cardId, selectable = false) {
+  const card = doudizhuCardInfo(cardId);
+  const element = document.createElement(selectable ? "button" : "span");
+  element.className = `ddz-card ${["diamonds", "hearts"].includes(card.suit) ? "red" : ""} ${card.suit === "joker" ? "joker" : ""}`;
+  element.textContent = card.label;
+  element.title = card.label;
+  element.dataset.cardId = cardId;
+  if (selectable) {
+    element.type = "button";
+    element.classList.toggle("selected", selectedDoudizhuCards.has(cardId));
+    element.addEventListener("click", () => {
+      if (selectedDoudizhuCards.has(cardId)) selectedDoudizhuCards.delete(cardId);
+      else selectedDoudizhuCards.add(cardId);
+      renderDoudizhuState(currentGameState);
+    });
+  }
+  return element;
+}
+
+function renderDoudizhuCards(containerId, cardIds, selectable = false) {
+  $(containerId).replaceChildren(...sortedDoudizhuCards(cardIds).map(cardId =>
+    makeDoudizhuCard(cardId, selectable)
+  ));
+}
+
+function doudizhuPlayerName(playerId) {
+  const player = currentRoomState?.players.find(item => item.id === playerId);
+  return player ? `${player.seat}号 ${player.name}` : "玩家";
+}
+
+function submitDoudizhuCommand(command) {
+  if (!currentGameState) return;
+  emitWithAck("game:command", {
+    ...command,
+    requestId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+    actionId: currentGameState.actionId,
+    stateRevision: currentGameState.revision,
+  }, () => {
+    selectedDoudizhuCards.clear();
+  });
+}
+
+function renderDoudizhuState(state) {
+  showGameView("doudizhu-view");
+  $("peek-role").classList.add("hidden");
+  if (lastDoudizhuActionId !== state.actionId) {
+    selectedDoudizhuCards.clear();
+    lastDoudizhuActionId = state.actionId;
+  }
+  selectedDoudizhuCards = new Set(
+    [...selectedDoudizhuCards].filter(cardId => state.hand.includes(cardId)),
+  );
+
+  const isMyTurn = state.currentPlayerId === currentPlayerId;
+  const isLandlord = state.landlordPlayerId === currentPlayerId;
+  const multiplier = state.result?.multiplier || 2 ** (state.bombCount || 0);
+  $("ddz-role-badge").textContent = !state.landlordPlayerId
+    ? "等待叫地主"
+    : isLandlord ? "地主" : "农民";
+  $("ddz-role-badge").classList.toggle("farmer", Boolean(state.landlordPlayerId && !isLandlord));
+  $("ddz-score-summary").textContent = `底分 ${state.bidding.highestBid || 0} · 倍数 ${multiplier}`;
+
+  $("ddz-players").replaceChildren(...state.playerIds.map(playerId => {
+    const player = currentRoomState?.players.find(item => item.id === playerId);
+    const element = document.createElement("article");
+    element.className = `ddz-player ${playerId === currentPlayerId ? "self" : ""} ${playerId === state.currentPlayerId && state.phase !== "game_over" ? "current" : ""}`;
+    const role = playerId === state.landlordPlayerId ? "地主" : state.landlordPlayerId ? "农民" : "叫分中";
+    element.innerHTML = `<strong></strong><small>${role} · ${state.handCounts[playerId]} 张</small>`;
+    element.querySelector("strong").textContent = `${player?.seat || "?"}号 ${player?.name || "玩家"}${playerId === currentPlayerId ? "（我）" : ""}`;
+    return element;
+  }));
+
+  const tableCards = state.currentCombination?.cardIds || [];
+  renderDoudizhuCards("ddz-table-cards", tableCards);
+  $("ddz-combination-label").textContent = state.currentCombination
+    ? `${doudizhuPlayerName(state.currentCombination.playerId)} · ${DDZ_COMBINATION_LABELS[state.currentCombination.combination.type] || "已出牌"}`
+    : "等待首家出牌";
+  $("ddz-bottom-wrap").classList.toggle("hidden", state.bottomCards.length === 0);
+  renderDoudizhuCards("ddz-bottom-cards", state.bottomCards);
+
+  const bidding = state.phase === "bidding";
+  const playing = state.phase === "playing";
+  $("ddz-bidding-actions").classList.toggle("hidden", !bidding || !isMyTurn);
+  $("ddz-play-actions").classList.toggle("hidden", !playing || !isMyTurn);
+  for (const button of $("ddz-bidding-actions").querySelectorAll("button[data-bid]")) {
+    const bid = Number(button.dataset.bid);
+    button.disabled = bid > 0 && bid <= state.bidding.highestBid;
+  }
+  $("ddz-pass").disabled = !state.currentCombination || state.trickLeaderPlayerId === currentPlayerId;
+  $("ddz-play").disabled = selectedDoudizhuCards.size === 0;
+  $("ddz-selected-count").textContent = selectedDoudizhuCards.size ? `(${selectedDoudizhuCards.size})` : "";
+
+  $("ddz-turn-message").textContent = state.phase === "game_over"
+    ? "本局已结束"
+    : isMyTurn
+      ? bidding ? "轮到你叫分" : "轮到你出牌"
+      : `${doudizhuPlayerName(state.currentPlayerId)}${bidding ? "正在叫分" : "正在出牌"}`;
+  $("game-progress").textContent = state.phase === "bidding"
+    ? `叫地主 · 当前最高 ${state.bidding.highestBid || 0} 分`
+    : state.phase === "playing"
+      ? `${doudizhuPlayerName(state.currentPlayerId)}的回合 · ${state.bombCount || 0} 个炸弹`
+      : `游戏结束 · ${state.winner === "landlord" ? "地主胜利" : "农民胜利"}`;
+
+  const result = state.result;
+  $("ddz-result").classList.toggle("hidden", !result);
+  if (result) {
+    const myPoints = result.points[currentPlayerId] || 0;
+    $("ddz-result").innerHTML = `<h2>${state.winner === "landlord" ? "地主胜利" : "农民胜利"}</h2><p>你的得分：${myPoints > 0 ? "+" : ""}${myPoints}</p><p>底分 ${result.baseScore} × ${result.multiplier} 倍${result.spring ? " · 春天" : result.antiSpring ? " · 反春" : ""}</p>`;
+  }
+  $("ddz-hand-count").textContent = `${state.hand.length} 张`;
+  renderDoudizhuCards("ddz-hand", state.hand, playing && isMyTurn);
+}
+
 // ── Game state rendering ───────────────────────────────────────────────────
 function renderGameState(state) {
   currentGameState = state;
@@ -224,6 +459,7 @@ function renderGameState(state) {
 
   if (state.mode === "lobby") return showGameView("lobby-view");
   showRoomScreen("game");
+  if (state.rulesVersion === "doudizhu-classic-v1") return renderDoudizhuState(state);
 
   if (state.roleName) {
     $("role-name").textContent = state.roleName;
@@ -412,7 +648,10 @@ function renderGameState(state) {
 
 // ── Entry actions ──────────────────────────────────────────────────────────
 $("create-room").addEventListener("click", () => {
-  socket.emit("host:create-room", { name: savedPlayerName || undefined }, result => {
+  socket.emit("host:create-room", {
+    name: savedPlayerName || undefined,
+    gameKind: selectedGameKind,
+  }, result => {
     if (!result?.ok) return $("entry-error").textContent = result?.message || "创建失败";
     saveSession(result);
     enterRoom(result);
@@ -722,7 +961,7 @@ function renderManagement(state) {
   $("open-config").classList.toggle("hidden", !isHost);
   $("open-config").disabled = !state.game.canStart;
   $("open-config").textContent = state.game.canStart
-    ? "进入游戏配置"
+    ? currentGameKind === "doudizhu" ? "开始斗地主" : "进入游戏配置"
     : `等待玩家（至少 ${state.game.minPlayers} 人且全部在线）`;
   $("leave-room").textContent = "退出房间";
   $("leave-room").title = "";
@@ -838,6 +1077,8 @@ socket.on("room:state", state => {
   if (state.roomId !== currentRoomId) return;
   membershipActive = true;
   currentRoomState = state;
+  currentGameKind = state.gameKind || currentGameKind || "werewolf";
+  $("room-game-name").textContent = gameName(currentGameKind);
   setConnectionStatus("已连接");
   setError("");
   isHost = state.viewer.playerId === currentPlayerId && state.viewer.isHost;
@@ -877,6 +1118,9 @@ function playNightEndAudio() {
 // ── Game events ────────────────────────────────────────────────────────────
 socket.on("player:game-state", renderGameState);
 socket.on("player:action-alert", () => vibrate([300, 150, 300]));
+socket.on("game:event", event => {
+  if (event?.type === "doudizhu:game-over") vibrate([500, 200, 500, 200, 500]);
+});
 socket.on("game:night-complete", () => {
   vibrate([160, 100, 160, 100, 500]);
   if (isHost) playNightEndAudio();
@@ -894,6 +1138,10 @@ socket.on("room:closed", () => {
 // ── Host controls ──────────────────────────────────────────────────────────
 $("open-config").addEventListener("click", () => {
   if (!currentRoomState || !isHost || !currentRoomState.game.canStart) return;
+  if (currentGameKind === "doudizhu") {
+    emitWithAck("host:start-game", {});
+    return;
+  }
   loadDefaultConfig(currentRoomState);
   showRoomScreen("config");
 });
@@ -922,6 +1170,20 @@ $("restart-game").addEventListener("click", () => {
 $("peek-role").addEventListener("click", () => {
   if (!currentGameState?.roleName) return;
   alert(`你的身份：${currentGameState.roleName}\n\n${currentGameState.roleDescription}`);
+});
+
+for (const button of $("ddz-bidding-actions").querySelectorAll("button[data-bid]")) {
+  button.addEventListener("click", () => {
+    submitDoudizhuCommand({ type: "bid", bid: Number(button.dataset.bid) });
+  });
+}
+$("ddz-pass").addEventListener("click", () => submitDoudizhuCommand({ type: "pass" }));
+$("ddz-play").addEventListener("click", () => {
+  if (selectedDoudizhuCards.size === 0) return;
+  submitDoudizhuCommand({
+    type: "play_cards",
+    cardIds: sortedDoudizhuCards(selectedDoudizhuCards),
+  });
 });
 
 // ── Player actions ─────────────────────────────────────────────────────────
@@ -1109,3 +1371,4 @@ document.querySelectorAll("[data-choice]").forEach(button => {
 savedPlayerName = readSavedPlayerName();
 currentPlayerName = savedPlayerName;
 renderPlayerProfiles();
+loadGameCatalog();
