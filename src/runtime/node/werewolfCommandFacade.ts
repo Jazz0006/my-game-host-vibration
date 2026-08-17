@@ -5,6 +5,8 @@ import {
   type WerewolfCommandOutcome,
 } from "./roomBridge.js";
 
+// Stable Node-runtime entry points: transport handlers provide identity/authority,
+// while WerewolfGameModule owns rule-specific command handling and projections.
 export function runPlayerCommand(
   room: RuntimeRoom,
   playerId: string,
