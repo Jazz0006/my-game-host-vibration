@@ -38,22 +38,40 @@ function hostContext(): GameCommandContext {
   return { isHost: true, now: 1_000 };
 }
 
+function createFivePlayerGame(module: WerewolfGameModule, dependencies: GameModuleDependencies) {
+  const config = configFromRoleDeck(5, [
+    "werewolf",
+    "seer",
+    "witch",
+    "villager",
+    "villager",
+  ]);
+  return module.createGame(
+    { playerIds: players.map(player => player.id), config },
+    dependencies,
+  );
+}
+
+function confirmAllRoles(
+  module: WerewolfGameModule,
+  game: ReturnType<WerewolfGameModule["createGame"]>,
+  dependencies: GameModuleDependencies,
+): void {
+  for (const player of players) {
+    module.handleCommand(
+      game,
+      playerContext(player.id),
+      { type: "confirmRole", actionId: game.actionId },
+      dependencies,
+    );
+  }
+}
+
 describe("GameModule contract", () => {
   it("runs a complete werewolf game without server, transport, session, or UI runtime state", () => {
     const module = new WerewolfGameModule();
     const dependencies = createDependencies();
-    const config = configFromRoleDeck(5, [
-      "werewolf",
-      "seer",
-      "witch",
-      "villager",
-      "villager",
-    ]);
-
-    const game = module.createGame(
-      { playerIds: players.map(player => player.id), config },
-      dependencies,
-    );
+    const game = createFivePlayerGame(module, dependencies);
 
     // Deterministic randomInt keeps the configured role order unchanged.
     expect(game.roles).toEqual({
@@ -65,14 +83,7 @@ describe("GameModule contract", () => {
     });
     expect(game.phase).toBe("role_reveal");
 
-    for (const player of players) {
-      module.handleCommand(
-        game,
-        playerContext(player.id),
-        { type: "confirmRole", actionId: game.actionId },
-        dependencies,
-      );
-    }
+    confirmAllRoles(module, game, dependencies);
     expect(game.phase).toBe("night_start");
 
     module.handleCommand(game, hostContext(), { type: "startNight" }, dependencies);
@@ -164,5 +175,71 @@ describe("GameModule contract", () => {
     for (const field of runtimeOnlyFields) {
       expect(game).not.toHaveProperty(field);
     }
+  });
+
+  it("owns multi-round state cleanup and persistent resources without a runtime coordinator", () => {
+    const module = new WerewolfGameModule();
+    const dependencies = createDependencies();
+    const game = createFivePlayerGame(module, dependencies);
+
+    confirmAllRoles(module, game, dependencies);
+    module.handleCommand(game, hostContext(), { type: "startNight" }, dependencies);
+
+    module.handleCommand(
+      game,
+      playerContext("p1"),
+      { type: "submitWolfTarget", targetPlayerId: "p4", actionId: game.actionId },
+      dependencies,
+    );
+    module.handleCommand(
+      game,
+      playerContext("p3"),
+      { type: "submitWitchAction", useAntidote: true, actionId: game.actionId },
+      dependencies,
+    );
+    module.handleCommand(
+      game,
+      playerContext("p2"),
+      { type: "submitSeerTarget", targetPlayerId: "p1", actionId: game.actionId },
+      dependencies,
+    );
+    module.handleCommand(
+      game,
+      playerContext("p2"),
+      { type: "confirmSeerResult", actionId: game.actionId },
+      dependencies,
+    );
+
+    expect(game.phase).toBe("night_complete");
+    expect(game.deaths).toEqual([]);
+    expect(game.deadPlayerIds).toEqual([]);
+    expect(game.witchAntidoteSpent).toBe(true);
+    expect(game.witchUsedAntidote).toBe(true);
+
+    module.handleCommand(game, hostContext(), { type: "startDayVote" }, dependencies);
+    expect(game.dayNumber).toBe(1);
+
+    module.handleCommand(game, hostContext(), { type: "closeDayVote" }, dependencies);
+    expect(game.phase).toBe("day_result");
+    expect(game.noKillToday).toBe(true);
+
+    module.handleCommand(game, hostContext(), { type: "beginNightStart" }, dependencies);
+    expect(game.phase).toBe("night_start");
+
+    module.handleCommand(game, hostContext(), { type: "startNight" }, dependencies);
+
+    expect(game.phase).toBe("night_werewolf");
+    expect(game.nightNumber).toBe(2);
+    expect(game.dayNumber).toBe(1);
+    expect(game.deaths).toEqual([]);
+    expect(game.votes).toEqual({});
+    expect(game.pkCandidateIds).toEqual([]);
+    expect(game.witchUsedAntidote).toBe(false);
+    expect(game.witchAntidoteSpent).toBe(true);
+    expect(game.witchPoisonSpent).toBe(false);
+    expect(game.wolfTargetId).toBeUndefined();
+    expect(game.seerTargetId).toBeUndefined();
+    expect(game.eliminatedTodayId).toBeUndefined();
+    expect(game.noKillToday).toBeUndefined();
   });
 });
