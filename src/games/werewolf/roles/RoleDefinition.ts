@@ -9,6 +9,7 @@ import type { WerewolfRuleState } from "./WerewolfRuleState.js";
 export type WerewolfTeam = "village" | "wolf" | "neutral";
 export type WerewolfDeathCause = "night_attack" | "poison" | "day_elimination" | "ability";
 export type WerewolfWinner = "wolf" | "village";
+export type WerewolfNightSchedule = "every_night" | "first_night_only";
 
 export type WerewolfRoleRuleContext<TRoleId extends string = string> = {
   game: GameState;
@@ -64,8 +65,16 @@ export type WerewolfRoleRuleHooks<
   ) => WerewolfWinner | null | undefined;
 };
 
+export type WerewolfNightInteractionTiming = {
+  order: number;
+  schedule: WerewolfNightSchedule;
+};
+
 export type WerewolfRoleInteractionDefinition<TKind extends string = string> = {
-  phase: GamePhase;
+  /** Legacy phase binding kept during the strangler migration. */
+  phase?: GamePhase;
+  /** Dynamic night orchestration metadata. */
+  night?: WerewolfNightInteractionTiming;
   kind: TKind;
   mode: InteractionMode;
   wakePolicy: InteractionWakePolicy;
