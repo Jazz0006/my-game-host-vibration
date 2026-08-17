@@ -4,6 +4,7 @@ import type {
   InteractionWakePolicy,
 } from "../../../core/interaction/PendingInteraction.js";
 import type { GamePhase, GameState } from "../../../domain/game.js";
+import type { WerewolfRuleState } from "./WerewolfRuleState.js";
 
 export type WerewolfTeam = "village" | "wolf" | "neutral";
 export type WerewolfDeathCause = "night_attack" | "poison" | "day_elimination" | "ability";
@@ -11,6 +12,7 @@ export type WerewolfWinner = "wolf" | "village";
 
 export type WerewolfRoleRuleContext<TRoleId extends string = string> = {
   game: GameState;
+  ruleState: WerewolfRuleState;
   rolePlayerId: string;
   roleId: TRoleId;
 };
@@ -21,19 +23,30 @@ export type WerewolfDeathRuleContext<TRoleId extends string = string> =
     cause: WerewolfDeathCause;
   };
 
-export type WerewolfTriggeredAction<TInteractionKind extends string = string> = {
+export type WerewolfInteractionEffect<TInteractionKind extends string = string> = {
+  type: "interaction";
   kind: TInteractionKind;
   actorPlayerId: string;
 };
 
+export type WerewolfDeathEffect = {
+  type: "death";
+  targetPlayerId: string;
+  cause: "ability";
+};
+
+export type WerewolfRuleEffect<TInteractionKind extends string = string> =
+  | WerewolfInteractionEffect<TInteractionKind>
+  | WerewolfDeathEffect;
+
 /**
  * Focused lifecycle hooks for roles whose rules do more than expose a normal
- * interaction. Hooks stay pure and transport-neutral: they inspect game state
- * and return decisions, but never mutate sockets, sessions, rooms or clients.
+ * interaction. Hooks stay pure and transport-neutral: they inspect game/rule
+ * state and return effects, but never mutate sockets, sessions, rooms or clients.
  *
  * Death hooks are evaluated for every assigned role, not only the dying role.
- * This leaves room for future protector/lover-style mechanics without turning
- * the contract into a generic rules DSL.
+ * This supports cross-player mechanics such as lovers and protectors without
+ * turning the contract into a generic rules DSL.
  */
 export type WerewolfRoleRuleHooks<
   TRoleId extends string = string,
@@ -44,7 +57,7 @@ export type WerewolfRoleRuleHooks<
   ) => { preventDeath: boolean; reason?: string } | undefined;
   afterDeath?: (
     context: WerewolfDeathRuleContext<TRoleId>,
-  ) => readonly WerewolfTriggeredAction<TInteractionKind>[];
+  ) => readonly WerewolfRuleEffect<TInteractionKind>[];
   resolveTeam?: (context: WerewolfRoleRuleContext<TRoleId>) => WerewolfTeam;
   evaluateVictory?: (
     context: WerewolfRoleRuleContext<TRoleId> & { defaultWinner: WerewolfWinner | null },
