@@ -9,10 +9,11 @@ export type RoomPlayer = {
 export type RoomState<
   TGameState = unknown,
   TGameConfig = unknown,
+  TPlayer extends RoomPlayer = RoomPlayer,
 > = {
   id: string;
   gameType: string;
-  players: RoomPlayer[];
+  players: TPlayer[];
   createdAt: number;
   updatedAt: number;
   gameConfig: TGameConfig;
