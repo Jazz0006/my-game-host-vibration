@@ -9,8 +9,6 @@ import {
   configFromPlayerCount,
   DEFAULT_GAME_CONFIG,
   GameRuleError,
-  type GameConfig,
-  type GameState,
   type Role,
 } from "./domain/game.js";
 import {
@@ -24,9 +22,11 @@ import {
 } from "./domain/testPrompt.js";
 import { createSessionToken, verifySessionToken } from "./domain/sessionToken.js";
 import {
+  actingPlayerIds as moduleActingPlayerIds,
   createWerewolfGame,
   playerGameView as modulePlayerGameView,
   roomCore,
+  roomGameView,
   type RuntimePlayer,
   type RuntimeRoom,
 } from "./runtime/node/roomBridge.js";
@@ -109,67 +109,46 @@ function removePlayer(room: Room, playerId: string): Player | undefined {
   return removed;
 }
 
-function voteTally(game: GameState): Record<string, number> {
-  const tally: Record<string, number> = {};
-  for (const targetId of Object.values(game.votes)) {
-    tally[targetId] = (tally[targetId] ?? 0) + 1;
-  }
-  return tally;
-}
-
 function roomView(room: Room, viewer: Player) {
   const prompt = room.activePrompt;
-  const game = room.game;
-  const aliveCount = game
-    ? Object.keys(game.roles).filter(id => !game.deadPlayerIds.includes(id)).length
-    : 0;
-  const votesRequired = game
-    ? Object.keys(game.roles).filter(
-        playerId =>
-          !game.deadPlayerIds.includes(playerId) &&
-          (game.phase !== "day_pk" || !game.pkCandidateIds.includes(playerId)),
-      ).length
-    : 0;
+  const gameView = roomGameView(room, viewer.isHost);
   return {
     roomId: room.id,
     viewer: { playerId: viewer.id, isHost: viewer.isHost },
     players: room.players.map(publicPlayer),
-    defaultRoleDeck: !game
+    defaultRoleDeck: !room.game
       ? (room.players.length >= MIN_PLAYERS
           ? configFromPlayerCount(room.players.length).roleDeck
           : room.gameConfig.roleDeck)
       : undefined,
-    roleCatalog: !game
+    roleCatalog: !room.game
       ? Object.entries(ROLE_INFO).map(([id, info]) => ({ id, name: info.name }))
       : undefined,
-    game: {
-      phase: game?.phase ?? "lobby",
-      canStart:
-        !game &&
-        room.players.length >= MIN_PLAYERS &&
-        room.players.every(player => player.connected),
-      minPlayers: MIN_PLAYERS,
-      maxPlayers: MAX_PLAYERS,
-      confirmedRoles: game?.confirmedRolePlayerIds.length ?? 0,
-      completedNightSteps: game
-        ? (["night_guard", "night_werewolf", "night_witch", "night_seer", "night_complete"] as const)
-            .indexOf(game.phase as "night_werewolf" | "night_guard" | "night_witch" | "night_seer" | "night_complete")
-        : 0,
-      dayNumber: game?.dayNumber ?? 0,
-      nightNumber: game?.nightNumber ?? 0,
-      aliveCount,
-      votesRequired,
-      votesCast: game ? Object.keys(game.votes).length : 0,
-      voteTally: viewer.isHost && game &&
-        ["day_vote", "day_pk", "day_result"].includes(game.phase)
-        ? voteTally(game)
-        : undefined,
-      pkCandidateIds: game?.pkCandidateIds ?? [],
-      eliminatedTodayId: game?.eliminatedTodayId,
-      noKillToday: game?.noKillToday ?? false,
-      winner: game?.winner,
-      deadPlayerIds: game?.deadPlayerIds ?? [],
-    },
+    game: gameView
+      ? {
+          ...gameView,
+          canStart: false,
+          minPlayers: MIN_PLAYERS,
+          maxPlayers: MAX_PLAYERS,
+        }
+      : {
+          phase: "lobby",
+          canStart:
+            room.players.length >= MIN_PLAYERS &&
+            room.players.every(player => player.connected),
+          minPlayers: MIN_PLAYERS,
+          maxPlayers: MAX_PLAYERS,
+          confirmedRoles: 0,
+          completedNightSteps: 0,
+          dayNumber: 0,
+          nightNumber: 0,
+          aliveCount: 0,
+          votesRequired: 0,
+          votesCast: 0,
+          pkCandidateIds: [],
+          noKillToday: false,
+          deadPlayerIds: [],
+        },
     testPrompt:
       viewer.isHost && prompt
         ? {
@@ -208,39 +187,9 @@ function broadcastRoom(io: Server, room: Room): void {
   }
 }
 
-function actingPlayerIds(game: GameState): string[] {
-  if (game.phase === "day_vote") {
-    return Object.keys(game.roles).filter(id => !game.deadPlayerIds.includes(id));
-  }
-  if (game.phase === "day_pk") {
-    return Object.keys(game.roles).filter(
-      id => !game.deadPlayerIds.includes(id) && !game.pkCandidateIds.includes(id),
-    );
-  }
-  if (game.phase === "day_hunter") {
-    return Object.entries(game.roles)
-      .filter(([, r]) => r === "hunter")
-      .map(([id]) => id);
-  }
-  const role =
-    game.phase === "night_werewolf" ? "werewolf"
-    : game.phase === "night_guard" ? "guard"
-    : game.phase === "night_witch" ? "witch"
-    : game.phase === "night_seer" ? "seer"
-    : undefined;
-  return role
-    ? Object.entries(game.roles)
-        .filter(
-          ([playerId, assignedRole]) =>
-            assignedRole === role && !game.deadPlayerIds.includes(playerId),
-        )
-        .map(([playerId]) => playerId)
-    : [];
-}
-
 function alertCurrentActors(io: Server, room: Room, resumed = false): void {
   if (!room.game) return;
-  for (const playerId of actingPlayerIds(room.game)) {
+  for (const playerId of moduleActingPlayerIds(room)) {
     const player = room.players.find(item => item.id === playerId);
     if (player?.socketId) {
       io.to(player.socketId).emit("player:action-alert", {
@@ -440,7 +389,7 @@ export function createGameServer() {
         });
         broadcastRoom(io, room);
         sendCurrentTestPrompt(socket, room, player);
-        if (room.game && actingPlayerIds(room.game).includes(player.id)) {
+        if (room.game && moduleActingPlayerIds(room).includes(player.id)) {
           alertCurrentActors(io, room, true);
         }
       },
