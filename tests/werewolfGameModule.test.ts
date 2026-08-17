@@ -89,7 +89,7 @@ describe("WerewolfGameModule", () => {
     expect(view.targets).toContainEqual({ id: "p4", name: "四号", seat: 4 });
   });
 
-  it("keeps host-only vote tally out of the player view boundary", () => {
+  it("keeps host-only vote tally out of the public view boundary", () => {
     const module = new WerewolfGameModule();
     const game = state({
       phase: "day_vote",
@@ -97,9 +97,32 @@ describe("WerewolfGameModule", () => {
     });
 
     const playerView = module.getPlayerView(game, "p3", viewContext);
+    const publicView = module.getPublicView(game, viewContext);
     const hostView = module.getHostView(game, viewContext);
 
     expect(playerView).not.toHaveProperty("voteTally");
+    expect(publicView).not.toHaveProperty("voteTally");
     expect(hostView.voteTally).toEqual({ p4: 2 });
+    expect(publicView).toMatchObject({
+      phase: "day_vote",
+      aliveCount: 5,
+      votesRequired: 5,
+      votesCast: 2,
+      deadPlayerIds: [],
+    });
+  });
+
+  it("selects acting players inside the game module", () => {
+    const module = new WerewolfGameModule();
+
+    expect(module.getActingPlayerIds(state())).toEqual(["p1"]);
+    expect(module.getActingPlayerIds(state({ phase: "night_seer" }))).toEqual(["p2"]);
+    expect(module.getActingPlayerIds(state({ phase: "day_vote" }))).toEqual([
+      "p1", "p2", "p3", "p4", "p5",
+    ]);
+    expect(module.getActingPlayerIds(state({
+      phase: "day_pk",
+      pkCandidateIds: ["p1", "p2"],
+    }))).toEqual(["p3", "p4", "p5"]);
   });
 });
