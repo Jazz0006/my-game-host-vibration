@@ -15,13 +15,14 @@ function comparablePlayerName(name: string): string {
 export class RoomCore<
   TGameState = unknown,
   TGameConfig = unknown,
+  TPlayer extends RoomPlayer = RoomPlayer,
 > {
   constructor(
-    readonly state: RoomState<TGameState, TGameConfig>,
+    readonly state: RoomState<TGameState, TGameConfig, TPlayer>,
     private readonly now: NowProvider = Date.now,
   ) {}
 
-  getPlayer(playerId: string): RoomPlayer | undefined {
+  getPlayer(playerId: string): TPlayer | undefined {
     return this.state.players.find(player => player.id === playerId);
   }
 
@@ -41,7 +42,7 @@ export class RoomCore<
     );
   }
 
-  addPlayer(player: Omit<RoomPlayer, "seat">): RoomPlayer {
+  addPlayer(player: Omit<TPlayer, "seat">): TPlayer {
     if (this.getPlayer(player.id)) {
       throw new Error("player already exists in room");
     }
@@ -52,17 +53,17 @@ export class RoomCore<
       throw new Error("player name already exists in room");
     }
 
-    const added: RoomPlayer = {
+    const added = {
       ...player,
       name: normalizedName,
       seat: this.state.players.length + 1,
-    };
+    } as TPlayer;
     this.state.players.push(added);
     this.touch();
     return added;
   }
 
-  renamePlayer(playerId: string, name: string): RoomPlayer {
+  renamePlayer(playerId: string, name: string): TPlayer {
     const player = this.requirePlayer(playerId);
     const normalizedName = normalizePlayerName(name);
     if (!normalizedName) throw new Error("player name cannot be empty");
@@ -74,7 +75,7 @@ export class RoomCore<
     return player;
   }
 
-  removePlayer(playerId: string): RoomPlayer | undefined {
+  removePlayer(playerId: string): TPlayer | undefined {
     const index = this.state.players.findIndex(player => player.id === playerId);
     if (index < 0) return undefined;
 
@@ -116,7 +117,7 @@ export class RoomCore<
     this.state.updatedAt = this.now();
   }
 
-  private requirePlayer(playerId: string): RoomPlayer {
+  private requirePlayer(playerId: string): TPlayer {
     const player = this.getPlayer(playerId);
     if (!player) throw new Error("player not found in room");
     return player;
