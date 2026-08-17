@@ -40,7 +40,8 @@ export type CupidRuleVariant =
 - 人狼恋：丘比特 + 两名恋人共同属于特殊 `lovers` 阵营；
 - 丘比特即使没有选择自己，也通过 relationship 的 `sourceRolePlayerId` 加入第三方；
 - 当所有仍存活的玩家都属于该第三方成员集合，Lovers 获胜；
-- 丘比特可以已经死亡，只要两名恋人仍完整存活并消灭其他阵营，第三方仍可获胜。
+- 丘比特可以已经死亡，只要两名恋人仍完整存活并消灭其他阵营，第三方仍可获胜；
+- 如果丘比特选择自己为恋人，成员集合通过 `Set` 去重，仍然只是两名实际玩家，不会形成重复成员。
 
 ## 为什么不把丘比特塞进 playerIds
 
@@ -167,6 +168,8 @@ Cupid + Wolf Lover + Human Lover
 Wolf Lover + Human Lover
 ```
 
+如果丘比特自己就是 Lover，则成员集合自然去重成两人。
+
 如果任一 Lover 已死，则特殊胜利不再阻塞普通阵营胜负；B4 的连锁死亡会在生产接入后处理另一名 Lover 的随死。
 
 ## 关系状态约束
@@ -185,16 +188,17 @@ Wolf Lover + Human Lover
 
 1. Classic 人狼恋：两名恋人进入 `lovers`，丘比特仍保持原阵营；
 2. China 人狼恋：丘比特 + 两名恋人三人全部进入 `lovers`；
-3. China 人人恋：不产生第三方；
-4. China 狼狼恋：不产生第三方；
-5. 原始角色身份不改变；
-6. 动态基础阵营 resolver 可以覆盖静态 role team；
-7. 混合情侣存活时压制 legacy 狼人平票胜利；
-8. Classic 最后两名恋人时 Lovers 获胜；
-9. China 丘比特 + 两名恋人三人终局时 Lovers 获胜；
-10. China 丘比特死亡、两名恋人最后存活时仍判 Lovers 获胜；
-11. 混合情侣被打破后恢复普通 faction victory；
-12. 禁止重叠恋人关系。
+3. China 丘比特自选：第三方成员去重并正确判胜；
+4. China 人人恋：不产生第三方；
+5. China 狼狼恋：不产生第三方；
+6. 原始角色身份不改变；
+7. 动态基础阵营 resolver 可以覆盖静态 role team；
+8. 混合情侣存活时压制 legacy 狼人平票胜利；
+9. Classic 最后两名恋人时 Lovers 获胜；
+10. China 丘比特 + 两名恋人三人终局时 Lovers 获胜；
+11. China 丘比特死亡、两名恋人最后存活时仍判 Lovers 获胜；
+12. 混合情侣被打破后恢复普通 faction victory；
+13. 禁止重叠恋人关系。
 
 ## 非目标
 
