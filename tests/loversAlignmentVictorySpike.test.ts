@@ -91,6 +91,31 @@ describe("B4.1 mixed Lovers alignment and victory spike", () => {
     ).toBe("wolf");
   });
 
+  it("China variant de-duplicates Cupid when Cupid selected themself as a lover", () => {
+    const game = gameState();
+    const ruleState = createEmptyWerewolfRuleState();
+    addLoversRelationship(ruleState, {
+      id: "lovers-self",
+      kind: "lovers",
+      sourceRolePlayerId: "b",
+      playerIds: ["a", "b"],
+    });
+    game.deadPlayerIds.push("c", "d");
+
+    expect(
+      resolveLoversEffectiveTeam(game, "b", registry, ruleState, "china_three_party"),
+    ).toBe("lovers");
+    expect(
+      resolveLoversVictory(
+        game,
+        checkVictory(game),
+        registry,
+        ruleState,
+        "china_three_party",
+      ),
+    ).toBe("lovers");
+  });
+
   it("does not create a special team for same-team village lovers in either variant", () => {
     const game = gameState();
     const ruleState = createEmptyWerewolfRuleState();
