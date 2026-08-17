@@ -5,7 +5,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server, type Socket } from "socket.io";
 import {
-  allAliveVoted,
   configFromRoleDeck,
   configFromPlayerCount,
   DEFAULT_GAME_CONFIG,
@@ -16,15 +15,14 @@ import {
 } from "./domain/game.js";
 import {
   beginNightStart,
-  closeDayVote,
   confirmRole,
   confirmSeerResult,
-  startDayVote,
+  runHostCommand,
+  runPlayerCommand,
   startNight,
   submitGuardTarget,
   submitHunterExecution,
   submitSeerTarget,
-  submitVote,
   submitWitchAction,
   submitWolfTarget,
 } from "./runtime/node/werewolfCommandFacade.js";
@@ -274,7 +272,7 @@ function afterNightAction(io: Server, room: Room): void {
   }
   if (game.phase === "night_complete") {
     io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
-    startDayVote(game);
+    runHostCommand(room, { type: "startDayVote" });
     broadcastRoom(io, room);
     alertCurrentActors(io, room);
     return;
@@ -762,7 +760,7 @@ export function createGameServer() {
               broadcastRoom(io, membership.room);
               io.to(membership.room.id).emit("game:over", { winner: game.winner });
             } else if (game.phase === "night_complete") {
-              startDayVote(game);
+              runHostCommand(membership.room, { type: "startDayVote" });
               broadcastRoom(io, membership.room);
               alertCurrentActors(io, membership.room);
             } else {
@@ -795,18 +793,23 @@ export function createGameServer() {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
         try {
-          const changed = submitVote(
-            membership.room.game,
+          const outcome = runPlayerCommand(
+            membership.room,
             membership.player.id,
-            data.targetId ?? "",
-            data.actionId ?? "",
+            {
+              type: "submitVote",
+              targetId: data.targetId ?? "",
+              actionId: data.actionId ?? "",
+            },
           );
-          if (changed) {
+          if (outcome.kind === "vote" && outcome.changed) {
             broadcastRoom(io, membership.room);
-            if (allAliveVoted(membership.room.game)) {
-              const result = closeDayVote(membership.room.game);
+            if (outcome.allEligibleVoted) {
+              const closeOutcome = runHostCommand(membership.room, { type: "closeDayVote" });
               broadcastRoom(io, membership.room);
-              afterCloseDayVote(io, membership.room, result);
+              if (closeOutcome.kind === "voteClosed") {
+                afterCloseDayVote(io, membership.room, closeOutcome.result);
+              }
             }
           }
           ack({ ok: true });
@@ -821,9 +824,11 @@ export function createGameServer() {
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以关闭投票" });
       if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
       try {
-        const result = closeDayVote(membership.room.game);
+        const outcome = runHostCommand(membership.room, { type: "closeDayVote" });
         broadcastRoom(io, membership.room);
-        afterCloseDayVote(io, membership.room, result);
+        if (outcome.kind === "voteClosed") {
+          afterCloseDayVote(io, membership.room, outcome.result);
+        }
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);
