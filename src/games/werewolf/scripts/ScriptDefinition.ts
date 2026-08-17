@@ -1,4 +1,4 @@
-import type { Role } from "../../../domain/game.js";
+import { configFromRoleDeck, type GameConfig, type Role } from "../../../domain/game.js";
 
 /**
  * A script selects roles and counts for a concrete table setup.
@@ -13,4 +13,8 @@ export type WerewolfScriptDefinition = {
 
 export function playerCountForScript(script: WerewolfScriptDefinition): number {
   return script.roleDeck.length;
+}
+
+export function configFromScript(script: WerewolfScriptDefinition): GameConfig {
+  return configFromRoleDeck(playerCountForScript(script), script.roleDeck);
 }
