@@ -20,7 +20,7 @@ describe("Hunter runtime hook architecture", () => {
     expect(domain).not.toMatch(/(?:^|\/)games(?:\/|$)/u);
     expect(module).toContain('from "./WerewolfDomainFacade.js"');
     expect(facade).toContain("WEREWOLF_RULE_RUNTIME_HOOKS");
-    expect(adapter).toContain("collectWerewolfAfterDeathActions");
+    expect(adapter).toContain("collectWerewolfAfterDeathEffects");
     expect(adapter).toContain("WEREWOLF_ROLE_REGISTRY");
   });
 
