@@ -100,6 +100,47 @@ export type GameState = {
 
 export class GameRuleError extends Error {}
 
+export type GameDeathCause = "night_attack" | "poison" | "day_elimination" | "ability";
+export type GameAfterDeathEvent = {
+  deadPlayerId: string;
+  cause: GameDeathCause;
+  continuation: "night" | "day";
+};
+
+/**
+ * Dependency-inversion seam between pure domain transitions and game-specific
+ * role lifecycle logic. A hook may take over the immediate flow by mutating
+ * state and returning true. Concrete role registries live outside domain/.
+ */
+export type GameRuleRuntimeHooks = {
+  afterDeath?: (
+    state: GameState,
+    event: GameAfterDeathEvent,
+    nextActionId: () => string,
+  ) => boolean;
+};
+
+/**
+ * Temporary compatibility fallback for callers that exercise domain functions
+ * directly. Production WerewolfGameModule injects the registry-backed hooks.
+ * Remove this fallback after direct domain tests are migrated to the game layer.
+ */
+const LEGACY_GAME_RULE_RUNTIME_HOOKS: GameRuleRuntimeHooks = {
+  afterDeath: (state, event, nextActionId) => {
+    if (state.roles[event.deadPlayerId] !== "hunter") return false;
+    if (event.cause === "poison") return false;
+    const hasLivingTarget = Object.keys(state.roles).some(
+      playerId => playerId !== event.deadPlayerId && !state.deadPlayerIds.includes(playerId),
+    );
+    if (!hasLivingTarget) return false;
+
+    state.hunterTrigger = event.continuation;
+    state.phase = "day_hunter";
+    state.actionId = nextActionId();
+    return true;
+  },
+};
+
 const NIGHT_ORDER: readonly Role[] = ["guard", "werewolf", "witch", "seer"];
 
 function hasLivingRole(state: GameState, role: Role): boolean {
@@ -147,15 +188,21 @@ export function checkVictory(state: GameState): "wolf" | "village" | null {
   return null;
 }
 
-function applyElimination(state: GameState, targetId: string, random: GameRandomSource): boolean {
+function applyElimination(
+  state: GameState,
+  targetId: string,
+  random: GameRandomSource,
+  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+): boolean {
   state.deadPlayerIds.push(targetId);
   state.eliminatedTodayId = targetId;
   delete state.noKillToday;
 
-  if (state.roles[targetId] === "hunter") {
-    state.hunterTrigger = "day";
-    state.phase = "day_hunter";
-    state.actionId = random.randomId();
+  if (hooks.afterDeath?.(
+    state,
+    { deadPlayerId: targetId, cause: "day_elimination", continuation: "day" },
+    random.randomId,
+  )) {
     return false;
   }
 
@@ -241,7 +288,11 @@ function assertKnownPlayer(state: GameState, playerId: string | undefined): asse
   if (!playerId || !state.roles[playerId]) throw new GameRuleError("请选择有效玩家");
 }
 
-function settleNight(state: GameState, random: GameRandomSource): void {
+function settleNight(
+  state: GameState,
+  random: GameRandomSource,
+  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+): void {
   const deaths = resolveNightDeaths(state);
   state.deaths = [...deaths];
 
@@ -249,18 +300,15 @@ function settleNight(state: GameState, random: GameRandomSource): void {
     if (!state.deadPlayerIds.includes(id)) state.deadPlayerIds.push(id);
   }
 
-  const hunterPlayerId = Object.entries(state.roles).find(([, role]) => role === "hunter")?.[0];
-  const hunterCanShoot =
-    hunterPlayerId !== undefined &&
-    deaths.has(hunterPlayerId) &&
-    state.witchPoisonTargetId !== hunterPlayerId &&
-    Object.keys(state.roles).some(playerId => !state.deadPlayerIds.includes(playerId));
-
-  if (hunterCanShoot) {
-    state.hunterTrigger = "night";
-    state.phase = "day_hunter";
-    state.actionId = random.randomId();
-    return;
+  for (const id of deaths) {
+    const cause: GameDeathCause = state.witchPoisonTargetId === id ? "poison" : "night_attack";
+    if (hooks.afterDeath?.(
+      state,
+      { deadPlayerId: id, cause, continuation: "night" },
+      random.randomId,
+    )) {
+      return;
+    }
   }
 
   const victory = checkVictory(state);
@@ -273,10 +321,15 @@ function settleNight(state: GameState, random: GameRandomSource): void {
   state.actionId = random.randomId();
 }
 
-function advanceAfterNightRole(state: GameState, currentRole: Role, random: GameRandomSource): void {
+function advanceAfterNightRole(
+  state: GameState,
+  currentRole: Role,
+  random: GameRandomSource,
+  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+): void {
   const nextPhase = nextNightPhase(state, currentRole);
   if (nextPhase === "night_complete") {
-    settleNight(state, random);
+    settleNight(state, random, hooks);
     return;
   }
   state.phase = nextPhase;
@@ -305,6 +358,7 @@ export function confirmRole(
 export function startNight(
   state: GameState,
   random: GameRandomSource = defaultGameRandomSource,
+  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
 ): void {
   if (state.phase !== "night_start") {
     throw new GameRuleError("当前不能开始夜晚流程");
@@ -333,7 +387,7 @@ export function startNight(
     state.phase = `night_${firstNightRole}` as GamePhase;
     state.actionId = random.randomId();
   } else {
-    settleNight(state, random);
+    settleNight(state, random, hooks);
   }
 }
 
@@ -343,6 +397,7 @@ export function submitWolfTarget(
   targetPlayerId: string | null | undefined,
   actionId?: string,
   random: GameRandomSource = defaultGameRandomSource,
+  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
 ): boolean {
   const requestedTargetId = targetPlayerId ?? undefined;
   if (
@@ -359,7 +414,7 @@ export function submitWolfTarget(
 
   if (requestedTargetId) state.wolfTargetId = requestedTargetId;
   else delete state.wolfTargetId;
-  advanceAfterNightRole(state, "werewolf", random);
+  advanceAfterNightRole(state, "werewolf", random, hooks);
   return true;
 }
 
@@ -369,6 +424,7 @@ export function submitGuardTarget(
   targetPlayerId: string | null | undefined,
   actionId?: string,
   random: GameRandomSource = defaultGameRandomSource,
+  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
 ): boolean {
   const requestedTargetId = targetPlayerId ?? undefined;
   if (
@@ -388,7 +444,7 @@ export function submitGuardTarget(
 
   if (requestedTargetId) state.guardProtectedId = requestedTargetId;
   else delete state.guardProtectedId;
-  advanceAfterNightRole(state, "guard", random);
+  advanceAfterNightRole(state, "guard", random, hooks);
   return true;
 }
 
@@ -398,6 +454,7 @@ export function submitWitchAction(
   action: { useAntidote?: boolean; poisonTargetId?: string | null },
   actionId?: string,
   random: GameRandomSource = defaultGameRandomSource,
+  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
 ): boolean {
   const requestedAntidote = action.useAntidote === true;
   const requestedPoison = action.poisonTargetId || undefined;
@@ -427,7 +484,7 @@ export function submitWitchAction(
   } else {
     delete state.witchPoisonTargetId;
   }
-  advanceAfterNightRole(state, "witch", random);
+  advanceAfterNightRole(state, "witch", random, hooks);
   return true;
 }
 
@@ -459,6 +516,7 @@ export function confirmSeerResult(
   actorPlayerId: string,
   actionId?: string,
   random: GameRandomSource = defaultGameRandomSource,
+  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
 ): boolean {
   if (
     (state.phase === "night_complete" || state.phase === "day_hunter" || state.phase === "game_over") &&
@@ -470,7 +528,7 @@ export function confirmSeerResult(
   if (!state.seerTargetId) throw new GameRuleError("请先选择查验目标");
 
   state.seerResultConfirmed = true;
-  settleNight(state, random);
+  settleNight(state, random, hooks);
   return true;
 }
 
@@ -563,6 +621,7 @@ export function allAliveVoted(state: GameState): boolean {
 export function closeDayVote(
   state: GameState,
   random: GameRandomSource = defaultGameRandomSource,
+  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
 ): "pk" | "no_kill" | string {
   if (state.phase !== "day_vote" && state.phase !== "day_pk") {
     throw new GameRuleError("当前不在投票阶段");
@@ -591,7 +650,7 @@ export function closeDayVote(
   const topCandidates = Object.keys(tally).filter(id => tally[id] === maxVotes);
 
   if (topCandidates.length === 1) {
-    applyElimination(state, topCandidates[0]!, random);
+    applyElimination(state, topCandidates[0]!, random, hooks);
     return topCandidates[0]!;
   }
 
