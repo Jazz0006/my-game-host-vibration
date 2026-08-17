@@ -25,6 +25,8 @@ function withActionId<T extends object>(command: T, actionId?: string): T & { ac
   return actionId === undefined ? command : { ...command, actionId };
 }
 
+// Transitional compatibility layer: preserve the current server handlers' return
+// semantics while routing every game action through WerewolfGameModule.handleCommand().
 function runStateCommand(
   state: GameState,
   playerId: string | undefined,
