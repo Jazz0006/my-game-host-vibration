@@ -23,4 +23,15 @@ describe("Hunter runtime hook architecture", () => {
     expect(adapter).toContain("collectWerewolfAfterDeathActions");
     expect(adapter).toContain("WEREWOLF_ROLE_REGISTRY");
   });
+
+  it("does not keep role-specific Hunter fallback logic in the domain layer", () => {
+    const domain = source("src/domain/game.ts");
+    const regressionSuite = source("tests/game.test.ts");
+
+    expect(domain).not.toContain("LEGACY_GAME_RULE_RUNTIME_HOOKS");
+    expect(domain).toContain("EMPTY_GAME_RULE_RUNTIME_HOOKS");
+    expect(regressionSuite).toContain(
+      'from "../src/games/werewolf/WerewolfDomainFacade.js"',
+    );
+  });
 });
