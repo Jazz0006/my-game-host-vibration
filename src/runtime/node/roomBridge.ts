@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { RoomCore } from "../../core/room/RoomCore.js";
 import type { GameViewContext } from "../../core/game/GameModule.js";
 import type { RoomPlayer, RoomState } from "../../core/room/types.js";
@@ -42,7 +43,7 @@ export function createWerewolfGame(room: RuntimeRoom, config: GameConfig): GameS
     {
       random: {
         randomInt(maxExclusive: number) {
-          return Math.floor(Math.random() * maxExclusive);
+          return crypto.randomInt(maxExclusive);
         },
         randomId() {
           return crypto.randomUUID();
