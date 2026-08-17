@@ -29,13 +29,6 @@ function isMixedPair(left: WerewolfTeam | undefined, right: WerewolfTeam | undef
   return (left === "wolf" && right === "village") || (left === "village" && right === "wolf");
 }
 
-function loversRelationshipFor(ruleState: WerewolfRuleState, playerId: string) {
-  return ruleState.relationships.find(
-    relationship =>
-      relationship.kind === "lovers" && relationship.playerIds.includes(playerId),
-  );
-}
-
 function specialTeamMembers(
   relationship: WerewolfLoversRelationship,
   variant: CupidRuleVariant,
