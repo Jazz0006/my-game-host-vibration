@@ -9,13 +9,13 @@ export type RoomPlayer = {
 export type RoomState<
   TGameState = unknown,
   TGameConfig = unknown,
-  TPrompt = unknown,
 > = {
   id: string;
+  gameType: string;
   players: RoomPlayer[];
   createdAt: number;
-  config: TGameConfig;
-  activePrompt?: TPrompt;
+  updatedAt: number;
+  gameConfig: TGameConfig;
   game?: TGameState;
 };
 
