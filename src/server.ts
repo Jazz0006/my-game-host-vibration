@@ -4,6 +4,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server, type Socket } from "socket.io";
+import { SessionTokenService } from "./core/session/SessionTokenService.js";
 import {
   configFromRoleDeck,
   configFromPlayerCount,
@@ -20,7 +21,7 @@ import {
   createTestPrompt,
   submitPrompt,
 } from "./domain/testPrompt.js";
-import { createSessionToken, verifySessionToken } from "./domain/sessionToken.js";
+import { NodeSessionTokenCryptoProvider } from "./runtime/node/NodeSessionTokenCryptoProvider.js";
 import {
   actingPlayerIds as moduleActingPlayerIds,
   createWerewolfGame,
@@ -253,6 +254,7 @@ export function createGameServer() {
   const httpServer = http.createServer(app);
   const io = new Server(httpServer);
   const rooms = new Map<string, Room>();
+  const sessionTokens = new SessionTokenService(new NodeSessionTokenCryptoProvider());
 
   app.use(express.static(path.join(__dirname, "../public")));
   if (process.env.NODE_ENV !== "production") {
@@ -267,13 +269,13 @@ export function createGameServer() {
   });
 
   io.on("connection", (socket: Socket) => {
-    socket.on("host:create-room", (data: { name?: string }, ack: ClientAck<unknown>) => {
+    socket.on("host:create-room", async (data: { name?: string }, ack: ClientAck<unknown>) => {
       try {
         if (findMembership(rooms, socket.id)) {
           return ack({ ok: false, message: "当前连接已经加入房间" });
         }
         const roomId = createRoomId(rooms);
-        const session = createSessionToken();
+        const session = await sessionTokens.createSessionToken();
         const host: Player = {
           id: crypto.randomUUID(),
           name: requestedPlayerName(undefined, data.name),
@@ -310,7 +312,7 @@ export function createGameServer() {
 
     socket.on(
       "player:join-room",
-      (data: { roomId?: string; name?: string }, ack: ClientAck<unknown>) => {
+      async (data: { roomId?: string; name?: string }, ack: ClientAck<unknown>) => {
         const roomId = data.roomId?.trim();
         const room = roomId ? rooms.get(roomId) : undefined;
         if (!roomId) return ack({ ok: false, message: "请输入房间号" });
@@ -324,7 +326,8 @@ export function createGameServer() {
         }
 
         const name = requestedPlayerName(room, data.name);
-        const session = createSessionToken();
+        const session = await sessionTokens.createSessionToken().catch(() => null);
+        if (!session) return ack({ ok: false, message: "加入房间失败" });
         const player = roomCore(room).addPlayer({
           id: crypto.randomUUID(),
           name,
@@ -348,7 +351,7 @@ export function createGameServer() {
 
     socket.on(
       "player:resume",
-      (
+      async (
         data: { roomId?: string; playerId?: string; resumeToken?: string },
         ack: ClientAck<unknown>,
       ) => {
@@ -364,7 +367,13 @@ export function createGameServer() {
 
         const room = rooms.get(roomId);
         const player = room?.players.find(item => item.id === playerId);
-        if (!room || !player || !verifySessionToken(resumeToken, player.resumeTokenHash)) {
+        if (!room || !player) {
+          return ack({ ok: false, message: "恢复凭证无效" });
+        }
+        const validSession = await sessionTokens
+          .verifySessionToken(resumeToken, player.resumeTokenHash)
+          .catch(() => false);
+        if (!validSession) {
           return ack({ ok: false, message: "恢复凭证无效" });
         }
 
