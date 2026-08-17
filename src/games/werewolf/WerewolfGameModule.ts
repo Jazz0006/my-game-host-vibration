@@ -79,6 +79,36 @@ function voteTally(game: GameState): Record<string, number> {
   return tally;
 }
 
+function completedNightSteps(game: GameState): number {
+  return (["night_guard", "night_werewolf", "night_witch", "night_seer", "night_complete"] as const)
+    .indexOf(game.phase as "night_guard" | "night_werewolf" | "night_witch" | "night_seer" | "night_complete");
+}
+
+function commonRoomGameView(game: GameState): Record<string, unknown> {
+  const aliveCount = Object.keys(game.roles).filter(id => !game.deadPlayerIds.includes(id)).length;
+  const votesRequired = Object.keys(game.roles).filter(
+    playerId =>
+      !game.deadPlayerIds.includes(playerId) &&
+      (game.phase !== "day_pk" || !game.pkCandidateIds.includes(playerId)),
+  ).length;
+
+  return {
+    phase: game.phase,
+    confirmedRoles: game.confirmedRolePlayerIds.length,
+    completedNightSteps: completedNightSteps(game),
+    dayNumber: game.dayNumber,
+    nightNumber: game.nightNumber,
+    aliveCount,
+    votesRequired,
+    votesCast: Object.keys(game.votes).length,
+    pkCandidateIds: game.pkCandidateIds,
+    eliminatedTodayId: game.eliminatedTodayId,
+    noKillToday: game.noKillToday ?? false,
+    winner: game.winner,
+    deadPlayerIds: game.deadPlayerIds,
+  };
+}
+
 export function allEligiblePlayersVoted(game: GameState): boolean {
   return allAliveVoted(game);
 }
@@ -147,6 +177,36 @@ export class WerewolfGameModule implements GameModule<
     }
 
     return { state };
+  }
+
+  getActingPlayerIds(game: GameState): string[] {
+    if (game.phase === "day_vote") {
+      return Object.keys(game.roles).filter(id => !game.deadPlayerIds.includes(id));
+    }
+    if (game.phase === "day_pk") {
+      return Object.keys(game.roles).filter(
+        id => !game.deadPlayerIds.includes(id) && !game.pkCandidateIds.includes(id),
+      );
+    }
+    if (game.phase === "day_hunter") {
+      return Object.entries(game.roles)
+        .filter(([, role]) => role === "hunter")
+        .map(([id]) => id);
+    }
+    const role =
+      game.phase === "night_werewolf" ? "werewolf"
+      : game.phase === "night_guard" ? "guard"
+      : game.phase === "night_witch" ? "witch"
+      : game.phase === "night_seer" ? "seer"
+      : undefined;
+    return role
+      ? Object.entries(game.roles)
+          .filter(
+            ([playerId, assignedRole]) =>
+              assignedRole === role && !game.deadPlayerIds.includes(playerId),
+          )
+          .map(([playerId]) => playerId)
+      : [];
   }
 
   getPlayerView(
@@ -263,43 +323,17 @@ export class WerewolfGameModule implements GameModule<
     return { ...base, mode: "waiting" };
   }
 
-  getHostView(game: GameState, context: GameViewContext): WerewolfHostView {
-    const aliveCount = Object.keys(game.roles).filter(id => !game.deadPlayerIds.includes(id)).length;
-    const votesRequired = Object.keys(game.roles).filter(
-      playerId =>
-        !game.deadPlayerIds.includes(playerId) &&
-        (game.phase !== "day_pk" || !game.pkCandidateIds.includes(playerId)),
-    ).length;
-
+  getHostView(game: GameState, _context: GameViewContext): WerewolfHostView {
     return {
-      phase: game.phase,
-      confirmedRoles: game.confirmedRolePlayerIds.length,
-      dayNumber: game.dayNumber,
-      nightNumber: game.nightNumber,
-      aliveCount,
-      votesRequired,
-      votesCast: Object.keys(game.votes).length,
+      ...commonRoomGameView(game),
       voteTally: ["day_vote", "day_pk", "day_result"].includes(game.phase)
         ? voteTally(game)
         : undefined,
-      pkCandidateIds: game.pkCandidateIds,
-      eliminatedTodayId: game.eliminatedTodayId,
-      noKillToday: game.noKillToday ?? false,
-      winner: game.winner,
-      deadPlayerIds: game.deadPlayerIds,
-      players: playerRefs(context),
     };
   }
 
-  getPublicView(game: GameState, context: GameViewContext): WerewolfPublicView {
-    return {
-      phase: game.phase,
-      dayNumber: game.dayNumber,
-      nightNumber: game.nightNumber,
-      deadPlayerIds: game.deadPlayerIds,
-      winner: game.winner,
-      players: playerRefs(context),
-    };
+  getPublicView(game: GameState, _context: GameViewContext): WerewolfPublicView {
+    return commonRoomGameView(game);
   }
 }
 
