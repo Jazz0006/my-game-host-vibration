@@ -1,3 +1,4 @@
+import type { Role } from "../../../../domain/game.js";
 import type { WerewolfRoleDefinition } from "../RoleDefinition.js";
 import {
   addLoversRelationship,
@@ -5,7 +6,7 @@ import {
   type WerewolfRuleState,
 } from "../WerewolfRuleState.js";
 
-export type CupidSpikeRoleId = "cupid" | "villager" | "werewolf";
+export type CupidSpikeRoleId = Role | "cupid";
 export type CupidSpikeInteractionKind = "cupid_link_lovers";
 
 export function applyCupidFirstNightSelection(
@@ -26,9 +27,9 @@ export function applyCupidFirstNightSelection(
  * Architecture-spike definition only. This is intentionally not registered in
  * the production role catalog or script deck yet.
  *
- * Target eligibility for the eventual UI/command layer is deliberately outside
- * this definition. Classic rules allow Cupid to choose themself as one lover;
- * the relationship model only requires the two lovers to be distinct players.
+ * Cupid deliberately has no legacy GamePhase binding. B4b uses the night timing
+ * metadata below to prove a first-night-only role can be orchestrated without
+ * adding `night_cupid` to the legacy domain state machine.
  */
 export const CUPID_SPIKE_ROLE_DEFINITION: WerewolfRoleDefinition<
   CupidSpikeRoleId,
@@ -39,6 +40,13 @@ export const CUPID_SPIKE_ROLE_DEFINITION: WerewolfRoleDefinition<
   description: "首夜选择两名玩家成为恋人；一名恋人死亡时，另一名恋人随之死亡。",
   team: "village",
   maxCount: 1,
+  interaction: {
+    night: { order: 5, schedule: "first_night_only" },
+    kind: "cupid_link_lovers",
+    mode: "single",
+    wakePolicy: { vibrate: true },
+    completionPolicy: { type: "single_submission" },
+  },
   hooks: {
     afterDeath: ({ ruleState, deadPlayerId }) => {
       const linkedPlayerId = loverOf(ruleState, deadPlayerId);
