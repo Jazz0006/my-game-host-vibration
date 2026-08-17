@@ -24,6 +24,13 @@ export function addLoversRelationship(
   if (state.relationships.some(item => item.id === relationship.id)) {
     throw new Error(`重复的关系 id: ${relationship.id}`);
   }
+  if (
+    state.relationships.some(
+      item => item.kind === "lovers" && item.playerIds.some(playerId => playerId === left || playerId === right),
+    )
+  ) {
+    throw new Error("玩家不能同时属于多组恋人关系");
+  }
   state.relationships.push(relationship);
 }
 
