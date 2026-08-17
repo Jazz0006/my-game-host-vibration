@@ -6,6 +6,7 @@ import type {
   GameViewContext,
 } from "../../core/game/GameModule.js";
 import {
+  allAliveVoted,
   beginNightStart,
   closeDayVote,
   confirmRole,
@@ -79,13 +80,7 @@ function voteTally(game: GameState): Record<string, number> {
 }
 
 export function allEligiblePlayersVoted(game: GameState): boolean {
-  if (game.phase !== "day_vote" && game.phase !== "day_pk") return false;
-  const eligiblePlayerIds = Object.keys(game.roles).filter(
-    playerId =>
-      !game.deadPlayerIds.includes(playerId) &&
-      (game.phase !== "day_pk" || !game.pkCandidateIds.includes(playerId)),
-  );
-  return eligiblePlayerIds.length > 0 && eligiblePlayerIds.every(playerId => game.votes[playerId] !== undefined);
+  return allAliveVoted(game);
 }
 
 export class WerewolfGameModule implements GameModule<
