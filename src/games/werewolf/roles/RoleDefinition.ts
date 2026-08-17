@@ -6,9 +6,9 @@ import type {
 import type { GamePhase, GameState } from "../../../domain/game.js";
 import type { WerewolfRuleState } from "./WerewolfRuleState.js";
 
-export type WerewolfTeam = "village" | "wolf" | "neutral";
+export type WerewolfTeam = "village" | "wolf" | "neutral" | "lovers";
 export type WerewolfDeathCause = "night_attack" | "poison" | "day_elimination" | "ability";
-export type WerewolfWinner = "wolf" | "village";
+export type WerewolfWinner = "wolf" | "village" | "lovers";
 
 export type WerewolfRoleRuleContext<TRoleId extends string = string> = {
   game: GameState;
