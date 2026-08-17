@@ -83,13 +83,7 @@ export function executeWerewolfCommand(
 ): WerewolfCommandOutcome {
   if (!room.game) throw new Error("game has not started");
 
-  const before = {
-    actionId: room.game.actionId,
-    phase: room.game.phase,
-    voteTarget: context.playerId ? room.game.votes[context.playerId] : undefined,
-  };
-
-  werewolfGameModule.handleCommand(
+  const result = werewolfGameModule.handleCommand(
     room.game,
     {
       ...(context.playerId === undefined ? {} : { playerId: context.playerId }),
@@ -101,47 +95,30 @@ export function executeWerewolfCommand(
   );
   room.updatedAt = Date.now();
 
-  switch (command.type) {
-    case "confirmRole":
-    case "submitSeerTarget":
-    case "beginNightStart":
+  switch (result.outcome.kind) {
+    case "roleConfirmed":
+    case "stateChanged":
       return { kind: "broadcast" };
 
-    case "startNight":
-    case "submitWolfTarget":
-    case "submitGuardTarget":
-    case "submitWitchAction":
-    case "confirmSeerResult":
-      return room.game.actionId !== before.actionId || room.game.phase !== before.phase
+    case "nightAdvanced":
+      return result.outcome.advanced
         ? { kind: "afterNightAction" }
         : { kind: "none" };
 
-    case "submitHunterExecution":
-      return room.game.actionId !== before.actionId || room.game.phase !== before.phase
+    case "hunterResolved":
+      return result.outcome.advanced
         ? { kind: "hunterResolved" }
         : { kind: "none" };
 
-    case "startDayVote":
-      return { kind: "broadcast" };
-
-    case "submitVote": {
-      const playerId = context.playerId;
-      if (!playerId) throw new Error("submitVote requires playerId");
-      const changed = room.game.votes[playerId] !== before.voteTarget;
+    case "voteSubmitted":
       return {
         kind: "vote",
-        changed,
-        allEligibleVoted: changed && allEligiblePlayersVoted(room.game),
+        changed: result.outcome.changed,
+        allEligibleVoted:
+          result.outcome.changed && allEligiblePlayersVoted(room.game),
       };
-    }
 
-    case "closeDayVote": {
-      const result = room.game.phase === "day_pk"
-        ? "pk"
-        : room.game.noKillToday
-          ? "no_kill"
-          : room.game.eliminatedTodayId ?? "no_kill";
-      return { kind: "voteClosed", result };
-    }
+    case "voteClosed":
+      return { kind: "voteClosed", result: result.outcome.result };
   }
 }
