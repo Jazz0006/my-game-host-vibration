@@ -105,6 +105,16 @@ export function getWerewolfRoleDefinition(role: Role) {
   return WEREWOLF_ROLE_REGISTRY[role];
 }
 
+export function werewolfRoleCatalog() {
+  return Object.values(WEREWOLF_ROLE_REGISTRY).map(({ id, name, description, team, maxCount }) => ({
+    id,
+    name,
+    description,
+    team,
+    ...(maxCount === undefined ? {} : { maxCount }),
+  }));
+}
+
 export function orderedNightRoles(): Role[] {
   return Object.values(WEREWOLF_ROLE_REGISTRY)
     .filter(definition => definition.nightOrder !== undefined)
