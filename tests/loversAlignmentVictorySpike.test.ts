@@ -62,7 +62,7 @@ function mixedLovers() {
 }
 
 describe("B4.1 mixed Lovers alignment and victory spike", () => {
-  it("keeps role identity but resolves both members of a wolf/villager pair to Lovers team", () => {
+  it("classic variant keeps Cupid outside a mixed Lovers team when Cupid chose two others", () => {
     const game = gameState();
     const ruleState = mixedLovers();
 
@@ -70,10 +70,28 @@ describe("B4.1 mixed Lovers alignment and victory spike", () => {
     expect(game.roles.b).toBe("villager");
     expect(resolveLoversEffectiveTeam(game, "a", registry, ruleState)).toBe("lovers");
     expect(resolveLoversEffectiveTeam(game, "b", registry, ruleState)).toBe("lovers");
-    expect(resolveLoversEffectiveTeam(game, "c", registry, ruleState)).toBe("wolf");
+    expect(resolveLoversEffectiveTeam(game, "d", registry, ruleState)).toBe("village");
   });
 
-  it("does not change the effective team of same-team lovers", () => {
+  it("China three-party variant puts Cupid and both mixed lovers on the Lovers team", () => {
+    const game = gameState();
+    const ruleState = mixedLovers();
+
+    expect(
+      resolveLoversEffectiveTeam(game, "a", registry, ruleState, "china_three_party"),
+    ).toBe("lovers");
+    expect(
+      resolveLoversEffectiveTeam(game, "b", registry, ruleState, "china_three_party"),
+    ).toBe("lovers");
+    expect(
+      resolveLoversEffectiveTeam(game, "d", registry, ruleState, "china_three_party"),
+    ).toBe("lovers");
+    expect(
+      resolveLoversEffectiveTeam(game, "c", registry, ruleState, "china_three_party"),
+    ).toBe("wolf");
+  });
+
+  it("does not create a special team for same-team village lovers in either variant", () => {
     const game = gameState();
     const ruleState = createEmptyWerewolfRuleState();
     addLoversRelationship(ruleState, {
@@ -84,7 +102,33 @@ describe("B4.1 mixed Lovers alignment and victory spike", () => {
     });
 
     expect(resolveLoversEffectiveTeam(game, "b", registry, ruleState)).toBe("village");
-    expect(resolveLoversEffectiveTeam(game, "d", registry, ruleState)).toBe("village");
+    expect(
+      resolveLoversEffectiveTeam(game, "a", registry, ruleState, "china_three_party"),
+    ).toBe("wolf");
+    expect(
+      resolveLoversEffectiveTeam(game, "b", registry, ruleState, "china_three_party"),
+    ).toBe("village");
+  });
+
+  it("does not create a special team for same-team wolf lovers in the China variant", () => {
+    const game = gameState();
+    const ruleState = createEmptyWerewolfRuleState();
+    addLoversRelationship(ruleState, {
+      id: "lovers-wolf",
+      kind: "lovers",
+      sourceRolePlayerId: "d",
+      playerIds: ["a", "c"],
+    });
+
+    expect(
+      resolveLoversEffectiveTeam(game, "a", registry, ruleState, "china_three_party"),
+    ).toBe("wolf");
+    expect(
+      resolveLoversEffectiveTeam(game, "c", registry, ruleState, "china_three_party"),
+    ).toBe("wolf");
+    expect(
+      resolveLoversEffectiveTeam(game, "d", registry, ruleState, "china_three_party"),
+    ).toBe("village");
   });
 
   it("composes with a caller-provided dynamic base-team resolver", () => {
@@ -95,12 +139,29 @@ describe("B4.1 mixed Lovers alignment and victory spike", () => {
       return game.roles[playerId] === "werewolf" ? ("wolf" as const) : ("village" as const);
     };
 
-    expect(resolveLoversEffectiveTeam(game, "a", registry, ruleState, dynamicTeam)).toBe("village");
-    expect(resolveLoversEffectiveTeam(game, "b", registry, ruleState, dynamicTeam)).toBe("village");
-    expect(resolveLoversVictory(game, "wolf", registry, ruleState, dynamicTeam)).toBe("wolf");
+    expect(
+      resolveLoversEffectiveTeam(
+        game,
+        "a",
+        registry,
+        ruleState,
+        "classic_millers_hollow",
+        dynamicTeam,
+      ),
+    ).toBe("village");
+    expect(
+      resolveLoversVictory(
+        game,
+        "wolf",
+        registry,
+        ruleState,
+        "classic_millers_hollow",
+        dynamicTeam,
+      ),
+    ).toBe("wolf");
   });
 
-  it("suppresses the normal wolf parity victory while a mixed pair is alive", () => {
+  it("suppresses normal wolf parity while a classic mixed pair is alive", () => {
     const game = gameState();
     game.deadPlayerIds.push("d");
     const ruleState = mixedLovers();
@@ -109,13 +170,44 @@ describe("B4.1 mixed Lovers alignment and victory spike", () => {
     expect(resolveLoversVictory(game, checkVictory(game), registry, ruleState)).toBeNull();
   });
 
-  it("awards Lovers victory when the mixed pair are the final two living players", () => {
+  it("classic variant awards Lovers victory when the mixed pair are the final two", () => {
     const game = gameState();
     game.deadPlayerIds.push("c", "d");
     const ruleState = mixedLovers();
 
-    expect(checkVictory(game)).toBe("wolf");
     expect(resolveLoversVictory(game, checkVictory(game), registry, ruleState)).toBe("lovers");
+  });
+
+  it("China variant awards Lovers victory when Cupid and both lovers are the only survivors", () => {
+    const game = gameState();
+    game.deadPlayerIds.push("c");
+    const ruleState = mixedLovers();
+
+    expect(
+      resolveLoversVictory(
+        game,
+        checkVictory(game),
+        registry,
+        ruleState,
+        "china_three_party",
+      ),
+    ).toBe("lovers");
+  });
+
+  it("China variant still awards the team when Cupid is dead and both lovers are the final two", () => {
+    const game = gameState();
+    game.deadPlayerIds.push("c", "d");
+    const ruleState = mixedLovers();
+
+    expect(
+      resolveLoversVictory(
+        game,
+        checkVictory(game),
+        registry,
+        ruleState,
+        "china_three_party",
+      ),
+    ).toBe("lovers");
   });
 
   it("returns to normal faction victory once the mixed pair is broken", () => {
@@ -124,7 +216,15 @@ describe("B4.1 mixed Lovers alignment and victory spike", () => {
     const ruleState = mixedLovers();
 
     expect(checkVictory(game)).toBe("wolf");
-    expect(resolveLoversVictory(game, checkVictory(game), registry, ruleState)).toBe("wolf");
+    expect(
+      resolveLoversVictory(
+        game,
+        checkVictory(game),
+        registry,
+        ruleState,
+        "china_three_party",
+      ),
+    ).toBe("wolf");
   });
 
   it("rejects overlapping lovers relationships", () => {
