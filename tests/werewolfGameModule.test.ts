@@ -109,6 +109,22 @@ describe("WerewolfGameModule", () => {
     expect(view.targets).toContainEqual({ id: "p4", name: "四号", seat: 4 });
   });
 
+  it("keeps game player references transport-neutral with only id/name/seat", () => {
+    const module = new WerewolfGameModule();
+    const game = state();
+
+    const view = module.getPlayerView(game, "p1", viewContext);
+    const targets = view.targets as Array<Record<string, unknown>>;
+
+    expect(targets).toHaveLength(5);
+    for (const target of targets) {
+      expect(Object.keys(target).sort()).toEqual(["id", "name", "seat"]);
+      expect(target).not.toHaveProperty("connected");
+      expect(target).not.toHaveProperty("socketId");
+      expect(target).not.toHaveProperty("isHost");
+    }
+  });
+
   it("keeps host-only vote tally out of the public view boundary", () => {
     const module = new WerewolfGameModule();
     const game = state({
