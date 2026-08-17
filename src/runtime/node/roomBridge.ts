@@ -53,9 +53,16 @@ export function playerGameView(room: RuntimeRoom, playerId: string): unknown {
   return werewolfGameModule.getPlayerView(room.game, playerId, gameViewContext(room));
 }
 
-export function hostGameView(room: RuntimeRoom): unknown {
+export function roomGameView(room: RuntimeRoom, isHost: boolean): Record<string, unknown> | undefined {
   if (!room.game) return undefined;
-  return werewolfGameModule.getHostView(room.game, gameViewContext(room));
+  const context = gameViewContext(room);
+  return isHost
+    ? werewolfGameModule.getHostView(room.game, context)
+    : werewolfGameModule.getPublicView(room.game, context);
+}
+
+export function actingPlayerIds(room: RuntimeRoom): string[] {
+  return room.game ? werewolfGameModule.getActingPlayerIds(room.game) : [];
 }
 
 export function createWerewolfGame(room: RuntimeRoom, config: GameConfig): GameState {
