@@ -33,12 +33,13 @@ describe("werewolf command facade", () => {
   it("preserves night-action advanced semantics", () => {
     const state = game();
     const wolfId = Object.entries(state.roles).find(([, role]) => role === "werewolf")![0];
+    const targetId = Object.keys(state.roles).find(id => id !== wolfId)!;
     state.phase = "night_werewolf";
     state.actionId = "wolf-action";
 
-    expect(submitWolfTarget(state, wolfId, "p5", "wolf-action")).toBe(true);
+    expect(submitWolfTarget(state, wolfId, targetId, "wolf-action")).toBe(true);
     expect(state.actionId).not.toBe("wolf-action");
-    expect(submitWolfTarget(state, wolfId, "p5", "wolf-action")).toBe(false);
+    expect(submitWolfTarget(state, wolfId, targetId, "wolf-action")).toBe(false);
   });
 
   it("preserves vote changed and close result semantics", () => {
