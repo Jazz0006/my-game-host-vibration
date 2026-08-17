@@ -49,6 +49,18 @@ export type WerewolfCommand =
   | { type: "closeDayVote" }
   | { type: "beginNightStart" };
 
+export type WerewolfRuleOutcome =
+  | { kind: "roleConfirmed"; allConfirmed: boolean }
+  | { kind: "nightAdvanced"; advanced: boolean }
+  | { kind: "hunterResolved"; advanced: boolean }
+  | { kind: "voteSubmitted"; changed: boolean }
+  | { kind: "voteClosed"; result: string }
+  | { kind: "stateChanged" };
+
+export type WerewolfCommandResult = GameCommandResult<GameState> & {
+  outcome: WerewolfRuleOutcome;
+};
+
 export type WerewolfPlayerView = Record<string, unknown>;
 export type WerewolfHostView = Record<string, unknown>;
 export type WerewolfPublicView = Record<string, unknown>;
@@ -132,51 +144,111 @@ export class WerewolfGameModule implements GameModule<
     context: GameCommandContext,
     command: WerewolfCommand,
     _dependencies: GameModuleDependencies,
-  ): GameCommandResult<GameState> {
+  ): WerewolfCommandResult {
     switch (command.type) {
       case "confirmRole":
-        confirmRole(state, requirePlayerId(context), command.actionId);
-        break;
+        return {
+          state,
+          outcome: {
+            kind: "roleConfirmed",
+            allConfirmed: confirmRole(state, requirePlayerId(context), command.actionId),
+          },
+        };
       case "startNight":
         startNight(state);
-        break;
+        return { state, outcome: { kind: "nightAdvanced", advanced: true } };
       case "submitWolfTarget":
-        submitWolfTarget(state, requirePlayerId(context), command.targetPlayerId, command.actionId);
-        break;
+        return {
+          state,
+          outcome: {
+            kind: "nightAdvanced",
+            advanced: submitWolfTarget(
+              state,
+              requirePlayerId(context),
+              command.targetPlayerId,
+              command.actionId,
+            ),
+          },
+        };
       case "submitGuardTarget":
-        submitGuardTarget(state, requirePlayerId(context), command.targetPlayerId, command.actionId);
-        break;
+        return {
+          state,
+          outcome: {
+            kind: "nightAdvanced",
+            advanced: submitGuardTarget(
+              state,
+              requirePlayerId(context),
+              command.targetPlayerId,
+              command.actionId,
+            ),
+          },
+        };
       case "submitWitchAction": {
         const action: { useAntidote?: boolean; poisonTargetId?: string | null } = {};
         if (command.useAntidote !== undefined) action.useAntidote = command.useAntidote;
         if (command.poisonTargetId !== undefined) action.poisonTargetId = command.poisonTargetId;
-        submitWitchAction(state, requirePlayerId(context), action, command.actionId);
-        break;
+        return {
+          state,
+          outcome: {
+            kind: "nightAdvanced",
+            advanced: submitWitchAction(
+              state,
+              requirePlayerId(context),
+              action,
+              command.actionId,
+            ),
+          },
+        };
       }
       case "submitSeerTarget":
         submitSeerTarget(state, requirePlayerId(context), command.targetPlayerId, command.actionId);
-        break;
+        return { state, outcome: { kind: "stateChanged" } };
       case "confirmSeerResult":
-        confirmSeerResult(state, requirePlayerId(context), command.actionId);
-        break;
+        return {
+          state,
+          outcome: {
+            kind: "nightAdvanced",
+            advanced: confirmSeerResult(state, requirePlayerId(context), command.actionId),
+          },
+        };
       case "submitHunterExecution":
-        submitHunterExecution(state, requirePlayerId(context), command.targetPlayerId, command.actionId);
-        break;
+        return {
+          state,
+          outcome: {
+            kind: "hunterResolved",
+            advanced: submitHunterExecution(
+              state,
+              requirePlayerId(context),
+              command.targetPlayerId,
+              command.actionId,
+            ),
+          },
+        };
       case "startDayVote":
         startDayVote(state);
-        break;
+        return { state, outcome: { kind: "stateChanged" } };
       case "submitVote":
-        submitVote(state, requirePlayerId(context), command.targetId, command.actionId);
-        break;
+        return {
+          state,
+          outcome: {
+            kind: "voteSubmitted",
+            changed: submitVote(
+              state,
+              requirePlayerId(context),
+              command.targetId,
+              command.actionId,
+            ),
+          },
+        };
       case "closeDayVote":
-        closeDayVote(state);
-        break;
+        return {
+          state,
+          outcome: { kind: "voteClosed", result: closeDayVote(state) },
+        };
       case "beginNightStart":
         beginNightStart(state);
-        break;
+        return { state, outcome: { kind: "stateChanged" } };
     }
-
-    return { state };
   }
 
   getActingPlayerIds(game: GameState): string[] {
