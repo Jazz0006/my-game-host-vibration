@@ -2,6 +2,8 @@ import type { PublicRoomPlayer, RoomPlayer, RoomState } from "./types.js";
 
 const MAX_PLAYER_NAME_LENGTH = 20;
 
+type NowProvider = () => number;
+
 function normalizePlayerName(name: string): string {
   return name.trim().slice(0, MAX_PLAYER_NAME_LENGTH);
 }
@@ -14,7 +16,10 @@ export class RoomCore<
   TGameState = unknown,
   TGameConfig = unknown,
 > {
-  constructor(readonly state: RoomState<TGameState, TGameConfig>) {}
+  constructor(
+    readonly state: RoomState<TGameState, TGameConfig>,
+    private readonly now: NowProvider = Date.now,
+  ) {}
 
   getPlayer(playerId: string): RoomPlayer | undefined {
     return this.state.players.find(player => player.id === playerId);
@@ -53,6 +58,7 @@ export class RoomCore<
       seat: this.state.players.length + 1,
     };
     this.state.players.push(added);
+    this.touch();
     return added;
   }
 
@@ -64,6 +70,7 @@ export class RoomCore<
       throw new Error("player name already exists in room");
     }
     player.name = normalizedName;
+    this.touch();
     return player;
   }
 
@@ -73,6 +80,7 @@ export class RoomCore<
 
     const [removed] = this.state.players.splice(index, 1);
     this.normalizeSeats();
+    this.touch();
     return removed;
   }
 
@@ -88,18 +96,24 @@ export class RoomCore<
     const adjustedIndex = insertIndex > originalIndex ? insertIndex - 1 : insertIndex;
     this.state.players.splice(adjustedIndex, 0, player);
     this.normalizeSeats();
+    this.touch();
   }
 
   transferHost(targetPlayerId: string): void {
     const target = this.requirePlayer(targetPlayerId);
     for (const player of this.state.players) player.isHost = false;
     target.isHost = true;
+    this.touch();
   }
 
-  normalizeSeats(): void {
+  private normalizeSeats(): void {
     this.state.players.forEach((player, index) => {
       player.seat = index + 1;
     });
+  }
+
+  private touch(): void {
+    this.state.updatedAt = this.now();
   }
 
   private requirePlayer(playerId: string): RoomPlayer {
