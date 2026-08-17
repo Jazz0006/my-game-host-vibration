@@ -50,6 +50,7 @@ export function shouldPreventWerewolfDeath<
   cause: WerewolfDeathCause,
   registry: WerewolfRoleRegistryLike<TRoleId, TInteractionKind>,
 ): { preventDeath: boolean; reasons: string[] } {
+  let preventDeath = false;
   const reasons: string[] = [];
 
   for (const { rolePlayerId, roleId, definition } of assignedDefinitions(game, registry)) {
@@ -61,10 +62,11 @@ export function shouldPreventWerewolfDeath<
       cause,
     });
     if (!decision?.preventDeath) continue;
+    preventDeath = true;
     if (decision.reason) reasons.push(decision.reason);
   }
 
-  return { preventDeath: reasons.length > 0, reasons };
+  return { preventDeath, reasons };
 }
 
 export function collectWerewolfAfterDeathActions<
