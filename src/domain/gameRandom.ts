@@ -1,7 +1,6 @@
-export interface GameRandomSource {
-  randomInt(maxExclusive: number): number;
-  randomId(): string;
-}
+import type { RandomProvider } from "../core/random/RandomProvider.js";
+
+export type GameRandomSource = RandomProvider;
 
 function webCryptoRandomInt(maxExclusive: number): number {
   if (!Number.isSafeInteger(maxExclusive) || maxExclusive <= 0 || maxExclusive > 0x1_0000_0000) {
@@ -19,7 +18,7 @@ function webCryptoRandomInt(maxExclusive: number): number {
   return value % maxExclusive;
 }
 
-export const defaultGameRandomSource: GameRandomSource = {
+export const defaultGameRandomSource: RandomProvider = {
   randomInt: webCryptoRandomInt,
   randomId() {
     return globalThis.crypto.randomUUID();
