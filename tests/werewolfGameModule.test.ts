@@ -62,7 +62,7 @@ describe("WerewolfGameModule", () => {
     expect(Object.values(game.roles).sort()).toEqual([...config.roleDeck].sort());
   });
 
-  it("delegates player commands to the existing rules engine", () => {
+  it("delegates player commands and preserves the rules-engine advance outcome", () => {
     const module = new WerewolfGameModule();
     const game = state();
 
@@ -74,8 +74,28 @@ describe("WerewolfGameModule", () => {
     );
 
     expect(result.state).toBe(game);
+    expect(result.outcome).toEqual({ kind: "nightAdvanced", advanced: true });
     expect(game.wolfTargetId).toBe("p4");
     expect(game.phase).toBe("night_witch");
+  });
+
+  it("preserves whether a submitted vote actually changed state", () => {
+    const module = new WerewolfGameModule();
+    const game = state({
+      phase: "day_vote",
+      dayNumber: 1,
+      actionId: "vote-1",
+    });
+
+    const result = module.handleCommand(
+      game,
+      { playerId: "p1", isHost: false, now: 123 },
+      { type: "submitVote", targetId: "p4", actionId: "vote-1" },
+      dependencies,
+    );
+
+    expect(result.outcome).toEqual({ kind: "voteSubmitted", changed: true });
+    expect(game.votes.p1).toBe("p4");
   });
 
   it("builds player action views from minimal room membership context", () => {
