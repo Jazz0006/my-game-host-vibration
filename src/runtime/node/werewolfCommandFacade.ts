@@ -1,6 +1,7 @@
 import type { GameCommandContext } from "../../core/game/GameModule.js";
-import { allAliveVoted as domainAllAliveVoted, type GameState, type Role } from "../../domain/game.js";
+import type { GameState, Role } from "../../domain/game.js";
 import {
+  allEligiblePlayersVoted,
   werewolfGameModule,
   type WerewolfCommand,
 } from "../../games/werewolf/WerewolfGameModule.js";
@@ -25,8 +26,6 @@ function withActionId<T extends object>(command: T, actionId?: string): T & { ac
   return actionId === undefined ? command : { ...command, actionId };
 }
 
-// Transitional compatibility layer: preserve the current server handlers' return
-// semantics while routing every game action through WerewolfGameModule.handleCommand().
 function runStateCommand(
   state: GameState,
   playerId: string | undefined,
@@ -55,7 +54,7 @@ export function runHostCommand(
 }
 
 export function allAliveVoted(state: GameState): boolean {
-  return domainAllAliveVoted(state);
+  return allEligiblePlayersVoted(state);
 }
 
 export function confirmRole(state: GameState, playerId: string, actionId?: string): boolean {
