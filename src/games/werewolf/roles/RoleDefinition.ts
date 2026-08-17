@@ -11,12 +11,13 @@ export type WerewolfWinner = "wolf" | "village";
 
 export type WerewolfRoleRuleContext<TRoleId extends string = string> = {
   game: GameState;
-  playerId: string;
+  rolePlayerId: string;
   roleId: TRoleId;
 };
 
 export type WerewolfDeathRuleContext<TRoleId extends string = string> =
   WerewolfRoleRuleContext<TRoleId> & {
+    deadPlayerId: string;
     cause: WerewolfDeathCause;
   };
 
@@ -30,8 +31,9 @@ export type WerewolfTriggeredAction<TInteractionKind extends string = string> = 
  * interaction. Hooks stay pure and transport-neutral: they inspect game state
  * and return decisions, but never mutate sockets, sessions, rooms or clients.
  *
- * This is intentionally not a generic rules DSL. New hooks should only be
- * added after a real role demonstrates the need.
+ * Death hooks are evaluated for every assigned role, not only the dying role.
+ * This leaves room for future protector/lover-style mechanics without turning
+ * the contract into a generic rules DSL.
  */
 export type WerewolfRoleRuleHooks<
   TRoleId extends string = string,
