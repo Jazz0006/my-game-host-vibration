@@ -1,4 +1,7 @@
-import type { GameRandomSource } from "../../domain/gameRandom.js";
+import {
+  defaultGameRandomSource,
+  type GameRandomSource,
+} from "../../domain/gameRandom.js";
 import {
   closeDayVote as domainCloseDayVote,
   confirmSeerResult as domainConfirmSeerResult,
@@ -13,7 +16,12 @@ import { WEREWOLF_RULE_RUNTIME_HOOKS } from "./WerewolfRuleRuntimeHooks.js";
 export {
   allAliveVoted,
   beginNightStart,
+  checkVictory,
+  configFromPlayerCount,
+  configFromRoleDeck,
   confirmRole,
+  dealRoles,
+  playerIdForRole,
   startDayVote,
   startGame,
   submitHunterExecution,
@@ -25,7 +33,10 @@ export {
   type Role,
 } from "../../domain/game.js";
 
-export function startNight(state: GameState, random: GameRandomSource): void {
+export function startNight(
+  state: GameState,
+  random: GameRandomSource = defaultGameRandomSource,
+): void {
   domainStartNight(state, random, WEREWOLF_RULE_RUNTIME_HOOKS);
 }
 
@@ -33,8 +44,8 @@ export function submitWolfTarget(
   state: GameState,
   actorPlayerId: string,
   targetPlayerId: string | null | undefined,
-  actionId: string | undefined,
-  random: GameRandomSource,
+  actionId?: string,
+  random: GameRandomSource = defaultGameRandomSource,
 ): boolean {
   return domainSubmitWolfTarget(
     state,
@@ -50,8 +61,8 @@ export function submitGuardTarget(
   state: GameState,
   actorPlayerId: string,
   targetPlayerId: string | null | undefined,
-  actionId: string | undefined,
-  random: GameRandomSource,
+  actionId?: string,
+  random: GameRandomSource = defaultGameRandomSource,
 ): boolean {
   return domainSubmitGuardTarget(
     state,
@@ -67,8 +78,8 @@ export function submitWitchAction(
   state: GameState,
   actorPlayerId: string,
   action: { useAntidote?: boolean; poisonTargetId?: string | null },
-  actionId: string | undefined,
-  random: GameRandomSource,
+  actionId?: string,
+  random: GameRandomSource = defaultGameRandomSource,
 ): boolean {
   return domainSubmitWitchAction(
     state,
@@ -83,8 +94,8 @@ export function submitWitchAction(
 export function confirmSeerResult(
   state: GameState,
   actorPlayerId: string,
-  actionId: string | undefined,
-  random: GameRandomSource,
+  actionId?: string,
+  random: GameRandomSource = defaultGameRandomSource,
 ): boolean {
   return domainConfirmSeerResult(
     state,
@@ -95,6 +106,9 @@ export function confirmSeerResult(
   );
 }
 
-export function closeDayVote(state: GameState, random: GameRandomSource): "pk" | "no_kill" | string {
+export function closeDayVote(
+  state: GameState,
+  random: GameRandomSource = defaultGameRandomSource,
+): "pk" | "no_kill" | string {
   return domainCloseDayVote(state, random, WEREWOLF_RULE_RUNTIME_HOOKS);
 }
