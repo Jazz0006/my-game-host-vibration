@@ -1,3 +1,4 @@
+import type { GameCommandContext } from "../../core/game/GameModule.js";
 import type { GameState, Role } from "../../domain/game.js";
 import {
   werewolfGameModule,
@@ -20,18 +21,20 @@ const commandDependencies = {
   },
 };
 
+function withActionId<T extends object>(command: T, actionId?: string): T & { actionId?: string } {
+  return actionId === undefined ? command : { ...command, actionId };
+}
+
 function runStateCommand(
   state: GameState,
   playerId: string | undefined,
   isHost: boolean,
   command: WerewolfCommand,
 ): void {
-  werewolfGameModule.handleCommand(
-    state,
-    { playerId, isHost, now: Date.now() },
-    command,
-    commandDependencies,
-  );
+  const context: GameCommandContext = playerId === undefined
+    ? { isHost, now: Date.now() }
+    : { playerId, isHost, now: Date.now() };
+  werewolfGameModule.handleCommand(state, context, command, commandDependencies);
 }
 
 export function runPlayerCommand(
@@ -51,7 +54,7 @@ export function runHostCommand(
 
 export function confirmRole(state: GameState, playerId: string, actionId?: string): boolean {
   const beforeCount = state.confirmedRolePlayerIds.length;
-  runStateCommand(state, playerId, false, { type: "confirmRole", actionId });
+  runStateCommand(state, playerId, false, withActionId({ type: "confirmRole" } as const, actionId));
   return state.confirmedRolePlayerIds.length > beforeCount && state.phase === "night_start";
 }
 
@@ -62,7 +65,10 @@ export function submitWolfTarget(
   actionId?: string,
 ): boolean {
   const beforeActionId = state.actionId;
-  runStateCommand(state, playerId, false, { type: "submitWolfTarget", targetPlayerId, actionId });
+  const command = targetPlayerId === undefined
+    ? { type: "submitWolfTarget" } as const
+    : { type: "submitWolfTarget", targetPlayerId } as const;
+  runStateCommand(state, playerId, false, withActionId(command, actionId));
   return state.actionId !== beforeActionId;
 }
 
@@ -73,7 +79,10 @@ export function submitGuardTarget(
   actionId?: string,
 ): boolean {
   const beforeActionId = state.actionId;
-  runStateCommand(state, playerId, false, { type: "submitGuardTarget", targetPlayerId, actionId });
+  const command = targetPlayerId === undefined
+    ? { type: "submitGuardTarget" } as const
+    : { type: "submitGuardTarget", targetPlayerId } as const;
+  runStateCommand(state, playerId, false, withActionId(command, actionId));
   return state.actionId !== beforeActionId;
 }
 
@@ -84,12 +93,13 @@ export function submitWitchAction(
   actionId?: string,
 ): boolean {
   const beforeActionId = state.actionId;
-  runStateCommand(state, playerId, false, {
+  const command: WerewolfCommand = {
     type: "submitWitchAction",
-    useAntidote: action.useAntidote,
-    poisonTargetId: action.poisonTargetId,
-    actionId,
-  });
+    ...(action.useAntidote === undefined ? {} : { useAntidote: action.useAntidote }),
+    ...(action.poisonTargetId === undefined ? {} : { poisonTargetId: action.poisonTargetId }),
+    ...(actionId === undefined ? {} : { actionId }),
+  };
+  runStateCommand(state, playerId, false, command);
   return state.actionId !== beforeActionId;
 }
 
@@ -99,7 +109,10 @@ export function submitSeerTarget(
   targetPlayerId: string | undefined,
   actionId?: string,
 ): Role {
-  runStateCommand(state, playerId, false, { type: "submitSeerTarget", targetPlayerId, actionId });
+  const command = targetPlayerId === undefined
+    ? { type: "submitSeerTarget" } as const
+    : { type: "submitSeerTarget", targetPlayerId } as const;
+  runStateCommand(state, playerId, false, withActionId(command, actionId));
   return state.roles[state.seerTargetId!]!;
 }
 
@@ -109,7 +122,7 @@ export function confirmSeerResult(
   actionId?: string,
 ): boolean {
   const beforeActionId = state.actionId;
-  runStateCommand(state, playerId, false, { type: "confirmSeerResult", actionId });
+  runStateCommand(state, playerId, false, withActionId({ type: "confirmSeerResult" } as const, actionId));
   return state.actionId !== beforeActionId;
 }
 
@@ -120,7 +133,10 @@ export function submitHunterExecution(
   actionId?: string,
 ): boolean {
   const beforeActionId = state.actionId;
-  runStateCommand(state, playerId, false, { type: "submitHunterExecution", targetPlayerId, actionId });
+  const command = targetPlayerId === undefined
+    ? { type: "submitHunterExecution" } as const
+    : { type: "submitHunterExecution", targetPlayerId } as const;
+  runStateCommand(state, playerId, false, withActionId(command, actionId));
   return state.actionId !== beforeActionId;
 }
 
