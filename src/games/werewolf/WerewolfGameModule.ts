@@ -106,51 +106,26 @@ export class WerewolfGameModule implements GameModule<
         startNight(state);
         break;
       case "submitWolfTarget":
-        submitWolfTarget(
-          state,
-          requirePlayerId(context),
-          command.targetPlayerId,
-          command.actionId,
-        );
+        submitWolfTarget(state, requirePlayerId(context), command.targetPlayerId, command.actionId);
         break;
       case "submitGuardTarget":
-        submitGuardTarget(
-          state,
-          requirePlayerId(context),
-          command.targetPlayerId,
-          command.actionId,
-        );
+        submitGuardTarget(state, requirePlayerId(context), command.targetPlayerId, command.actionId);
         break;
       case "submitWitchAction": {
         const action: { useAntidote?: boolean; poisonTargetId?: string | null } = {};
         if (command.useAntidote !== undefined) action.useAntidote = command.useAntidote;
         if (command.poisonTargetId !== undefined) action.poisonTargetId = command.poisonTargetId;
-        submitWitchAction(
-          state,
-          requirePlayerId(context),
-          action,
-          command.actionId,
-        );
+        submitWitchAction(state, requirePlayerId(context), action, command.actionId);
         break;
       }
       case "submitSeerTarget":
-        submitSeerTarget(
-          state,
-          requirePlayerId(context),
-          command.targetPlayerId,
-          command.actionId,
-        );
+        submitSeerTarget(state, requirePlayerId(context), command.targetPlayerId, command.actionId);
         break;
       case "confirmSeerResult":
         confirmSeerResult(state, requirePlayerId(context), command.actionId);
         break;
       case "submitHunterExecution":
-        submitHunterExecution(
-          state,
-          requirePlayerId(context),
-          command.targetPlayerId,
-          command.actionId,
-        );
+        submitHunterExecution(state, requirePlayerId(context), command.targetPlayerId, command.actionId);
         break;
       case "startDayVote":
         startDayVote(state);
