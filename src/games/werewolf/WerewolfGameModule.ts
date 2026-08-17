@@ -3,6 +3,7 @@ import type {
   GameCommandResult,
   GameModule,
   GameModuleDependencies,
+  GamePlayerRef,
   GameViewContext,
 } from "../../core/game/GameModule.js";
 import {
@@ -21,6 +22,7 @@ import {
   submitWitchAction,
   submitWolfTarget,
   type GameConfig,
+  type GamePhase,
   type GameState,
   type Role,
 } from "../../domain/game.js";
@@ -61,9 +63,66 @@ export type WerewolfCommandResult = GameCommandResult<GameState> & {
   outcome: WerewolfRuleOutcome;
 };
 
-export type WerewolfPlayerView = Record<string, unknown>;
-export type WerewolfHostView = Record<string, unknown>;
-export type WerewolfPublicView = Record<string, unknown>;
+export type WerewolfPlayerMode =
+  | "spectator"
+  | "role_reveal"
+  | "waiting"
+  | "night_start"
+  | "wolf_action"
+  | "guard_action"
+  | "witch_action"
+  | "seer_action"
+  | "seer_result"
+  | "night_complete"
+  | "day_vote"
+  | "day_pk"
+  | "day_result"
+  | "hunter_execution"
+  | "day_announce"
+  | "game_over";
+
+export type WerewolfPlayerView = {
+  phase: GamePhase;
+  mode: WerewolfPlayerMode;
+  role?: Role;
+  roleName?: string;
+  roleDescription?: string;
+  actionId?: string;
+  deadPlayerIds?: string[];
+  roleConfirmed?: boolean;
+  targets?: GamePlayerRef[];
+  attackedPlayer?: GamePlayerRef | undefined;
+  poisonTargets?: GamePlayerRef[];
+  antidoteAvailable?: boolean;
+  poisonAvailable?: boolean;
+  checkedPlayer?: GamePlayerRef | undefined;
+  checkedAlignment?: "werewolf" | "good" | undefined;
+  deaths?: GamePlayerRef[];
+  myVote?: string | undefined;
+  eliminatedPlayer?: GamePlayerRef | undefined;
+  noKill?: boolean;
+  winner?: "wolf" | "village" | undefined;
+};
+
+export type WerewolfPublicView = {
+  phase: GamePhase;
+  confirmedRoles: number;
+  completedNightSteps: number;
+  dayNumber: number;
+  nightNumber: number;
+  aliveCount: number;
+  votesRequired: number;
+  votesCast: number;
+  pkCandidateIds: string[];
+  eliminatedTodayId: string | undefined;
+  noKillToday: boolean;
+  winner: "wolf" | "village" | undefined;
+  deadPlayerIds: string[];
+};
+
+export type WerewolfHostView = WerewolfPublicView & {
+  voteTally: Record<string, number> | undefined;
+};
 
 const ROLE_INFO: Record<Role, { name: string; description: string }> = {
   werewolf: { name: "狼人", description: "夜间可以击杀任意一名存活玩家（包括狼人）或选择空刀。" },
@@ -79,7 +138,7 @@ function requirePlayerId(context: GameCommandContext): string {
   return context.playerId;
 }
 
-function playerRefs(context: GameViewContext) {
+function playerRefs(context: GameViewContext): GamePlayerRef[] {
   return context.players.map(player => ({ ...player }));
 }
 
@@ -96,7 +155,7 @@ function completedNightSteps(game: GameState): number {
     .indexOf(game.phase as "night_guard" | "night_werewolf" | "night_witch" | "night_seer" | "night_complete");
 }
 
-function commonRoomGameView(game: GameState): Record<string, unknown> {
+function commonRoomGameView(game: GameState): WerewolfPublicView {
   const aliveCount = Object.keys(game.roles).filter(id => !game.deadPlayerIds.includes(id)).length;
   const votesRequired = Object.keys(game.roles).filter(
     playerId =>
