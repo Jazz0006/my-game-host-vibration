@@ -1,17 +1,20 @@
-import crypto from "node:crypto";
+import {
+  defaultGameRandomSource,
+  type GameRandomSource,
+} from "./gameRandom.js";
 
 export type Role = "werewolf" | "seer" | "witch" | "guard" | "hunter" | "villager";
 export type GamePhase =
   | "role_reveal"
-  | "night_start"       // waiting for host to begin the night
+  | "night_start"
   | "night_werewolf"
   | "night_guard"
   | "night_witch"
   | "night_seer"
   | "night_complete"
-  | "day_vote"          // first vote — targets: all alive except self
-  | "day_pk"            // tie-break vote — targets: pkCandidateIds only
-  | "day_result"        // outcome display; host advances to next night
+  | "day_vote"
+  | "day_pk"
+  | "day_result"
   | "day_hunter"
   | "game_over";
 
@@ -26,11 +29,11 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
 };
 
 const PRESET_DECKS: Record<number, readonly Role[]> = {
-  5:  ["werewolf", "seer", "witch", "villager", "villager"],
-  6:  ["werewolf", "werewolf", "seer", "witch", "villager", "villager"],
-  7:  ["werewolf", "werewolf", "seer", "witch", "villager", "villager", "villager"],
-  8:  ["werewolf", "werewolf", "seer", "witch", "guard", "villager", "villager", "villager"],
-  9:  ["werewolf", "werewolf", "werewolf", "seer", "witch", "guard", "villager", "villager", "villager"],
+  5: ["werewolf", "seer", "witch", "villager", "villager"],
+  6: ["werewolf", "werewolf", "seer", "witch", "villager", "villager"],
+  7: ["werewolf", "werewolf", "seer", "witch", "villager", "villager", "villager"],
+  8: ["werewolf", "werewolf", "seer", "witch", "guard", "villager", "villager", "villager"],
+  9: ["werewolf", "werewolf", "werewolf", "seer", "witch", "guard", "villager", "villager", "villager"],
   10: ["werewolf", "werewolf", "werewolf", "seer", "witch", "guard", "hunter", "villager", "villager", "villager"],
   11: ["werewolf", "werewolf", "werewolf", "seer", "witch", "guard", "hunter", "villager", "villager", "villager", "villager"],
   12: ["werewolf", "werewolf", "werewolf", "werewolf", "seer", "witch", "guard", "hunter", "villager", "villager", "villager", "villager"],
@@ -75,25 +78,22 @@ export type GameState = {
   roles: Record<string, Role>;
   confirmedRolePlayerIds: string[];
   actionId: string;
-  // Night action state (cleared each night)
   wolfTargetId?: string;
   guardProtectedId?: string;
   guardLastProtectedId?: string;
-  witchUsedAntidote: boolean;    // used antidote THIS night (for death resolution)
-  witchAntidoteSpent: boolean;   // permanent: antidote bottle consumed
-  witchPoisonSpent: boolean;     // permanent: poison bottle consumed
+  witchUsedAntidote: boolean;
+  witchAntidoteSpent: boolean;
+  witchPoisonSpent: boolean;
   witchPoisonTargetId?: string;
   seerTargetId?: string;
   seerResultConfirmed: boolean;
   hunterExecutionTargetId?: string;
   hunterTrigger?: "night" | "day";
-  deaths: string[];              // died last night (persists through day for display)
-  // Day state
-  votes: Record<string, string>; // voterId → targetId (reused for day_pk)
-  pkCandidateIds: string[];      // players tied in day_vote; targets for day_pk
+  deaths: string[];
+  votes: Record<string, string>;
+  pkCandidateIds: string[];
   eliminatedTodayId?: string;
-  noKillToday?: boolean;         // true when day_pk still tied
-  // Cumulative
+  noKillToday?: boolean;
   deadPlayerIds: string[];
   winner?: "wolf" | "village";
 };
@@ -127,16 +127,11 @@ function nextNightPhase(state: GameState, currentRole: Role): GamePhase {
   return next ? (`night_${next}` as GamePhase) : "night_complete";
 }
 
-function nextActionId(): string {
-  return crypto.randomUUID();
-}
-
 function resolveNightDeaths(state: GameState): Set<string> {
   const deaths = new Set<string>();
   if (state.wolfTargetId) {
     const guarded = state.wolfTargetId === state.guardProtectedId;
     const saved = state.witchUsedAntidote;
-    // Exactly one protection saves the target. Guard + antidote together cancel out (同守同救).
     if (guarded === saved) deaths.add(state.wolfTargetId);
   }
   if (state.witchPoisonTargetId) deaths.add(state.witchPoisonTargetId);
@@ -152,9 +147,7 @@ export function checkVictory(state: GameState): "wolf" | "village" | null {
   return null;
 }
 
-// Applies elimination of a single player and transitions to the correct next phase.
-// Returns true if phase advanced to game_over.
-function applyElimination(state: GameState, targetId: string): boolean {
+function applyElimination(state: GameState, targetId: string, random: GameRandomSource): boolean {
   state.deadPlayerIds.push(targetId);
   state.eliminatedTodayId = targetId;
   delete state.noKillToday;
@@ -162,7 +155,7 @@ function applyElimination(state: GameState, targetId: string): boolean {
   if (state.roles[targetId] === "hunter") {
     state.hunterTrigger = "day";
     state.phase = "day_hunter";
-    state.actionId = nextActionId();
+    state.actionId = random.randomId();
     return false;
   }
 
@@ -170,18 +163,18 @@ function applyElimination(state: GameState, targetId: string): boolean {
   if (victory) {
     state.phase = "game_over";
     state.winner = victory;
-    state.actionId = nextActionId();
+    state.actionId = random.randomId();
     return true;
   }
   state.phase = "day_result";
-  state.actionId = nextActionId();
+  state.actionId = random.randomId();
   return false;
 }
 
 export function dealRoles(
   playerIds: readonly string[],
   config: GameConfig = DEFAULT_GAME_CONFIG,
-  randomInt: (maxExclusive: number) => number = max => crypto.randomInt(max),
+  randomInt: (maxExclusive: number) => number = defaultGameRandomSource.randomInt,
 ): Record<string, Role> {
   if (playerIds.length !== config.playerCount || new Set(playerIds).size !== config.playerCount) {
     throw new GameRuleError(`${config.playerCount}人局必须恰好有${config.playerCount}名不同的玩家`);
@@ -200,15 +193,16 @@ export function dealRoles(
 export function startGame(
   playerIds: readonly string[],
   config: GameConfig = DEFAULT_GAME_CONFIG,
+  random: GameRandomSource = defaultGameRandomSource,
 ): GameState {
   return {
     config,
     phase: "role_reveal",
     nightNumber: 1,
     dayNumber: 0,
-    roles: dealRoles(playerIds, config),
+    roles: dealRoles(playerIds, config, random.randomInt),
     confirmedRolePlayerIds: [],
-    actionId: nextActionId(),
+    actionId: random.randomId(),
     witchUsedAntidote: false,
     witchAntidoteSpent: false,
     witchPoisonSpent: false,
@@ -247,7 +241,7 @@ function assertKnownPlayer(state: GameState, playerId: string | undefined): asse
   if (!playerId || !state.roles[playerId]) throw new GameRuleError("请选择有效玩家");
 }
 
-function settleNight(state: GameState): void {
+function settleNight(state: GameState, random: GameRandomSource): void {
   const deaths = resolveNightDeaths(state);
   state.deaths = [...deaths];
 
@@ -265,7 +259,7 @@ function settleNight(state: GameState): void {
   if (hunterCanShoot) {
     state.hunterTrigger = "night";
     state.phase = "day_hunter";
-    state.actionId = nextActionId();
+    state.actionId = random.randomId();
     return;
   }
 
@@ -276,37 +270,42 @@ function settleNight(state: GameState): void {
   } else {
     state.phase = "night_complete";
   }
-  state.actionId = nextActionId();
+  state.actionId = random.randomId();
 }
 
-function advanceAfterNightRole(state: GameState, currentRole: Role): void {
+function advanceAfterNightRole(state: GameState, currentRole: Role, random: GameRandomSource): void {
   const nextPhase = nextNightPhase(state, currentRole);
   if (nextPhase === "night_complete") {
-    settleNight(state);
+    settleNight(state, random);
     return;
   }
   state.phase = nextPhase;
-  state.actionId = nextActionId();
+  state.actionId = random.randomId();
 }
 
-// ── Night phase functions ────────────────────────────────────────────────────
-
-export function confirmRole(state: GameState, playerId: string, actionId?: string): boolean {
+export function confirmRole(
+  state: GameState,
+  playerId: string,
+  actionId?: string,
+  random: GameRandomSource = defaultGameRandomSource,
+): boolean {
   if (state.confirmedRolePlayerIds.includes(playerId)) return false;
   assertAction(state, actionId, "role_reveal");
   assertKnownPlayer(state, playerId);
 
   state.confirmedRolePlayerIds.push(playerId);
   if (state.confirmedRolePlayerIds.length === state.config.playerCount) {
-    // After all roles confirmed, host clicks to start the first night
     state.phase = "night_start";
-    state.actionId = nextActionId();
+    state.actionId = random.randomId();
     return true;
   }
   return false;
 }
 
-export function startNight(state: GameState): void {
+export function startNight(
+  state: GameState,
+  random: GameRandomSource = defaultGameRandomSource,
+): void {
   if (state.phase !== "night_start") {
     throw new GameRuleError("当前不能开始夜晚流程");
   }
@@ -327,15 +326,14 @@ export function startNight(state: GameState): void {
   state.votes = {};
   state.pkCandidateIds = [];
 
-  // Increment night number on subsequent nights (not the first)
   if (state.dayNumber > 0) state.nightNumber += 1;
 
   const firstNightRole = nightQueue(state)[0];
   if (firstNightRole) {
     state.phase = `night_${firstNightRole}` as GamePhase;
-    state.actionId = nextActionId();
+    state.actionId = random.randomId();
   } else {
-    settleNight(state);
+    settleNight(state, random);
   }
 }
 
@@ -344,6 +342,7 @@ export function submitWolfTarget(
   actorPlayerId: string,
   targetPlayerId: string | null | undefined,
   actionId?: string,
+  random: GameRandomSource = defaultGameRandomSource,
 ): boolean {
   const requestedTargetId = targetPlayerId ?? undefined;
   if (
@@ -360,7 +359,7 @@ export function submitWolfTarget(
 
   if (requestedTargetId) state.wolfTargetId = requestedTargetId;
   else delete state.wolfTargetId;
-  advanceAfterNightRole(state, "werewolf");
+  advanceAfterNightRole(state, "werewolf", random);
   return true;
 }
 
@@ -369,6 +368,7 @@ export function submitGuardTarget(
   actorPlayerId: string,
   targetPlayerId: string | null | undefined,
   actionId?: string,
+  random: GameRandomSource = defaultGameRandomSource,
 ): boolean {
   const requestedTargetId = targetPlayerId ?? undefined;
   if (
@@ -388,7 +388,7 @@ export function submitGuardTarget(
 
   if (requestedTargetId) state.guardProtectedId = requestedTargetId;
   else delete state.guardProtectedId;
-  advanceAfterNightRole(state, "guard");
+  advanceAfterNightRole(state, "guard", random);
   return true;
 }
 
@@ -397,6 +397,7 @@ export function submitWitchAction(
   actorPlayerId: string,
   action: { useAntidote?: boolean; poisonTargetId?: string | null },
   actionId?: string,
+  random: GameRandomSource = defaultGameRandomSource,
 ): boolean {
   const requestedAntidote = action.useAntidote === true;
   const requestedPoison = action.poisonTargetId || undefined;
@@ -426,7 +427,7 @@ export function submitWitchAction(
   } else {
     delete state.witchPoisonTargetId;
   }
-  advanceAfterNightRole(state, "witch");
+  advanceAfterNightRole(state, "witch", random);
   return true;
 }
 
@@ -457,6 +458,7 @@ export function confirmSeerResult(
   state: GameState,
   actorPlayerId: string,
   actionId?: string,
+  random: GameRandomSource = defaultGameRandomSource,
 ): boolean {
   if (
     (state.phase === "night_complete" || state.phase === "day_hunter" || state.phase === "game_over") &&
@@ -468,7 +470,7 @@ export function confirmSeerResult(
   if (!state.seerTargetId) throw new GameRuleError("请先选择查验目标");
 
   state.seerResultConfirmed = true;
-  settleNight(state);
+  settleNight(state, random);
   return true;
 }
 
@@ -477,6 +479,7 @@ export function submitHunterExecution(
   actorPlayerId: string,
   targetPlayerId: string | null | undefined,
   actionId?: string,
+  random: GameRandomSource = defaultGameRandomSource,
 ): boolean {
   const requestedTargetId = targetPlayerId ?? undefined;
   if (
@@ -505,15 +508,14 @@ export function submitHunterExecution(
   } else {
     state.phase = triggeredAtNight ? "night_complete" : "day_result";
   }
-  state.actionId = nextActionId();
+  state.actionId = random.randomId();
   return true;
 }
 
-// ── Day phase functions ──────────────────────────────────────────────────────
-
-// Called by server immediately after emitting game:night-complete.
-// Auto-transitions night_complete → day_vote (no host click needed).
-export function startDayVote(state: GameState): void {
+export function startDayVote(
+  state: GameState,
+  random: GameRandomSource = defaultGameRandomSource,
+): void {
   if (state.phase !== "night_complete") {
     throw new GameRuleError("只能在夜间结束后开始白天投票");
   }
@@ -523,7 +525,7 @@ export function startDayVote(state: GameState): void {
   delete state.eliminatedTodayId;
   delete state.noKillToday;
   state.phase = "day_vote";
-  state.actionId = nextActionId();
+  state.actionId = random.randomId();
 }
 
 export function submitVote(
@@ -541,7 +543,6 @@ export function submitVote(
     throw new GameRuleError("PK玩家不能参与PK投票");
   }
   if (voterId === targetId) throw new GameRuleError("不能投票给自己");
-  // In PK phase, only pkCandidateIds are valid targets
   if (state.phase === "day_pk" && !state.pkCandidateIds.includes(targetId)) {
     throw new GameRuleError("请从平票玩家中选择放逐目标");
   }
@@ -559,33 +560,30 @@ export function allAliveVoted(state: GameState): boolean {
   return eligibleVoterIds.length > 0 && eligibleVoterIds.every(id => id in state.votes);
 }
 
-// Closes voting and resolves outcome. Works for both day_vote and day_pk.
-// Returns the eliminated player id, "pk" (tie on first vote → entering pk), or "no_kill" (pk still tied).
-export function closeDayVote(state: GameState): "pk" | "no_kill" | string {
+export function closeDayVote(
+  state: GameState,
+  random: GameRandomSource = defaultGameRandomSource,
+): "pk" | "no_kill" | string {
   if (state.phase !== "day_vote" && state.phase !== "day_pk") {
     throw new GameRuleError("当前不在投票阶段");
   }
   const isPk = state.phase === "day_pk";
-
-  // Build tally
   const tally: Record<string, number> = {};
   for (const targetId of Object.values(state.votes)) {
     tally[targetId] = (tally[targetId] ?? 0) + 1;
   }
 
   if (Object.keys(tally).length === 0) {
-    // No votes cast at all
     if (isPk) {
       state.noKillToday = true;
       delete state.eliminatedTodayId;
       state.phase = "day_result";
-      state.actionId = nextActionId();
+      state.actionId = random.randomId();
       return "no_kill";
     }
-    // First round with no votes — go to PK with all alive as candidates? Treat as no-kill.
     state.noKillToday = true;
     state.phase = "day_result";
-    state.actionId = nextActionId();
+    state.actionId = random.randomId();
     return "no_kill";
   }
 
@@ -593,36 +591,34 @@ export function closeDayVote(state: GameState): "pk" | "no_kill" | string {
   const topCandidates = Object.keys(tally).filter(id => tally[id] === maxVotes);
 
   if (topCandidates.length === 1) {
-    // Clear winner — eliminate
-    applyElimination(state, topCandidates[0]!);
+    applyElimination(state, topCandidates[0]!, random);
     return topCandidates[0]!;
   }
 
-  // Tie
   if (isPk) {
-    // PK also tied — no kill
     state.noKillToday = true;
     delete state.eliminatedTodayId;
     state.phase = "day_result";
-    state.actionId = nextActionId();
+    state.actionId = random.randomId();
     return "no_kill";
   }
 
-  // First vote tied — enter PK
   state.pkCandidateIds = topCandidates;
   state.votes = {};
   state.phase = "day_pk";
-  state.actionId = nextActionId();
+  state.actionId = random.randomId();
   return "pk";
 }
 
-// Host clicks "宣布结果并准备夜晚" on day_result screen.
-export function beginNightStart(state: GameState): void {
+export function beginNightStart(
+  state: GameState,
+  random: GameRandomSource = defaultGameRandomSource,
+): void {
   if (state.phase !== "day_result") {
     throw new GameRuleError("当前不能进入夜晚准备阶段");
   }
   state.phase = "night_start";
-  state.actionId = nextActionId();
+  state.actionId = random.randomId();
 }
 
 export function playerIdForRole(state: GameState, role: Role): string {
