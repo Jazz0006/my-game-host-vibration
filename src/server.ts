@@ -6,14 +6,19 @@ import { fileURLToPath } from "node:url";
 import { Server, type Socket } from "socket.io";
 import {
   allAliveVoted,
-  beginNightStart,
-  closeDayVote,
   configFromRoleDeck,
   configFromPlayerCount,
-  confirmRole,
-  confirmSeerResult,
   DEFAULT_GAME_CONFIG,
   GameRuleError,
+  type GameConfig,
+  type GameState,
+  type Role,
+} from "./domain/game.js";
+import {
+  beginNightStart,
+  closeDayVote,
+  confirmRole,
+  confirmSeerResult,
   startDayVote,
   startNight,
   submitGuardTarget,
@@ -22,10 +27,7 @@ import {
   submitVote,
   submitWitchAction,
   submitWolfTarget,
-  type GameConfig,
-  type GameState,
-  type Role,
-} from "./domain/game.js";
+} from "./runtime/node/werewolfCommandFacade.js";
 import {
   acknowledgePrompt,
   createTestPrompt,
