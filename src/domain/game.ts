@@ -120,26 +120,7 @@ export type GameRuleRuntimeHooks = {
   ) => boolean;
 };
 
-/**
- * Temporary compatibility fallback for callers that exercise domain functions
- * directly. Production WerewolfGameModule injects the registry-backed hooks.
- * Remove this fallback after direct domain tests are migrated to the game layer.
- */
-const LEGACY_GAME_RULE_RUNTIME_HOOKS: GameRuleRuntimeHooks = {
-  afterDeath: (state, event, nextActionId) => {
-    if (state.roles[event.deadPlayerId] !== "hunter") return false;
-    if (event.cause === "poison") return false;
-    const hasLivingTarget = Object.keys(state.roles).some(
-      playerId => playerId !== event.deadPlayerId && !state.deadPlayerIds.includes(playerId),
-    );
-    if (!hasLivingTarget) return false;
-
-    state.hunterTrigger = event.continuation;
-    state.phase = "day_hunter";
-    state.actionId = nextActionId();
-    return true;
-  },
-};
+const EMPTY_GAME_RULE_RUNTIME_HOOKS: GameRuleRuntimeHooks = {};
 
 const NIGHT_ORDER: readonly Role[] = ["guard", "werewolf", "witch", "seer"];
 
@@ -192,7 +173,7 @@ function applyElimination(
   state: GameState,
   targetId: string,
   random: GameRandomSource,
-  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+  hooks: GameRuleRuntimeHooks = EMPTY_GAME_RULE_RUNTIME_HOOKS,
 ): boolean {
   state.deadPlayerIds.push(targetId);
   state.eliminatedTodayId = targetId;
@@ -291,7 +272,7 @@ function assertKnownPlayer(state: GameState, playerId: string | undefined): asse
 function settleNight(
   state: GameState,
   random: GameRandomSource,
-  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+  hooks: GameRuleRuntimeHooks = EMPTY_GAME_RULE_RUNTIME_HOOKS,
 ): void {
   const deaths = resolveNightDeaths(state);
   state.deaths = [...deaths];
@@ -325,7 +306,7 @@ function advanceAfterNightRole(
   state: GameState,
   currentRole: Role,
   random: GameRandomSource,
-  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+  hooks: GameRuleRuntimeHooks = EMPTY_GAME_RULE_RUNTIME_HOOKS,
 ): void {
   const nextPhase = nextNightPhase(state, currentRole);
   if (nextPhase === "night_complete") {
@@ -358,7 +339,7 @@ export function confirmRole(
 export function startNight(
   state: GameState,
   random: GameRandomSource = defaultGameRandomSource,
-  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+  hooks: GameRuleRuntimeHooks = EMPTY_GAME_RULE_RUNTIME_HOOKS,
 ): void {
   if (state.phase !== "night_start") {
     throw new GameRuleError("当前不能开始夜晚流程");
@@ -397,7 +378,7 @@ export function submitWolfTarget(
   targetPlayerId: string | null | undefined,
   actionId?: string,
   random: GameRandomSource = defaultGameRandomSource,
-  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+  hooks: GameRuleRuntimeHooks = EMPTY_GAME_RULE_RUNTIME_HOOKS,
 ): boolean {
   const requestedTargetId = targetPlayerId ?? undefined;
   if (
@@ -424,7 +405,7 @@ export function submitGuardTarget(
   targetPlayerId: string | null | undefined,
   actionId?: string,
   random: GameRandomSource = defaultGameRandomSource,
-  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+  hooks: GameRuleRuntimeHooks = EMPTY_GAME_RULE_RUNTIME_HOOKS,
 ): boolean {
   const requestedTargetId = targetPlayerId ?? undefined;
   if (
@@ -454,7 +435,7 @@ export function submitWitchAction(
   action: { useAntidote?: boolean; poisonTargetId?: string | null },
   actionId?: string,
   random: GameRandomSource = defaultGameRandomSource,
-  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+  hooks: GameRuleRuntimeHooks = EMPTY_GAME_RULE_RUNTIME_HOOKS,
 ): boolean {
   const requestedAntidote = action.useAntidote === true;
   const requestedPoison = action.poisonTargetId || undefined;
@@ -516,7 +497,7 @@ export function confirmSeerResult(
   actorPlayerId: string,
   actionId?: string,
   random: GameRandomSource = defaultGameRandomSource,
-  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+  hooks: GameRuleRuntimeHooks = EMPTY_GAME_RULE_RUNTIME_HOOKS,
 ): boolean {
   if (
     (state.phase === "night_complete" || state.phase === "day_hunter" || state.phase === "game_over") &&
@@ -621,7 +602,7 @@ export function allAliveVoted(state: GameState): boolean {
 export function closeDayVote(
   state: GameState,
   random: GameRandomSource = defaultGameRandomSource,
-  hooks: GameRuleRuntimeHooks = LEGACY_GAME_RULE_RUNTIME_HOOKS,
+  hooks: GameRuleRuntimeHooks = EMPTY_GAME_RULE_RUNTIME_HOOKS,
 ): "pk" | "no_kill" | string {
   if (state.phase !== "day_vote" && state.phase !== "day_pk") {
     throw new GameRuleError("当前不在投票阶段");
