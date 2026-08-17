@@ -1,11 +1,20 @@
 import type { PublicRoomPlayer, RoomPlayer, RoomState } from "./types.js";
 
+const MAX_PLAYER_NAME_LENGTH = 20;
+
+function normalizePlayerName(name: string): string {
+  return name.trim().slice(0, MAX_PLAYER_NAME_LENGTH);
+}
+
+function comparablePlayerName(name: string): string {
+  return normalizePlayerName(name).toLocaleLowerCase();
+}
+
 export class RoomCore<
   TGameState = unknown,
   TGameConfig = unknown,
-  TPrompt = unknown,
 > {
-  constructor(readonly state: RoomState<TGameState, TGameConfig, TPrompt>) {}
+  constructor(readonly state: RoomState<TGameState, TGameConfig>) {}
 
   getPlayer(playerId: string): RoomPlayer | undefined {
     return this.state.players.find(player => player.id === playerId);
@@ -21,9 +30,9 @@ export class RoomCore<
   }
 
   hasPlayerName(name: string, exceptPlayerId?: string): boolean {
-    const normalized = name.toLocaleLowerCase();
+    const normalized = comparablePlayerName(name);
     return this.state.players.some(player =>
-      player.id !== exceptPlayerId && player.name.toLocaleLowerCase() === normalized
+      player.id !== exceptPlayerId && comparablePlayerName(player.name) === normalized
     );
   }
 
@@ -31,12 +40,16 @@ export class RoomCore<
     if (this.getPlayer(player.id)) {
       throw new Error("player already exists in room");
     }
-    if (this.hasPlayerName(player.name)) {
+
+    const normalizedName = normalizePlayerName(player.name);
+    if (!normalizedName) throw new Error("player name cannot be empty");
+    if (this.hasPlayerName(normalizedName)) {
       throw new Error("player name already exists in room");
     }
 
     const added: RoomPlayer = {
       ...player,
+      name: normalizedName,
       seat: this.state.players.length + 1,
     };
     this.state.players.push(added);
@@ -45,7 +58,7 @@ export class RoomCore<
 
   renamePlayer(playerId: string, name: string): RoomPlayer {
     const player = this.requirePlayer(playerId);
-    const normalizedName = name.trim();
+    const normalizedName = normalizePlayerName(name);
     if (!normalizedName) throw new Error("player name cannot be empty");
     if (this.hasPlayerName(normalizedName, playerId)) {
       throw new Error("player name already exists in room");
