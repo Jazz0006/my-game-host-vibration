@@ -100,7 +100,7 @@ export const WEREWOLF_ROLE_REGISTRY: Record<
           playerId => playerId !== rolePlayerId && !game.deadPlayerIds.includes(playerId),
         );
         return hasLivingTarget
-          ? [{ kind: "hunter_shot", actorPlayerId: rolePlayerId }]
+          ? [{ type: "interaction", kind: "hunter_shot", actorPlayerId: rolePlayerId }]
           : [];
       },
     },
