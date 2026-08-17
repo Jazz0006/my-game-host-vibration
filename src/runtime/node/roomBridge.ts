@@ -70,13 +70,9 @@ export function playerGameView(room: RuntimeRoom, playerId: string): unknown {
 export function roomGameView(room: RuntimeRoom, isHost: boolean): Record<string, unknown> | undefined {
   if (!room.game) return undefined;
   const context = gameViewContext(room);
-  if (!isHost) return werewolfGameModule.getPublicView(room.game, context);
-
-  const view = werewolfGameModule.getHostView(room.game, context);
-  const interaction = activeInteraction(room);
-  return interaction
-    ? { ...view, activeInteraction: interaction }
-    : view;
+  return isHost
+    ? werewolfGameModule.getHostView(room.game, context)
+    : werewolfGameModule.getPublicView(room.game, context);
 }
 
 export function actingPlayerIds(room: RuntimeRoom): string[] {
