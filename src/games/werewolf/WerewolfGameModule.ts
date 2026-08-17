@@ -91,17 +91,17 @@ export type WerewolfPlayerView = {
   deadPlayerIds?: string[];
   roleConfirmed?: boolean;
   targets?: GamePlayerRef[];
-  attackedPlayer?: GamePlayerRef;
+  attackedPlayer?: GamePlayerRef | undefined;
   poisonTargets?: GamePlayerRef[];
   antidoteAvailable?: boolean;
   poisonAvailable?: boolean;
-  checkedPlayer?: GamePlayerRef;
-  checkedAlignment?: "werewolf" | "good";
+  checkedPlayer?: GamePlayerRef | undefined;
+  checkedAlignment?: "werewolf" | "good" | undefined;
   deaths?: GamePlayerRef[];
-  myVote?: string;
-  eliminatedPlayer?: GamePlayerRef;
+  myVote?: string | undefined;
+  eliminatedPlayer?: GamePlayerRef | undefined;
   noKill?: boolean;
-  winner?: "wolf" | "village";
+  winner?: "wolf" | "village" | undefined;
 };
 
 export type WerewolfPublicView = {
@@ -114,14 +114,14 @@ export type WerewolfPublicView = {
   votesRequired: number;
   votesCast: number;
   pkCandidateIds: string[];
-  eliminatedTodayId?: string;
+  eliminatedTodayId: string | undefined;
   noKillToday: boolean;
-  winner?: "wolf" | "village";
+  winner: "wolf" | "village" | undefined;
   deadPlayerIds: string[];
 };
 
 export type WerewolfHostView = WerewolfPublicView & {
-  voteTally?: Record<string, number>;
+  voteTally: Record<string, number> | undefined;
 };
 
 const ROLE_INFO: Record<Role, { name: string; description: string }> = {
