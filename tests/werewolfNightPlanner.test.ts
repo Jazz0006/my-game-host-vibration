@@ -126,7 +126,7 @@ describe("WerewolfNightPlanner", () => {
     expect(getActiveWerewolfInteraction(game)?.kind).toBe("wolf_kill");
 
     const wolfId = Object.entries(game.roles).find(([, role]) => role === "werewolf")?.[0];
-    expect(wolfId).toBeDefined();
+    if (!wolfId) throw new Error("test setup requires a werewolf");
     module.handleCommand(
       game,
       { playerId: wolfId, isHost: false, now: 1 },
