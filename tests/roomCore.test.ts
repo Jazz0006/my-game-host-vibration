@@ -132,6 +132,35 @@ describe("RoomCore", () => {
     })).toThrow("player name already exists in room");
   });
 
+  it("updates updatedAt after successful room mutations", () => {
+    let now = 100;
+    const core = new RoomCore(
+      room([player("p1", "房主", 1, true), player("p2", "玩家二号", 2)]),
+      () => now,
+    );
+
+    core.renamePlayer("p2", "小明");
+    expect(core.state.updatedAt).toBe(100);
+
+    now = 200;
+    core.transferHost("p2");
+    expect(core.state.updatedAt).toBe(200);
+
+    now = 300;
+    core.removePlayer("p1");
+    expect(core.state.updatedAt).toBe(300);
+  });
+
+  it("does not update updatedAt when a mutation is rejected", () => {
+    const core = new RoomCore(
+      room([player("p1", "Alice", 1, true), player("p2", "Bob", 2)]),
+      () => 999,
+    );
+
+    expect(() => core.renamePlayer("p2", " alice ")).toThrow();
+    expect(core.state.updatedAt).toBe(1);
+  });
+
   it("exposes public room members without resume credentials", () => {
     const core = new RoomCore(room([player("p1", "房主", 1, true)]));
 
