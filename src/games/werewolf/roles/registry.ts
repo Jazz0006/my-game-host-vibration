@@ -92,6 +92,18 @@ export const WEREWOLF_ROLE_REGISTRY: Record<
       completionPolicy: { type: "single_submission" },
       allowDeadActors: true,
     },
+    hooks: {
+      afterDeath: ({ game, rolePlayerId, deadPlayerId, cause }) => {
+        if (rolePlayerId !== deadPlayerId) return [];
+        if (cause !== "night_attack" && cause !== "day_elimination") return [];
+        const hasLivingTarget = Object.keys(game.roles).some(
+          playerId => playerId !== rolePlayerId && !game.deadPlayerIds.includes(playerId),
+        );
+        return hasLivingTarget
+          ? [{ kind: "hunter_shot", actorPlayerId: rolePlayerId }]
+          : [];
+      },
+    },
   },
   villager: {
     id: "villager",

@@ -8,9 +8,14 @@ import {
 
 export type WerewolfInteraction = PendingInteraction<WerewolfInteractionKind>;
 
+type WerewolfInteractionRoleDefinition = {
+  id: string;
+  interaction?: WerewolfRoleDefinition<string, WerewolfInteractionKind>["interaction"];
+};
+
 function actorsForDefinition(
   game: GameState,
-  definition: WerewolfRoleDefinition<string, WerewolfInteractionKind>,
+  definition: WerewolfInteractionRoleDefinition,
 ): string[] {
   return Object.entries(game.roles)
     .filter(([playerId, assignedRole]) => {
@@ -23,7 +28,7 @@ function actorsForDefinition(
 
 function activeInteraction(
   game: GameState,
-  definition: WerewolfRoleDefinition<string, WerewolfInteractionKind>,
+  definition: WerewolfInteractionRoleDefinition,
 ): WerewolfInteraction | undefined {
   const interaction = definition.interaction;
   if (!interaction || interaction.phase !== game.phase) return undefined;
@@ -46,13 +51,14 @@ function activeInteraction(
 /**
  * Resolves the current authoritative interaction from registered role data.
  *
- * The planner deliberately contains no role-specific phase switch. Adding a
- * normal action role should be a registry change, not an orchestrator change.
- * Complex roles can extend RoleDefinition with focused rule hooks later.
+ * The planner deliberately depends only on the interaction-facing projection
+ * of a role definition. Lifecycle hooks may carry a narrower role-id generic,
+ * but that must not leak into orchestration because the planner never invokes
+ * those hooks.
  */
 export function getActiveWerewolfInteraction(
   game: GameState,
-  registry: Readonly<Record<string, WerewolfRoleDefinition<string, WerewolfInteractionKind>>> =
+  registry: Readonly<Record<string, WerewolfInteractionRoleDefinition>> =
     WEREWOLF_ROLE_REGISTRY,
 ): WerewolfInteraction | undefined {
   for (const definition of Object.values(registry)) {
