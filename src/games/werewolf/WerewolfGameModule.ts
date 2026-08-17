@@ -25,7 +25,7 @@ import {
   type GamePhase,
   type GameState,
   type Role,
-} from "../../domain/game.js";
+} from "./WerewolfDomainFacade.js";
 
 export type WerewolfCreateInput = {
   playerIds: readonly string[];
