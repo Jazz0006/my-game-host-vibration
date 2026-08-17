@@ -26,7 +26,7 @@ export type WerewolfCommandOutcome =
   | { kind: "vote"; changed: boolean; allEligibleVoted: boolean }
   | { kind: "voteClosed"; result: string };
 
-const moduleDependencies = {
+const commandDependencies = {
   random: {
     randomInt(maxExclusive: number) {
       return crypto.randomInt(maxExclusive);
@@ -62,73 +62,79 @@ export function createWerewolfGame(room: RuntimeRoom, config: GameConfig): GameS
   room.gameConfig = config;
   room.game = werewolfGameModule.createGame(
     { playerIds: room.players.map(player => player.id), config },
-    moduleDependencies,
+    commandDependencies,
   );
   room.updatedAt = Date.now();
   return room.game;
 }
 
+// Translate pure game-command state changes into transport-agnostic orchestration
+// signals. Socket.IO decides how those signals become broadcasts/alerts/events.
 export function executeWerewolfCommand(
   room: RuntimeRoom,
   command: WerewolfCommand,
-  options: { playerId?: string; isHost?: boolean } = {},
+  context: { playerId?: string; isHost?: boolean } = {},
 ): WerewolfCommandOutcome {
-  const game = room.game;
-  if (!game) throw new Error("game is not started");
+  if (!room.game) throw new Error("game has not started");
 
-  const beforeActionId = game.actionId;
-  const beforeVote = options.playerId ? game.votes[options.playerId] : undefined;
+  const before = {
+    actionId: room.game.actionId,
+    phase: room.game.phase,
+    voteTarget: context.playerId ? room.game.votes[context.playerId] : undefined,
+  };
 
   werewolfGameModule.handleCommand(
-    game,
+    room.game,
     {
-      playerId: options.playerId,
-      isHost: options.isHost ?? false,
+      ...(context.playerId === undefined ? {} : { playerId: context.playerId }),
+      isHost: context.isHost ?? false,
       now: Date.now(),
     },
     command,
-    moduleDependencies,
+    commandDependencies,
   );
   room.updatedAt = Date.now();
 
   switch (command.type) {
     case "confirmRole":
     case "submitSeerTarget":
-    case "startDayVote":
     case "beginNightStart":
       return { kind: "broadcast" };
 
     case "startNight":
-      return { kind: "afterNightAction" };
-
     case "submitWolfTarget":
     case "submitGuardTarget":
     case "submitWitchAction":
     case "confirmSeerResult":
-      return game.actionId !== beforeActionId
+      return room.game.actionId !== before.actionId || room.game.phase !== before.phase
         ? { kind: "afterNightAction" }
         : { kind: "none" };
 
     case "submitHunterExecution":
-      return game.actionId !== beforeActionId
+      return room.game.actionId !== before.actionId || room.game.phase !== before.phase
         ? { kind: "hunterResolved" }
         : { kind: "none" };
 
+    case "startDayVote":
+      return { kind: "broadcast" };
+
     case "submitVote": {
-      const changed = options.playerId !== undefined && game.votes[options.playerId] !== beforeVote;
+      const playerId = context.playerId;
+      if (!playerId) throw new Error("submitVote requires playerId");
+      const changed = room.game.votes[playerId] !== before.voteTarget;
       return {
         kind: "vote",
         changed,
-        allEligibleVoted: changed && allAliveVoted(game),
+        allEligibleVoted: changed && allAliveVoted(room.game),
       };
     }
 
     case "closeDayVote": {
-      const result = game.phase === "day_pk"
+      const result = room.game.phase === "day_pk"
         ? "pk"
-        : game.noKillToday
+        : room.game.noKillToday
           ? "no_kill"
-          : game.eliminatedTodayId ?? "no_kill";
+          : room.game.eliminatedTodayId ?? "no_kill";
       return { kind: "voteClosed", result };
     }
   }
