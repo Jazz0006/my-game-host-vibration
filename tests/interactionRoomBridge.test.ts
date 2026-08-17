@@ -70,23 +70,15 @@ describe("room bridge interactions", () => {
     expect(playerGameView(currentRoom, "p3")).not.toHaveProperty("activeInteraction");
   });
 
-  it("gives the host the authoritative interaction including actor ids", () => {
-    const hostView = roomGameView(room(), true);
-
-    expect(hostView).toMatchObject({
-      activeInteraction: {
-        id: "seer-interaction",
-        kind: "seer_check",
-        actorPlayerIds: ["p2"],
-      },
-    });
+  it("does not leak secret interaction actors into the host room view", () => {
+    expect(roomGameView(room(), true)).not.toHaveProperty("activeInteraction");
   });
 
   it("does not leak the active interaction into the public room game view", () => {
     expect(roomGameView(room(), false)).not.toHaveProperty("activeInteraction");
   });
 
-  it("derives acting players from the active interaction", () => {
+  it("derives acting players from the server-private active interaction", () => {
     expect(actingPlayerIds(room())).toEqual(["p2"]);
   });
 });
