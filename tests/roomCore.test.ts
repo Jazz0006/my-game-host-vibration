@@ -17,16 +17,26 @@ function player(
   };
 }
 
-function room(players: RoomPlayer[]): RoomState<undefined, { gameType: string }> {
+function room(players: RoomPlayer[]): RoomState<undefined, { roleDeck: string[] }> {
   return {
     id: "123456",
+    gameType: "werewolf",
     players,
     createdAt: 1,
-    config: { gameType: "werewolf" },
+    updatedAt: 1,
+    gameConfig: { roleDeck: [] },
   };
 }
 
 describe("RoomCore", () => {
+  it("keeps game type separate from game-specific configuration", () => {
+    const state = room([player("p1", "房主", 1, true)]);
+
+    expect(state.gameType).toBe("werewolf");
+    expect(state.gameConfig).toEqual({ roleDeck: [] });
+    expect(state).not.toHaveProperty("activePrompt");
+  });
+
   it("adds players at the end with continuous seats", () => {
     const core = new RoomCore(room([player("p1", "房主", 1, true)]));
 
@@ -39,6 +49,26 @@ describe("RoomCore", () => {
 
     expect(added.seat).toBe(2);
     expect(core.state.players.map(item => item.seat)).toEqual([1, 2]);
+  });
+
+  it("normalizes names when players are added", () => {
+    const core = new RoomCore(room([player("p1", "房主", 1, true)]));
+
+    const added = core.addPlayer({
+      id: "p2",
+      name: "   这是一个非常非常非常长的玩家名字用于验证截断行为   ",
+      isHost: false,
+      resumeTokenHash: "hash-p2",
+    });
+
+    expect(added.name).toBe("这是一个非常非常非常长的玩家名字用于验证");
+    expect(added.name.length).toBe(20);
+    expect(() => core.addPlayer({
+      id: "p3",
+      name: "   ",
+      isHost: false,
+      resumeTokenHash: "hash-p3",
+    })).toThrow("player name cannot be empty");
   });
 
   it("removes a player and closes the seat gap", () => {
@@ -85,7 +115,7 @@ describe("RoomCore", () => {
     ]);
   });
 
-  it("enforces case-insensitive unique names and trims renames", () => {
+  it("enforces normalized case-insensitive unique names and trims renames", () => {
     const core = new RoomCore(room([
       player("p1", "Alice", 1, true),
       player("p2", "Bob", 2),
@@ -93,7 +123,13 @@ describe("RoomCore", () => {
 
     expect(() => core.renamePlayer("p2", " alice ")).toThrow("player name already exists in room");
     expect(core.renamePlayer("p2", "  小明  ").name).toBe("小明");
-    expect(core.hasPlayerName("小明")).toBe(true);
+    expect(core.hasPlayerName("  小明  ")).toBe(true);
+    expect(() => core.addPlayer({
+      id: "p3",
+      name: " ALICE ",
+      isHost: false,
+      resumeTokenHash: "hash-p3",
+    })).toThrow("player name already exists in room");
   });
 
   it("exposes public room members without resume credentials", () => {
