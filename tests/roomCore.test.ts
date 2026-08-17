@@ -51,6 +51,40 @@ describe("RoomCore", () => {
     expect(core.state.players.map(item => item.seat)).toEqual([1, 2]);
   });
 
+  it("preserves runtime-only fields on RoomPlayer extensions", () => {
+    type RuntimePlayer = RoomPlayer & { socketId: string | null; connected: boolean };
+    const state: RoomState<undefined, { roleDeck: string[] }, RuntimePlayer> = {
+      id: "123456",
+      gameType: "werewolf",
+      players: [{
+        id: "p1",
+        name: "房主",
+        seat: 1,
+        isHost: true,
+        resumeTokenHash: "hash-p1",
+        socketId: "socket-1",
+        connected: true,
+      }],
+      createdAt: 1,
+      updatedAt: 1,
+      gameConfig: { roleDeck: [] },
+    };
+    const core = new RoomCore(state, () => 2);
+
+    const added = core.addPlayer({
+      id: "p2",
+      name: "玩家二号",
+      isHost: false,
+      resumeTokenHash: "hash-p2",
+      socketId: "socket-2",
+      connected: true,
+    });
+
+    expect(added.socketId).toBe("socket-2");
+    expect(added.connected).toBe(true);
+    expect(core.getPlayer("p1")?.socketId).toBe("socket-1");
+  });
+
   it("normalizes names when players are added", () => {
     const core = new RoomCore(room([player("p1", "房主", 1, true)]));
 
@@ -98,6 +132,22 @@ describe("RoomCore", () => {
       { id: "p3", seat: 1 },
       { id: "p1", seat: 2 },
       { id: "p2", seat: 3 },
+    ]);
+  });
+
+  it("allows the existing server insert-index convention for moving a player to the end", () => {
+    const core = new RoomCore(room([
+      player("p1", "房主", 1, true),
+      player("p2", "玩家二号", 2),
+      player("p3", "玩家三号", 3),
+    ]));
+
+    core.movePlayerSeat("p1", 3);
+
+    expect(core.state.players.map(item => ({ id: item.id, seat: item.seat }))).toEqual([
+      { id: "p2", seat: 1 },
+      { id: "p3", seat: 2 },
+      { id: "p1", seat: 3 },
     ]);
   });
 

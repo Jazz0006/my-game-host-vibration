@@ -39,10 +39,10 @@ type GameView = {
   mode: string;
   role: "werewolf" | "witch" | "seer" | "villager";
   actionId: string;
-  targets?: Array<{ id: string }>;
-  poisonTargets?: Array<{ id: string }>;
+  targets?: Array<{ id: string; name?: string; seat?: number }>;
+  poisonTargets?: Array<{ id: string; name?: string; seat?: number }>;
   checkedAlignment?: string;
-  deaths?: Array<{ id: string }>;
+  deaths?: Array<{ id: string; name?: string; seat?: number }>;
 };
 
 describe("five-player Socket.IO game flow", () => {
@@ -108,12 +108,17 @@ describe("five-player Socket.IO game flow", () => {
       expect(result.ok).toBe(true);
     }
 
-    // After all roles confirmed, host must start the night
     const wolfAction = waitFor<GameView>(wolf.socket, "player:game-state", view => view.mode === "wolf_action");
     expect(await emitAck<{ ok: boolean }>(host, "host:start-night", {})).toEqual({ ok: true });
 
     const wolfView = await wolfAction;
-    const victimId = wolfView.targets![0]!.id;
+    const victim = wolfView.targets![0]!;
+    expect(victim.name).toBeTypeOf("string");
+    expect(victim.seat).toBeTypeOf("number");
+    expect(victim).not.toHaveProperty("connected");
+    expect(victim).not.toHaveProperty("socketId");
+    expect(victim).not.toHaveProperty("isHost");
+    const victimId = victim.id;
     const witch = byRole.get("witch")!;
     const witchAction = waitFor<GameView>(witch.socket, "player:game-state", view => view.mode === "witch_action");
     expect(
@@ -143,7 +148,6 @@ describe("five-player Socket.IO game flow", () => {
     const resultView = await seerResult;
     expect(resultView.checkedAlignment).toBe("werewolf");
 
-    // After seer confirms, night_complete auto-transitions to day_vote; alive players see day_vote with deaths
     const completed = sockets.map(socket =>
       waitFor<GameView>(socket, "player:game-state", view =>
         view.mode === "day_vote" || view.mode === "spectator" || view.mode === "game_over"),

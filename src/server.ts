@@ -5,54 +5,34 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server, type Socket } from "socket.io";
 import {
-  allAliveVoted,
-  beginNightStart,
-  closeDayVote,
   configFromRoleDeck,
   configFromPlayerCount,
-  confirmRole,
-  confirmSeerResult,
   DEFAULT_GAME_CONFIG,
   GameRuleError,
-  startDayVote,
-  startGame,
-  startNight,
-  submitGuardTarget,
-  submitHunterExecution,
-  submitSeerTarget,
-  submitVote,
-  submitWitchAction,
-  submitWolfTarget,
-  type GameConfig,
-  type GameState,
   type Role,
 } from "./domain/game.js";
+import {
+  runHostCommand,
+  runPlayerCommand,
+} from "./runtime/node/werewolfCommandFacade.js";
 import {
   acknowledgePrompt,
   createTestPrompt,
   submitPrompt,
-  type TestPrompt,
 } from "./domain/testPrompt.js";
 import { createSessionToken, verifySessionToken } from "./domain/sessionToken.js";
+import {
+  actingPlayerIds as moduleActingPlayerIds,
+  createWerewolfGame,
+  playerGameView as modulePlayerGameView,
+  roomCore,
+  roomGameView,
+  type RuntimePlayer,
+  type RuntimeRoom,
+} from "./runtime/node/roomBridge.js";
 
-export type Player = {
-  id: string;
-  name: string;
-  seat: number;
-  socketId: string | null;
-  connected: boolean;
-  isHost: boolean;
-  resumeTokenHash: string;
-};
-
-export type Room = {
-  id: string;
-  players: Player[];
-  createdAt: number;
-  config: GameConfig;
-  activePrompt?: TestPrompt;
-  game?: GameState;
-};
+export type Player = RuntimePlayer;
+export type Room = RuntimeRoom;
 
 type ClientAck<T> = (response: T) => void;
 type BasicAck = ClientAck<{ ok: true } | { ok: false; message: string }>;
@@ -104,10 +84,7 @@ const PLAYER_NUMBER_LABELS = [
 ];
 
 function playerNameExists(room: Room, name: string, exceptPlayerId?: string): boolean {
-  const normalized = name.toLocaleLowerCase();
-  return room.players.some(player =>
-    player.id !== exceptPlayerId && player.name.toLocaleLowerCase() === normalized
-  );
+  return roomCore(room).hasPlayerName(name, exceptPlayerId);
 }
 
 function nextDefaultPlayerName(room?: Room): string {
@@ -126,83 +103,52 @@ function requestedPlayerName(room: Room | undefined, value?: string): string {
   return requested;
 }
 
-function normalizeSeats(room: Room): void {
-  room.players.forEach((player, index) => {
-    player.seat = index + 1;
-  });
-}
-
 function removePlayer(room: Room, playerId: string): Player | undefined {
-  const index = room.players.findIndex(player => player.id === playerId);
-  if (index < 0) return undefined;
-  const [removed] = room.players.splice(index, 1);
-  normalizeSeats(room);
-  if (room.activePrompt?.targetPlayerId === playerId) delete room.activePrompt;
+  const removed = roomCore(room).removePlayer(playerId);
+  if (removed && room.activePrompt?.targetPlayerId === playerId) delete room.activePrompt;
   return removed;
-}
-
-function voteTally(game: GameState): Record<string, number> {
-  const tally: Record<string, number> = {};
-  for (const targetId of Object.values(game.votes)) {
-    tally[targetId] = (tally[targetId] ?? 0) + 1;
-  }
-  return tally;
 }
 
 function roomView(room: Room, viewer: Player) {
   const prompt = room.activePrompt;
-  const game = room.game;
-  const aliveCount = game
-    ? Object.keys(game.roles).filter(id => !game.deadPlayerIds.includes(id)).length
-    : 0;
-  const votesRequired = game
-    ? Object.keys(game.roles).filter(
-        playerId =>
-          !game.deadPlayerIds.includes(playerId) &&
-          (game.phase !== "day_pk" || !game.pkCandidateIds.includes(playerId)),
-      ).length
-    : 0;
+  const gameView = roomGameView(room, viewer.isHost);
   return {
     roomId: room.id,
     viewer: { playerId: viewer.id, isHost: viewer.isHost },
     players: room.players.map(publicPlayer),
-    defaultRoleDeck: !game
+    defaultRoleDeck: !room.game
       ? (room.players.length >= MIN_PLAYERS
           ? configFromPlayerCount(room.players.length).roleDeck
-          : room.config.roleDeck)
+          : room.gameConfig.roleDeck)
       : undefined,
-    roleCatalog: !game
+    roleCatalog: !room.game
       ? Object.entries(ROLE_INFO).map(([id, info]) => ({ id, name: info.name }))
       : undefined,
-    game: {
-      phase: game?.phase ?? "lobby",
-      canStart:
-        !game &&
-        room.players.length >= MIN_PLAYERS &&
-        room.players.every(player => player.connected),
-      minPlayers: MIN_PLAYERS,
-      maxPlayers: MAX_PLAYERS,
-      confirmedRoles: game?.confirmedRolePlayerIds.length ?? 0,
-      completedNightSteps: game
-        ? (["night_guard", "night_werewolf", "night_witch", "night_seer", "night_complete"] as const)
-            .indexOf(game.phase as "night_werewolf" | "night_guard" | "night_witch" | "night_seer" | "night_complete")
-        : 0,
-      dayNumber: game?.dayNumber ?? 0,
-      nightNumber: game?.nightNumber ?? 0,
-      aliveCount,
-      votesRequired,
-      votesCast: game ? Object.keys(game.votes).length : 0,
-      // Tally shown to host during day_vote, day_pk, and day_result
-      voteTally: viewer.isHost && game &&
-        ["day_vote", "day_pk", "day_result"].includes(game.phase)
-        ? voteTally(game)
-        : undefined,
-      pkCandidateIds: game?.pkCandidateIds ?? [],
-      eliminatedTodayId: game?.eliminatedTodayId,
-      noKillToday: game?.noKillToday ?? false,
-      winner: game?.winner,
-      deadPlayerIds: game?.deadPlayerIds ?? [],
-    },
+    game: gameView
+      ? {
+          ...gameView,
+          canStart: false,
+          minPlayers: MIN_PLAYERS,
+          maxPlayers: MAX_PLAYERS,
+        }
+      : {
+          phase: "lobby",
+          canStart:
+            room.players.length >= MIN_PLAYERS &&
+            room.players.every(player => player.connected),
+          minPlayers: MIN_PLAYERS,
+          maxPlayers: MAX_PLAYERS,
+          confirmedRoles: 0,
+          completedNightSteps: 0,
+          dayNumber: 0,
+          nightNumber: 0,
+          aliveCount: 0,
+          votesRequired: 0,
+          votesCast: 0,
+          pkCandidateIds: [],
+          noKillToday: false,
+          deadPlayerIds: [],
+        },
     testPrompt:
       viewer.isHost && prompt
         ? {
@@ -215,155 +161,9 @@ function roomView(room: Room, viewer: Player) {
   };
 }
 
-function playerGameView(room: Room, player: Player) {
-  const game = room.game;
-  if (!game) return { phase: "lobby", mode: "lobby" };
-
-  const role = game.roles[player.id]!;
-  const base = {
-    phase: game.phase,
-    role,
-    roleName: ROLE_INFO[role].name,
-    roleDescription: ROLE_INFO[role].description,
-    actionId: game.actionId,
-    deadPlayerIds: game.deadPlayerIds,
-  };
-
-  if (game.phase === "role_reveal") {
-    const roleConfirmed = game.confirmedRolePlayerIds.includes(player.id);
-    return { ...base, mode: roleConfirmed ? "waiting" : "role_reveal", roleConfirmed };
-  }
-
-  const targetViews = room.players.map(publicPlayer);
-  const alive = (t: ReturnType<typeof publicPlayer>) => !game.deadPlayerIds.includes(t.id);
-  const isDead = game.deadPlayerIds.includes(player.id);
-
-  if (game.phase === "night_werewolf" && role === "werewolf" && !isDead) {
-    return {
-      ...base,
-      mode: "wolf_action",
-      targets: targetViews.filter(alive),
-    };
-  }
-
-  if (game.phase === "night_guard" && role === "guard" && !isDead) {
-    return {
-      ...base,
-      mode: "guard_action",
-      targets: targetViews.filter(t => alive(t) && t.id !== game.guardLastProtectedId),
-    };
-  }
-
-  if (game.phase === "night_witch" && role === "witch" && !isDead) {
-    return {
-      ...base,
-      mode: "witch_action",
-      attackedPlayer: targetViews.find(target => target.id === game.wolfTargetId),
-      poisonTargets: targetViews.filter(t => alive(t) && t.id !== player.id),
-      antidoteAvailable: !game.witchAntidoteSpent && Boolean(game.wolfTargetId),
-      poisonAvailable: !game.witchPoisonSpent,
-    };
-  }
-
-  if (game.phase === "night_seer" && role === "seer" && !isDead) {
-    const checkedPlayer = targetViews.find(target => target.id === game.seerTargetId);
-    return {
-      ...base,
-      mode: game.seerTargetId ? "seer_result" : "seer_action",
-      targets: targetViews.filter(t => alive(t) && t.id !== player.id),
-      checkedPlayer,
-      checkedAlignment: game.seerTargetId
-        ? game.roles[game.seerTargetId] === "werewolf"
-          ? "werewolf"
-          : "good"
-        : undefined,
-    };
-  }
-
-  if (game.phase === "night_start") {
-    return { ...base, mode: "night_start" };
-  }
-
-  if (game.phase === "night_complete") {
-    return {
-      ...base,
-      mode: "night_complete",
-      deaths: targetViews.filter(target => game.deaths.includes(target.id)),
-    };
-  }
-
-  const deathViews = targetViews.filter(target => game.deaths.includes(target.id));
-
-  if (game.phase === "day_vote") {
-    if (isDead) return { ...base, mode: "spectator", deaths: deathViews };
-    const myVote = game.votes[player.id];
-    return {
-      ...base,
-      mode: "day_vote",
-      deaths: deathViews,
-      targets: targetViews.filter(t => alive(t) && t.id !== player.id),
-      myVote,
-    };
-  }
-
-  if (game.phase === "day_pk") {
-    if (isDead) return { ...base, mode: "spectator", deaths: deathViews };
-    if (game.pkCandidateIds.includes(player.id)) {
-      return { ...base, mode: "waiting", deaths: deathViews };
-    }
-    const myVote = game.votes[player.id];
-    return {
-      ...base,
-      mode: "day_pk",
-      deaths: deathViews,
-      targets: targetViews.filter(
-        target => alive(target) && target.id !== player.id && game.pkCandidateIds.includes(target.id),
-      ),
-      myVote,
-    };
-  }
-
-  if (game.phase === "day_result") {
-    const eliminatedPlayer = game.eliminatedTodayId
-      ? targetViews.find(t => t.id === game.eliminatedTodayId)
-      : undefined;
-    return {
-      ...base,
-      mode: "day_result",
-      deaths: deathViews,
-      eliminatedPlayer,
-      noKill: game.noKillToday ?? false,
-    };
-  }
-
-  if (game.phase === "day_hunter") {
-    if (role === "hunter") {
-      return {
-        ...base,
-        mode: "hunter_execution",
-        targets: targetViews.filter(target => !game.deadPlayerIds.includes(target.id)),
-      };
-    }
-    if (game.hunterTrigger === "night") {
-      return { ...base, mode: "day_announce", deaths: deathViews };
-    }
-    return { ...base, mode: "waiting" };
-  }
-
-  if (game.phase === "game_over") {
-    return {
-      ...base,
-      mode: "game_over",
-      winner: game.winner,
-    };
-  }
-
-  return { ...base, mode: "waiting" };
-}
-
 function sendPrivateState(io: Server, room: Room, player: Player): void {
   if (!player.socketId) return;
-  io.to(player.socketId).emit("player:game-state", playerGameView(room, player));
+  io.to(player.socketId).emit("player:game-state", modulePlayerGameView(room, player.id));
 }
 
 function sendCurrentTestPrompt(socket: Socket, room: Room, player: Player): void {
@@ -387,39 +187,9 @@ function broadcastRoom(io: Server, room: Room): void {
   }
 }
 
-function actingPlayerIds(game: GameState): string[] {
-  if (game.phase === "day_vote") {
-    return Object.keys(game.roles).filter(id => !game.deadPlayerIds.includes(id));
-  }
-  if (game.phase === "day_pk") {
-    return Object.keys(game.roles).filter(
-      id => !game.deadPlayerIds.includes(id) && !game.pkCandidateIds.includes(id),
-    );
-  }
-  if (game.phase === "day_hunter") {
-    return Object.entries(game.roles)
-      .filter(([, r]) => r === "hunter")
-      .map(([id]) => id);
-  }
-  const role =
-    game.phase === "night_werewolf" ? "werewolf"
-    : game.phase === "night_guard" ? "guard"
-    : game.phase === "night_witch" ? "witch"
-    : game.phase === "night_seer" ? "seer"
-    : undefined;
-  return role
-    ? Object.entries(game.roles)
-        .filter(
-          ([playerId, assignedRole]) =>
-            assignedRole === role && !game.deadPlayerIds.includes(playerId),
-        )
-        .map(([playerId]) => playerId)
-    : [];
-}
-
 function alertCurrentActors(io: Server, room: Room, resumed = false): void {
   if (!room.game) return;
-  for (const playerId of actingPlayerIds(room.game)) {
+  for (const playerId of moduleActingPlayerIds(room)) {
     const player = room.players.find(item => item.id === playerId);
     if (player?.socketId) {
       io.to(player.socketId).emit("player:action-alert", {
@@ -442,7 +212,7 @@ function afterNightAction(io: Server, room: Room): void {
   }
   if (game.phase === "night_complete") {
     io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
-    startDayVote(game);
+    runHostCommand(room, { type: "startDayVote" });
     broadcastRoom(io, room);
     alertCurrentActors(io, room);
     return;
@@ -466,9 +236,9 @@ function afterCloseDayVote(io: Server, room: Room, result: string): void {
   } else if (phase === "day_hunter") {
     alertCurrentActors(io, room);
   } else if (phase === "day_pk") {
-    alertCurrentActors(io, room); // alert eligible non-PK voters
+    alertCurrentActors(io, room);
   }
-  // "no_kill" and "day_result" just need the broadcast already done
+  void result;
 }
 
 function ruleError(ack: BasicAck, error: unknown): void {
@@ -513,7 +283,15 @@ export function createGameServer() {
           isHost: true,
           resumeTokenHash: session.hash,
         };
-        const room: Room = { id: roomId, players: [host], createdAt: Date.now(), config: DEFAULT_GAME_CONFIG };
+        const now = Date.now();
+        const room: Room = {
+          id: roomId,
+          gameType: "werewolf",
+          players: [host],
+          createdAt: now,
+          updatedAt: now,
+          gameConfig: DEFAULT_GAME_CONFIG,
+        };
         rooms.set(roomId, room);
         void socket.join(roomId);
         ack({
@@ -547,16 +325,14 @@ export function createGameServer() {
 
         const name = requestedPlayerName(room, data.name);
         const session = createSessionToken();
-        const player: Player = {
+        const player = roomCore(room).addPlayer({
           id: crypto.randomUUID(),
           name,
-          seat: room.players.length + 1,
           socketId: socket.id,
           connected: true,
           isHost: false,
           resumeTokenHash: session.hash,
-        };
-        room.players.push(player);
+        });
         void socket.join(roomId);
         ack({
           ok: true,
@@ -613,7 +389,7 @@ export function createGameServer() {
         });
         broadcastRoom(io, room);
         sendCurrentTestPrompt(socket, room, player);
-        if (room.game && actingPlayerIds(room.game).includes(player.id)) {
+        if (room.game && moduleActingPlayerIds(room).includes(player.id)) {
           alertCurrentActors(io, room, true);
         }
       },
@@ -635,8 +411,7 @@ export function createGameServer() {
         const gameConfig = data?.roleDeck
           ? configFromRoleDeck(room.players.length, data.roleDeck)
           : configFromPlayerCount(room.players.length);
-        room.config = gameConfig;
-        room.game = startGame(room.players.map(player => player.id), gameConfig);
+        createWerewolfGame(room, gameConfig);
         delete room.activePrompt;
         broadcastRoom(io, room);
         ack({ ok: true });
@@ -660,13 +435,7 @@ export function createGameServer() {
           data.insertIndex! > room.players.length
         ) return ack({ ok: false, message: "目标座位无效" });
 
-        const target = room.players[originalIndex]!;
-        room.players.splice(originalIndex, 1);
-        const adjustedIndex = data.insertIndex! > originalIndex
-          ? data.insertIndex! - 1
-          : data.insertIndex!;
-        room.players.splice(adjustedIndex, 0, target);
-        normalizeSeats(room);
+        roomCore(room).movePlayerSeat(data.targetPlayerId!, data.insertIndex!);
         broadcastRoom(io, room);
         ack({ ok: true });
       },
@@ -686,9 +455,9 @@ export function createGameServer() {
         if (playerNameExists(membership.room, name, membership.player.id)) {
           return ack({ ok: false, message: "这个名字已被房间里的其他玩家使用" });
         }
-        membership.player.name = name;
+        const renamed = roomCore(membership.room).renamePlayer(membership.player.id, name);
         broadcastRoom(io, membership.room);
-        ack({ ok: true, name });
+        ack({ ok: true, name: renamed.name });
       },
     );
 
@@ -737,8 +506,7 @@ export function createGameServer() {
           return ack({ ok: false, message: "只能将房主转让给在线玩家" });
         }
 
-        membership.player.isHost = false;
-        target.isHost = true;
+        roomCore(membership.room).transferHost(target.id);
         broadcastRoom(io, membership.room);
         ack({ ok: true });
       },
@@ -762,8 +530,8 @@ export function createGameServer() {
           return ack({ ok: false, message: "只能将房主转让给在线玩家" });
         }
 
-        membership.player.isHost = false;
-        target.isHost = true;
+        const core = roomCore(membership.room);
+        core.transferHost(target.id);
         removePlayer(membership.room, membership.player.id);
         void socket.leave(membership.room.id);
         broadcastRoom(io, membership.room);
@@ -804,12 +572,11 @@ export function createGameServer() {
       const membership = findMembership(rooms, socket.id);
       if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
       try {
-        const allConfirmed = confirmRole(membership.room.game, membership.player.id, data.actionId);
+        runPlayerCommand(membership.room, membership.player.id, {
+          type: "confirmRole",
+          ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
+        });
         broadcastRoom(io, membership.room);
-        // All roles confirmed → night_start; host will click to begin the night
-        if (allConfirmed) {
-          // no actor alert needed yet — host sees 开始夜晚 button
-        }
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);
@@ -822,15 +589,12 @@ export function createGameServer() {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
         try {
-          const advanced = submitWolfTarget(
-            membership.room.game,
-            membership.player.id,
-            data.targetPlayerId,
-            data.actionId,
-          );
-          if (advanced) {
-            afterNightAction(io, membership.room);
-          }
+          const outcome = runPlayerCommand(membership.room, membership.player.id, {
+            type: "submitWolfTarget",
+            ...(data.targetPlayerId === undefined ? {} : { targetPlayerId: data.targetPlayerId }),
+            ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
+          });
+          if (outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
           ack({ ok: true });
         } catch (error) {
           ruleError(ack, error);
@@ -847,18 +611,13 @@ export function createGameServer() {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
         try {
-          const action: { useAntidote?: boolean; poisonTargetId?: string | null } = {};
-          if (data.useAntidote !== undefined) action.useAntidote = data.useAntidote;
-          if (data.poisonTargetId !== undefined) action.poisonTargetId = data.poisonTargetId;
-          const advanced = submitWitchAction(
-            membership.room.game,
-            membership.player.id,
-            action,
-            data.actionId,
-          );
-          if (advanced) {
-            afterNightAction(io, membership.room);
-          }
+          const outcome = runPlayerCommand(membership.room, membership.player.id, {
+            type: "submitWitchAction",
+            ...(data.useAntidote === undefined ? {} : { useAntidote: data.useAntidote }),
+            ...(data.poisonTargetId === undefined ? {} : { poisonTargetId: data.poisonTargetId }),
+            ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
+          });
+          if (outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
           ack({ ok: true });
         } catch (error) {
           ruleError(ack, error);
@@ -872,12 +631,11 @@ export function createGameServer() {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
         try {
-          submitSeerTarget(
-            membership.room.game,
-            membership.player.id,
-            data.targetPlayerId,
-            data.actionId,
-          );
+          runPlayerCommand(membership.room, membership.player.id, {
+            type: "submitSeerTarget",
+            ...(data.targetPlayerId === undefined ? {} : { targetPlayerId: data.targetPlayerId }),
+            ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
+          });
           broadcastRoom(io, membership.room);
           ack({ ok: true });
         } catch (error) {
@@ -890,14 +648,11 @@ export function createGameServer() {
       const membership = findMembership(rooms, socket.id);
       if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
       try {
-        const advanced = confirmSeerResult(
-          membership.room.game,
-          membership.player.id,
-          data.actionId,
-        );
-        if (advanced) {
-          afterNightAction(io, membership.room);
-        }
+        const outcome = runPlayerCommand(membership.room, membership.player.id, {
+          type: "confirmSeerResult",
+          ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
+        });
+        if (outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);
@@ -910,15 +665,12 @@ export function createGameServer() {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
         try {
-          const advanced = submitGuardTarget(
-            membership.room.game,
-            membership.player.id,
-            data.targetPlayerId,
-            data.actionId,
-          );
-          if (advanced) {
-            afterNightAction(io, membership.room);
-          }
+          const outcome = runPlayerCommand(membership.room, membership.player.id, {
+            type: "submitGuardTarget",
+            ...(data.targetPlayerId === undefined ? {} : { targetPlayerId: data.targetPlayerId }),
+            ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
+          });
+          if (outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
           ack({ ok: true });
         } catch (error) {
           ruleError(ack, error);
@@ -932,24 +684,21 @@ export function createGameServer() {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
         try {
-          const advanced = submitHunterExecution(
-            membership.room.game,
-            membership.player.id,
-            data.targetPlayerId,
-            data.actionId,
-          );
-          if (advanced) {
+          const outcome = runPlayerCommand(membership.room, membership.player.id, {
+            type: "submitHunterExecution",
+            ...(data.targetPlayerId === undefined ? {} : { targetPlayerId: data.targetPlayerId }),
+            ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
+          });
+          if (outcome.kind === "hunterResolved") {
             const { game } = membership.room;
             if (game.phase === "game_over") {
               broadcastRoom(io, membership.room);
               io.to(membership.room.id).emit("game:over", { winner: game.winner });
             } else if (game.phase === "night_complete") {
-              // The night death was already announced before the hunter acted.
-              startDayVote(game);
+              runHostCommand(membership.room, { type: "startDayVote" });
               broadcastRoom(io, membership.room);
               alertCurrentActors(io, membership.room);
             } else {
-              // day_result or day_hunter resolved → just broadcast
               broadcastRoom(io, membership.room);
             }
           }
@@ -965,8 +714,8 @@ export function createGameServer() {
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以开始夜晚" });
       if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
       try {
-        startNight(membership.room.game);
-        afterNightAction(io, membership.room);
+        const outcome = runHostCommand(membership.room, { type: "startNight" });
+        if (outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);
@@ -979,19 +728,23 @@ export function createGameServer() {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
         try {
-          const changed = submitVote(
-            membership.room.game,
+          const outcome = runPlayerCommand(
+            membership.room,
             membership.player.id,
-            data.targetId ?? "",
-            data.actionId ?? "",
+            {
+              type: "submitVote",
+              targetId: data.targetId ?? "",
+              actionId: data.actionId ?? "",
+            },
           );
-          if (changed) {
+          if (outcome.kind === "vote" && outcome.changed) {
             broadcastRoom(io, membership.room);
-            // Auto-close when all alive players have voted
-            if (allAliveVoted(membership.room.game)) {
-              const result = closeDayVote(membership.room.game);
+            if (outcome.allEligibleVoted) {
+              const closeOutcome = runHostCommand(membership.room, { type: "closeDayVote" });
               broadcastRoom(io, membership.room);
-              afterCloseDayVote(io, membership.room, result);
+              if (closeOutcome.kind === "voteClosed") {
+                afterCloseDayVote(io, membership.room, closeOutcome.result);
+              }
             }
           }
           ack({ ok: true });
@@ -1006,9 +759,11 @@ export function createGameServer() {
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以关闭投票" });
       if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
       try {
-        const result = closeDayVote(membership.room.game);
+        const outcome = runHostCommand(membership.room, { type: "closeDayVote" });
         broadcastRoom(io, membership.room);
-        afterCloseDayVote(io, membership.room, result);
+        if (outcome.kind === "voteClosed") {
+          afterCloseDayVote(io, membership.room, outcome.result);
+        }
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);
@@ -1020,7 +775,7 @@ export function createGameServer() {
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以操作" });
       if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
       try {
-        beginNightStart(membership.room.game);
+        runHostCommand(membership.room, { type: "beginNightStart" });
         broadcastRoom(io, membership.room);
         ack({ ok: true });
       } catch (error) {
@@ -1033,17 +788,15 @@ export function createGameServer() {
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以重新开始游戏" });
       if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
       const { room } = membership;
-      const gameConfig = room.config.playerCount === room.players.length
-        ? room.config
+      const gameConfig = room.gameConfig.playerCount === room.players.length
+        ? room.gameConfig
         : configFromPlayerCount(room.players.length);
-      room.config = gameConfig;
-      room.game = startGame(room.players.map(player => player.id), gameConfig);
+      createWerewolfGame(room, gameConfig);
       delete room.activePrompt;
       broadcastRoom(io, room);
       ack({ ok: true });
     });
 
-    // 开发阶段保留的定向震动闭环，正式游戏开始后自动停用。
     socket.on(
       "host:send-test-prompt",
       (data: { targetPlayerId?: string }, ack: BasicAck) => {

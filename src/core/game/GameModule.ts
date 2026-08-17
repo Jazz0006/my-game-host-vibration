@@ -21,9 +21,10 @@ export type GameModuleDependencies = {
   random: RandomProvider;
 };
 
-export type GameCommandResult<TState> = {
+export type GameCommandResult<TState, TOutcome = unknown> = {
   state: TState;
   events?: GameEventDraft[];
+  outcome?: TOutcome;
 };
 
 export interface GameModule<
@@ -33,6 +34,7 @@ export interface GameModule<
   THostView,
   TPublicView = unknown,
   TCreateInput = unknown,
+  TCommandOutcome = unknown,
 > {
   readonly type: string;
 
@@ -43,7 +45,7 @@ export interface GameModule<
     context: GameCommandContext,
     command: TCommand,
     dependencies: GameModuleDependencies,
-  ): GameCommandResult<TState>;
+  ): GameCommandResult<TState, TCommandOutcome>;
 
   getPlayerView(
     state: TState,
