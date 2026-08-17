@@ -7,12 +7,14 @@ import {
 import type { WerewolfRoleDefinition } from "../src/games/werewolf/roles/RoleDefinition.js";
 import {
   WEREWOLF_ROLE_REGISTRY,
+  werewolfRoleCatalog,
   type WerewolfInteractionKind,
 } from "../src/games/werewolf/roles/registry.js";
 import {
   CLASSIC_WEREWOLF_SCRIPTS,
   getClassicWerewolfScript,
 } from "../src/games/werewolf/scripts/classic.js";
+import { configFromScript } from "../src/games/werewolf/scripts/ScriptDefinition.js";
 
 function guardState(): GameState {
   return {
@@ -59,6 +61,16 @@ describe("Werewolf role registry", () => {
     expect(WEREWOLF_ROLE_REGISTRY.villager.interaction).toBeUndefined();
   });
 
+  it("provides one reusable catalog for future clients", () => {
+    expect(werewolfRoleCatalog()).toContainEqual({
+      id: "seer",
+      name: "预言家",
+      description: "每晚可以查验一名其他玩家的阵营。",
+      team: "village",
+      maxCount: 1,
+    });
+  });
+
   it("declares the current night order in role metadata", () => {
     expect(registeredNightOrder()).toEqual(["guard", "werewolf", "witch", "seer"]);
   });
@@ -98,7 +110,12 @@ describe("Werewolf scripts", () => {
       "classic-8",
       "classic-10",
     ]);
-    expect(getClassicWerewolfScript("classic-10")?.roleDeck).toHaveLength(10);
+    const classic10 = getClassicWerewolfScript("classic-10");
+    expect(classic10?.roleDeck).toHaveLength(10);
+    expect(classic10 && configFromScript(classic10)).toMatchObject({
+      playerCount: 10,
+      roleDeck: classic10?.roleDeck,
+    });
     expect(getClassicWerewolfScript("missing")).toBeUndefined();
   });
 });
