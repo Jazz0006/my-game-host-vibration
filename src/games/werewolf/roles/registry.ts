@@ -26,6 +26,7 @@ export const WEREWOLF_ROLE_REGISTRY: Record<
     nightOrder: 20,
     interaction: {
       phase: "night_werewolf",
+      night: { order: 20, schedule: "every_night" },
       kind: "wolf_kill",
       mode: "group",
       wakePolicy: { vibrate: true, audioCue: "wolf_wake" },
@@ -41,6 +42,7 @@ export const WEREWOLF_ROLE_REGISTRY: Record<
     nightOrder: 40,
     interaction: {
       phase: "night_seer",
+      night: { order: 40, schedule: "every_night" },
       kind: "seer_check",
       mode: "single",
       wakePolicy: { vibrate: true },
@@ -56,6 +58,7 @@ export const WEREWOLF_ROLE_REGISTRY: Record<
     nightOrder: 30,
     interaction: {
       phase: "night_witch",
+      night: { order: 30, schedule: "every_night" },
       kind: "witch_action",
       mode: "single",
       wakePolicy: { vibrate: true },
@@ -72,6 +75,7 @@ export const WEREWOLF_ROLE_REGISTRY: Record<
     nightOrder: 10,
     interaction: {
       phase: "night_guard",
+      night: { order: 10, schedule: "every_night" },
       kind: "guard_protect",
       mode: "single",
       wakePolicy: { vibrate: true },
