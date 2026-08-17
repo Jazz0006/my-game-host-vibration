@@ -10,16 +10,57 @@ B4 已验证：
 
 B4.1 继续验证关系规则的第二类能力：**关系可以改变有效阵营与胜利条件，而不改变玩家原始身份。**
 
+同时，本项目面向不同狼人杀规则集，丘比特不能硬编码成单一平台规则。因此 B4.1 支持两种可配置规则变体。
+
 本 PR 仍然是 architecture spike，不把丘比特加入生产角色表、夜间阶段或客户端 UI。
 
-## 规则基线
+## 丘比特规则变体
 
-采用经典《米勒山谷狼人 / Les Loups-Garous de Thiercelieux》丘比特规则：
+```ts
+export type CupidRuleVariant =
+  | "classic_millers_hollow"
+  | "china_three_party";
+```
 
-1. 同阵营恋人仍然跟随原阵营目标。
-2. 如果一名狼人和一名村民成为恋人，他们必须共同消灭所有其他玩家，最后两人存活才能获胜。
-3. 混合情侣存在时，普通狼人阵营不能仅因为人数达到平票条件而提前获胜。
-4. 玩家原始身份不改变：狼人恋人仍然是狼人角色，村民恋人仍然是原村民角色；改变的是用于胜负判断的 effective team / objective。
+### classic_millers_hollow
+
+经典《米勒山谷狼人》基线：
+
+- 同阵营恋人保持原阵营；
+- 人狼恋时，两名恋人成为特殊 `lovers` 阵营；
+- 如果丘比特选择的是另外两名玩家，丘比特仍留在自己的原阵营；
+- 两名混合恋人必须成为最后两名存活玩家才能获得 Lovers 胜利。
+
+### china_three_party
+
+国内平台常见的人狼恋第三方变体：
+
+- 人人恋：不产生第三方，保持原阵营；
+- 狼狼恋：不产生第三方，保持原阵营；
+- 人狼恋：丘比特 + 两名恋人共同属于特殊 `lovers` 阵营；
+- 丘比特即使没有选择自己，也通过 relationship 的 `sourceRolePlayerId` 加入第三方；
+- 当所有仍存活的玩家都属于该第三方成员集合，Lovers 获胜；
+- 丘比特可以已经死亡，只要两名恋人仍完整存活并消灭其他阵营，第三方仍可获胜。
+
+## 为什么不把丘比特塞进 playerIds
+
+关系结构仍保持：
+
+```ts
+{
+  kind: "lovers",
+  sourceRolePlayerId: "cupid-player",
+  playerIds: ["lover-a", "lover-b"]
+}
+```
+
+其中：
+
+- `playerIds` 永远表示真正的两名恋人；
+- `sourceRolePlayerId` 表示建立关系的丘比特；
+- 是否把丘比特视为第三方成员，由 `CupidRuleVariant` 解释。
+
+这样不会污染“恋人只有两人”的关系语义，也便于以后增加其他平台规则。
 
 ## 类型扩展
 
@@ -39,104 +80,121 @@ B4.1 继续验证关系规则的第二类能力：**关系可以改变有效阵�
 
 ## Experimental LoversRuleResolver
 
-新增：
+文件：
 
 ```text
 src/games/werewolf/roles/experimental/LoversRuleResolver.ts
 ```
 
-提供两个纯函数：
+提供：
 
 ```ts
 resolveLoversEffectiveTeam(...)
 resolveLoversVictory(...)
 ```
 
+两个函数都接受 `CupidRuleVariant`。
+
 ### Effective team
 
-- 无恋人关系：返回角色原阵营。
-- 村民 + 村民：双方仍为 `village`。
-- 狼人 + 狼人：双方仍为 `wolf`。
-- 狼人 + 村民：双方 effective team 为 `lovers`。
-
-原始 `game.roles[playerId]` 不发生改变。
-
-### Victory override
-
-对于仍然存活的狼人 + 村民混合情侣：
+以人狼恋为例：
 
 ```text
-普通 checkVictory()
-        ↓
-如果混合情侣仍完整存活
-        ↓
-还有其他存活玩家？ ── 是 ──> null（阻止普通阵营提前胜利）
-        │
-        否
-        ↓
-仅剩两名恋人
-        ↓
-"lovers"
+classic_millers_hollow
+Cupid A -> 原阵营
+Wolf B  -> lovers
+Human C -> lovers
+
+china_three_party
+Cupid A -> lovers
+Wolf B  -> lovers
+Human C -> lovers
 ```
 
-如果混合情侣已经被打破，则恢复普通 faction victory。
+角色身份本身不变：狼人仍是狼人角色，丘比特仍是丘比特角色。
 
-## 为什么必须覆盖普通狼人平票胜利
+### 与动态阵营组合
 
-当前 legacy domain 的 `checkVictory()` 使用：
+Lovers resolver 支持调用方传入 `LoversBaseTeamResolver`。
+
+这样未来可以先通过 B3 `resolveTeam` 得到角色当前有效阵营，再由 Lovers 关系规则做二次解释，避免机械狼、变阵营角色等被静态 `role.team` 错判。
+
+## Victory override
+
+只要混合恋人的两名 Lover 都还活着，普通 faction victory 就被暂停，避免 legacy：
 
 ```ts
-if (wolves === 0) return "village";
 if (wolves >= others) return "wolf";
 ```
 
-因此例如：
+过早判狼人胜利。
+
+### Classic
 
 ```text
-狼人恋人 A
-村民恋人 B
-普通狼人 C
-普通村民 D（已死亡）
+混合情侣仍活着
+      ↓
+只剩两名 Lover？
+  是 -> lovers
+  否 -> null，继续游戏
 ```
 
-当前存活：A / B / C。
+### China three-party
 
-legacy 计算：
+第三方成员集合为：
 
 ```text
-wolves = 2
-others = 1
-=> wolf victory
+Cupid + Lover A + Lover B
 ```
 
-但经典丘比特规则下，A 已经与 B 形成混合情侣，不能跟 C 一起直接获得狼人胜利。
+```text
+混合情侣仍活着
+      ↓
+所有存活玩家是否都属于第三方成员集合？
+  是 -> lovers
+  否 -> null，继续游戏
+```
 
-B4.1 resolver 因此返回 `null`，让游戏继续；当最终只剩 A + B 时返回 `lovers`。
+因此既支持三人终局：
 
-## 关系状态约束补强
+```text
+Cupid + Wolf Lover + Human Lover
+```
 
-B4 已禁止：
+也支持丘比特先死后的两人终局：
 
-- 恋人选择同一个玩家两次；
-- 重复 relationship id。
+```text
+Wolf Lover + Human Lover
+```
 
-B4.1 再增加：
+如果任一 Lover 已死，则特殊胜利不再阻塞普通阵营胜负；B4 的连锁死亡会在生产接入后处理另一名 Lover 的随死。
 
-- 一名玩家不能同时属于两组 Lovers relationship。
+## 关系状态约束
 
-这使 `loverOf(playerId)` 保持单值语义，也避免未来 snapshot 恢复时产生模糊关系图。
+保持：
 
-## 测试
+- 恋人必须是两名不同玩家；
+- relationship id 不可重复；
+- 一名玩家不能同时属于多组 Lovers relationship。
 
-新增 `tests/loversAlignmentVictorySpike.test.ts`，覆盖：
+`sourceRolePlayerId` 不算第二组恋人关系成员，因此丘比特可以正常创建一组自己并未参与的恋人关系。
 
-1. 狼人 + 村民情侣 effective team = `lovers`；
-2. 原始角色身份不改变；
-3. 同阵营恋人保持原阵营；
-4. 混合情侣存活时阻止 legacy 狼人平票胜利；
-5. 最后只剩混合情侣时返回 `lovers` 胜利；
-6. 一名恋人死亡后恢复普通 faction victory；
-7. 禁止重叠恋人关系。
+## 测试覆盖
+
+`tests/loversAlignmentVictorySpike.test.ts` 覆盖：
+
+1. Classic 人狼恋：两名恋人进入 `lovers`，丘比特仍保持原阵营；
+2. China 人狼恋：丘比特 + 两名恋人三人全部进入 `lovers`；
+3. China 人人恋：不产生第三方；
+4. China 狼狼恋：不产生第三方；
+5. 原始角色身份不改变；
+6. 动态基础阵营 resolver 可以覆盖静态 role team；
+7. 混合情侣存活时压制 legacy 狼人平票胜利；
+8. Classic 最后两名恋人时 Lovers 获胜；
+9. China 丘比特 + 两名恋人三人终局时 Lovers 获胜；
+10. China 丘比特死亡、两名恋人最后存活时仍判 Lovers 获胜；
+11. 混合情侣被打破后恢复普通 faction victory；
+12. 禁止重叠恋人关系。
 
 ## 非目标
 
@@ -154,7 +212,7 @@ B4.1 再增加：
 
 ## 后续
 
-如果 B4.1 测试通过，下一步建议进入 B5：机械狼，用来验证：
+B4.1 验证通过后，下一步建议进入 B5：机械狼，用来验证：
 
 - 原始身份与当前能力来源分离；
 - 动态获得 / 模仿技能；
