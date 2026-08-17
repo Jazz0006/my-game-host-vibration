@@ -135,6 +135,22 @@ describe("RoomCore", () => {
     ]);
   });
 
+  it("allows the existing server insert-index convention for moving a player to the end", () => {
+    const core = new RoomCore(room([
+      player("p1", "房主", 1, true),
+      player("p2", "玩家二号", 2),
+      player("p3", "玩家三号", 3),
+    ]));
+
+    core.movePlayerSeat("p1", 3);
+
+    expect(core.state.players.map(item => ({ id: item.id, seat: item.seat }))).toEqual([
+      { id: "p2", seat: 1 },
+      { id: "p3", seat: 2 },
+      { id: "p1", seat: 3 },
+    ]);
+  });
+
   it("transfers host ownership to exactly one member", () => {
     const core = new RoomCore(room([
       player("p1", "房主", 1, true),
