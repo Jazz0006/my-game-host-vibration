@@ -56,9 +56,12 @@ export function resolveLoversEffectiveTeam<TRoleId extends string>(
 }
 
 /**
- * Applies the classic Cupid mixed-couple victory override. The mixed pair wins
- * only when both Lovers are alive and every other player is dead. Same-team
- * Lovers do not replace their original faction's normal victory condition.
+ * Applies the classic Cupid mixed-couple victory override.
+ *
+ * While both members of a mixed wolf/villager pair are alive, ordinary faction
+ * victory is suspended: the wolf lover no longer wins merely because wolves
+ * reach parity. The pair wins only when they are the final two living players.
+ * Once the mixed pair is broken, normal faction victory is allowed again.
  */
 export function resolveLoversVictory<TRoleId extends string>(
   game: GameState,
@@ -74,9 +77,10 @@ export function resolveLoversVictory<TRoleId extends string>(
     const rightTeam = baseTeamFor(game, rightPlayerId, registry);
     if (!isClassicMixedPair(leftTeam, rightTeam)) continue;
 
-    if (game.deadPlayerIds.includes(leftPlayerId) || game.deadPlayerIds.includes(rightPlayerId)) {
-      continue;
-    }
+    const bothAlive =
+      !game.deadPlayerIds.includes(leftPlayerId) &&
+      !game.deadPlayerIds.includes(rightPlayerId);
+    if (!bothAlive) continue;
 
     const livingPlayerIds = Object.keys(game.roles).filter(
       playerId => !game.deadPlayerIds.includes(playerId),
@@ -88,6 +92,8 @@ export function resolveLoversVictory<TRoleId extends string>(
     ) {
       return "lovers";
     }
+
+    return null;
   }
 
   return defaultWinner;
