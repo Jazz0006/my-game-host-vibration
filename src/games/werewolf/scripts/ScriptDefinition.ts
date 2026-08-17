@@ -3,18 +3,24 @@ import { configFromRoleDeck, type GameConfig, type Role } from "../../../domain/
 /**
  * A script selects roles and counts for a concrete table setup.
  * Role behavior remains in the role registry; scripts only compose roles.
+ *
+ * The generic role id lets architecture spikes compose roles that have not yet
+ * been added to the legacy domain Role union. Production config conversion stays
+ * intentionally restricted to legacy Role until that migration is ready.
  */
-export type WerewolfScriptDefinition = {
+export type WerewolfScriptDefinition<TRoleId extends string = Role> = {
   id: string;
   name: string;
   description?: string;
-  roleDeck: readonly Role[];
+  roleDeck: readonly TRoleId[];
 };
 
-export function playerCountForScript(script: WerewolfScriptDefinition): number {
+export function playerCountForScript<TRoleId extends string>(
+  script: WerewolfScriptDefinition<TRoleId>,
+): number {
   return script.roleDeck.length;
 }
 
-export function configFromScript(script: WerewolfScriptDefinition): GameConfig {
+export function configFromScript(script: WerewolfScriptDefinition<Role>): GameConfig {
   return configFromRoleDeck(playerCountForScript(script), script.roleDeck);
 }
