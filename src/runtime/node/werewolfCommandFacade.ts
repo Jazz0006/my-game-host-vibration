@@ -1,5 +1,5 @@
 import type { GameCommandContext } from "../../core/game/GameModule.js";
-import type { GameState, Role } from "../../domain/game.js";
+import { allAliveVoted as domainAllAliveVoted, type GameState, type Role } from "../../domain/game.js";
 import {
   werewolfGameModule,
   type WerewolfCommand,
@@ -52,6 +52,10 @@ export function runHostCommand(
   command: WerewolfCommand,
 ): WerewolfCommandOutcome {
   return executeWerewolfCommand(room, command, { isHost: true });
+}
+
+export function allAliveVoted(state: GameState): boolean {
+  return domainAllAliveVoted(state);
 }
 
 export function confirmRole(state: GameState, playerId: string, actionId?: string): boolean {
