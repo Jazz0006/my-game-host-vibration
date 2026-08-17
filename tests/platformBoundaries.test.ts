@@ -5,23 +5,38 @@ import { describe, expect, it } from "vitest";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const repoRoot = path.join(__dirname, "..");
 
 function source(relativePath: string): string {
-  return fs.readFileSync(path.join(__dirname, "..", relativePath), "utf8");
+  return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+}
+
+function expectNoNodeRuntimeImports(relativePath: string): void {
+  const contents = source(relativePath);
+  expect(contents).not.toMatch(/from\s+["']node:/u);
+  expect(contents).not.toMatch(/require\(["']node:/u);
 }
 
 describe("platform boundaries", () => {
-  it("keeps the Werewolf rules engine free of Node runtime imports", () => {
-    const gameSource = source("src/domain/game.ts");
-
-    expect(gameSource).not.toMatch(/from\s+["']node:/u);
-    expect(gameSource).not.toMatch(/require\(["']node:/u);
+  it("keeps the Werewolf rules engine and default randomness free of Node runtime imports", () => {
+    expectNoNodeRuntimeImports("src/domain/game.ts");
+    expectNoNodeRuntimeImports("src/domain/gameRandom.ts");
   });
 
-  it("keeps session-token crypto implementation out of the platform-neutral service", () => {
-    const serviceSource = source("src/core/session/SessionTokenService.ts");
+  it("keeps session-token contracts and service platform-neutral", () => {
+    expectNoNodeRuntimeImports("src/core/security/SessionTokenCryptoProvider.ts");
+    expectNoNodeRuntimeImports("src/core/session/SessionTokenService.ts");
+  });
 
-    expect(serviceSource).not.toMatch(/from\s+["']node:/u);
-    expect(serviceSource).not.toMatch(/require\(["']node:/u);
+  it("removes the legacy domain session-token implementation", () => {
+    expect(fs.existsSync(path.join(repoRoot, "src/domain/sessionToken.ts"))).toBe(false);
+  });
+
+  it("routes Node server session tokens through the service and runtime adapter", () => {
+    const serverSource = source("src/server.ts");
+
+    expect(serverSource).toContain('from "./core/session/SessionTokenService.js"');
+    expect(serverSource).toContain('from "./runtime/node/NodeSessionTokenCryptoProvider.js"');
+    expect(serverSource).not.toContain("./domain/sessionToken.js");
   });
 });
