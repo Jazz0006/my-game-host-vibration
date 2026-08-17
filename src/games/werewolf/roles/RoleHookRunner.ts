@@ -2,10 +2,14 @@ import type { GameState } from "../../../domain/game.js";
 import type {
   WerewolfDeathCause,
   WerewolfRoleDefinition,
+  WerewolfRuleEffect,
   WerewolfTeam,
-  WerewolfTriggeredAction,
   WerewolfWinner,
 } from "./RoleDefinition.js";
+import {
+  createEmptyWerewolfRuleState,
+  type WerewolfRuleState,
+} from "./WerewolfRuleState.js";
 
 export class WerewolfRoleHookConflictError extends Error {}
 
@@ -31,13 +35,8 @@ function assignedDefinitions<TRoleId extends string, TInteractionKind extends st
   for (const [rolePlayerId, rawRoleId] of Object.entries(game.roles)) {
     const definition = registry[rawRoleId];
     if (!definition) continue;
-    result.push({
-      rolePlayerId,
-      roleId: definition.id,
-      definition,
-    });
+    result.push({ rolePlayerId, roleId: definition.id, definition });
   }
-
   return result;
 }
 
@@ -49,6 +48,7 @@ export function shouldPreventWerewolfDeath<
   deadPlayerId: string,
   cause: WerewolfDeathCause,
   registry: WerewolfRoleRegistryLike<TRoleId, TInteractionKind>,
+  ruleState: WerewolfRuleState = createEmptyWerewolfRuleState(),
 ): { preventDeath: boolean; reasons: string[] } {
   let preventDeath = false;
   const reasons: string[] = [];
@@ -56,6 +56,7 @@ export function shouldPreventWerewolfDeath<
   for (const { rolePlayerId, roleId, definition } of assignedDefinitions(game, registry)) {
     const decision = definition.hooks?.beforeDeath?.({
       game,
+      ruleState,
       rolePlayerId,
       roleId,
       deadPlayerId,
@@ -69,7 +70,7 @@ export function shouldPreventWerewolfDeath<
   return { preventDeath, reasons };
 }
 
-export function collectWerewolfAfterDeathActions<
+export function collectWerewolfAfterDeathEffects<
   TRoleId extends string,
   TInteractionKind extends string,
 >(
@@ -77,22 +78,27 @@ export function collectWerewolfAfterDeathActions<
   deadPlayerId: string,
   cause: WerewolfDeathCause,
   registry: WerewolfRoleRegistryLike<TRoleId, TInteractionKind>,
-): WerewolfTriggeredAction<TInteractionKind>[] {
-  const actions: WerewolfTriggeredAction<TInteractionKind>[] = [];
+  ruleState: WerewolfRuleState = createEmptyWerewolfRuleState(),
+): WerewolfRuleEffect<TInteractionKind>[] {
+  const effects: WerewolfRuleEffect<TInteractionKind>[] = [];
 
   for (const { rolePlayerId, roleId, definition } of assignedDefinitions(game, registry)) {
     const triggered = definition.hooks?.afterDeath?.({
       game,
+      ruleState,
       rolePlayerId,
       roleId,
       deadPlayerId,
       cause,
     });
-    if (triggered) actions.push(...triggered);
+    if (triggered) effects.push(...triggered);
   }
 
-  return actions;
+  return effects;
 }
+
+/** @deprecated Prefer collectWerewolfAfterDeathEffects. */
+export const collectWerewolfAfterDeathActions = collectWerewolfAfterDeathEffects;
 
 export function resolveWerewolfEffectiveTeam<
   TRoleId extends string,
@@ -101,6 +107,7 @@ export function resolveWerewolfEffectiveTeam<
   game: GameState,
   playerId: string,
   registry: WerewolfRoleRegistryLike<TRoleId, TInteractionKind>,
+  ruleState: WerewolfRuleState = createEmptyWerewolfRuleState(),
 ): WerewolfTeam | undefined {
   const rawRoleId = game.roles[playerId];
   if (!rawRoleId) return undefined;
@@ -109,6 +116,7 @@ export function resolveWerewolfEffectiveTeam<
 
   return definition.hooks?.resolveTeam?.({
     game,
+    ruleState,
     rolePlayerId: playerId,
     roleId: definition.id,
   }) ?? definition.team;
@@ -121,12 +129,14 @@ export function resolveWerewolfVictoryOverride<
   game: GameState,
   defaultWinner: WerewolfWinner | null,
   registry: WerewolfRoleRegistryLike<TRoleId, TInteractionKind>,
+  ruleState: WerewolfRuleState = createEmptyWerewolfRuleState(),
 ): WerewolfWinner | null {
   const overrides: Array<WerewolfWinner | null> = [];
 
   for (const { rolePlayerId, roleId, definition } of assignedDefinitions(game, registry)) {
     const override = definition.hooks?.evaluateVictory?.({
       game,
+      ruleState,
       rolePlayerId,
       roleId,
       defaultWinner,
