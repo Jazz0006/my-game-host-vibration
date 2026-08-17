@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_GAME_CONFIG } from "../src/domain/game.js";
 import {
   createWerewolfGame,
+  executeWerewolfCommand,
   gameViewContext,
   playerGameView,
   roomCore,
@@ -105,5 +106,19 @@ describe("Node room bridge", () => {
     expect(game.config).toBe(DEFAULT_GAME_CONFIG);
     expect(view.phase).toBe("role_reveal");
     expect(view.mode).toBe("role_reveal");
+  });
+
+  it("maps explicit game outcomes to Node orchestration outcomes", () => {
+    const room = runtimeRoom();
+    const game = createWerewolfGame(room, DEFAULT_GAME_CONFIG);
+
+    const outcome = executeWerewolfCommand(
+      room,
+      { type: "confirmRole", actionId: game.actionId },
+      { playerId: "p1" },
+    );
+
+    expect(outcome).toEqual({ kind: "broadcast" });
+    expect(game.confirmedRolePlayerIds).toContain("p1");
   });
 });
