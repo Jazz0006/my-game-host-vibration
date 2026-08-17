@@ -135,27 +135,28 @@ export class WerewolfGameModule implements GameModule<
 > {
   readonly type = "werewolf";
 
-  createGame(input: WerewolfCreateInput, _dependencies: GameModuleDependencies): GameState {
-    return startGame(input.playerIds, input.config);
+  createGame(input: WerewolfCreateInput, dependencies: GameModuleDependencies): GameState {
+    return startGame(input.playerIds, input.config, dependencies.random);
   }
 
   handleCommand(
     state: GameState,
     context: GameCommandContext,
     command: WerewolfCommand,
-    _dependencies: GameModuleDependencies,
+    dependencies: GameModuleDependencies,
   ): WerewolfCommandResult {
+    const random = dependencies.random;
     switch (command.type) {
       case "confirmRole":
         return {
           state,
           outcome: {
             kind: "roleConfirmed",
-            allConfirmed: confirmRole(state, requirePlayerId(context), command.actionId),
+            allConfirmed: confirmRole(state, requirePlayerId(context), command.actionId, random),
           },
         };
       case "startNight":
-        startNight(state);
+        startNight(state, random);
         return { state, outcome: { kind: "nightAdvanced", advanced: true } };
       case "submitWolfTarget":
         return {
@@ -167,6 +168,7 @@ export class WerewolfGameModule implements GameModule<
               requirePlayerId(context),
               command.targetPlayerId,
               command.actionId,
+              random,
             ),
           },
         };
@@ -180,6 +182,7 @@ export class WerewolfGameModule implements GameModule<
               requirePlayerId(context),
               command.targetPlayerId,
               command.actionId,
+              random,
             ),
           },
         };
@@ -196,6 +199,7 @@ export class WerewolfGameModule implements GameModule<
               requirePlayerId(context),
               action,
               command.actionId,
+              random,
             ),
           },
         };
@@ -208,7 +212,7 @@ export class WerewolfGameModule implements GameModule<
           state,
           outcome: {
             kind: "nightAdvanced",
-            advanced: confirmSeerResult(state, requirePlayerId(context), command.actionId),
+            advanced: confirmSeerResult(state, requirePlayerId(context), command.actionId, random),
           },
         };
       case "submitHunterExecution":
@@ -221,11 +225,12 @@ export class WerewolfGameModule implements GameModule<
               requirePlayerId(context),
               command.targetPlayerId,
               command.actionId,
+              random,
             ),
           },
         };
       case "startDayVote":
-        startDayVote(state);
+        startDayVote(state, random);
         return { state, outcome: { kind: "stateChanged" } };
       case "submitVote":
         return {
@@ -243,10 +248,10 @@ export class WerewolfGameModule implements GameModule<
       case "closeDayVote":
         return {
           state,
-          outcome: { kind: "voteClosed", result: closeDayVote(state) },
+          outcome: { kind: "voteClosed", result: closeDayVote(state, random) },
         };
       case "beginNightStart":
-        beginNightStart(state);
+        beginNightStart(state, random);
         return { state, outcome: { kind: "stateChanged" } };
     }
   }
