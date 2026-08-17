@@ -4,13 +4,15 @@ import type {
   WerewolfTeam,
   WerewolfWinner,
 } from "../RoleDefinition.js";
-import type { WerewolfRuleState } from "../WerewolfRuleState.js";
+import type { WerewolfRuleState, WerewolfLoversRelationship } from "../WerewolfRuleState.js";
 
 export type LoversRoleRegistryLike<TRoleId extends string = string> = Readonly<
   Record<string, WerewolfRoleDefinition<TRoleId, string>>
 >;
 
 export type LoversBaseTeamResolver = (playerId: string) => WerewolfTeam | undefined;
+
+export type CupidRuleVariant = "classic_millers_hollow" | "china_three_party";
 
 function staticTeamResolver<TRoleId extends string>(
   game: GameState,
@@ -23,7 +25,7 @@ function staticTeamResolver<TRoleId extends string>(
   };
 }
 
-function isClassicMixedPair(left: WerewolfTeam | undefined, right: WerewolfTeam | undefined): boolean {
+function isMixedPair(left: WerewolfTeam | undefined, right: WerewolfTeam | undefined): boolean {
   return (left === "wolf" && right === "village") || (left === "village" && right === "wolf");
 }
 
@@ -34,47 +36,85 @@ function loversRelationshipFor(ruleState: WerewolfRuleState, playerId: string) {
   );
 }
 
+function specialTeamMembers(
+  relationship: WerewolfLoversRelationship,
+  variant: CupidRuleVariant,
+): Set<string> {
+  const members = new Set<string>(relationship.playerIds);
+  if (variant === "china_three_party") {
+    members.add(relationship.sourceRolePlayerId);
+  }
+  return members;
+}
+
+function isSpecialTeamMember(
+  relationship: WerewolfLoversRelationship,
+  playerId: string,
+  variant: CupidRuleVariant,
+): boolean {
+  return specialTeamMembers(relationship, variant).has(playerId);
+}
+
 /**
  * Resolves relationship-derived alignment without changing the player's role.
- * Same-team lovers retain their normal team. A classic wolf/villager mixed pair
- * becomes the special Lovers team for victory purposes.
  *
+ * Classic Miller's Hollow:
+ * - a wolf/villager mixed pair becomes the special Lovers team;
+ * - Cupid stays on their original team unless Cupid selected themself.
+ *
+ * China three-party variant:
+ * - for a wolf/villager mixed pair, Cupid and both lovers share the special
+ *   Lovers team, even when Cupid selected two other players.
+ *
+ * Same-team lovers retain their normal team in both variants.
  * Callers may provide a base-team resolver so relationship rules compose with
- * role-level dynamic alignment (for example future transformation/copy rules).
+ * role-level dynamic alignment.
  */
 export function resolveLoversEffectiveTeam<TRoleId extends string>(
   game: GameState,
   playerId: string,
   registry: LoversRoleRegistryLike<TRoleId>,
   ruleState: WerewolfRuleState,
+  variant: CupidRuleVariant = "classic_millers_hollow",
   resolveBaseTeam: LoversBaseTeamResolver = staticTeamResolver(game, registry),
 ): WerewolfTeam | undefined {
   const ownTeam = resolveBaseTeam(playerId);
   if (!ownTeam) return undefined;
 
-  const relationship = loversRelationshipFor(ruleState, playerId);
-  if (!relationship) return ownTeam;
+  for (const relationship of ruleState.relationships) {
+    if (relationship.kind !== "lovers") continue;
 
-  const [leftPlayerId, rightPlayerId] = relationship.playerIds;
-  const leftTeam = resolveBaseTeam(leftPlayerId);
-  const rightTeam = resolveBaseTeam(rightPlayerId);
+    const [leftPlayerId, rightPlayerId] = relationship.playerIds;
+    const leftTeam = resolveBaseTeam(leftPlayerId);
+    const rightTeam = resolveBaseTeam(rightPlayerId);
+    if (!isMixedPair(leftTeam, rightTeam)) continue;
 
-  return isClassicMixedPair(leftTeam, rightTeam) ? "lovers" : ownTeam;
+    if (isSpecialTeamMember(relationship, playerId, variant)) return "lovers";
+  }
+
+  return ownTeam;
 }
 
 /**
- * Applies the classic Cupid mixed-couple victory override.
+ * Applies the configured mixed-couple victory override.
  *
- * While both members of a mixed wolf/villager pair are alive, ordinary faction
- * victory is suspended: the wolf lover no longer wins merely because wolves
- * reach parity. The pair wins only when they are the final two living players.
- * Once the mixed pair is broken, normal faction victory is allowed again.
+ * While both lovers of a mixed wolf/villager pair are alive, ordinary faction
+ * victory is suspended. The special team wins when every living player belongs
+ * to that variant's special team:
+ *
+ * - classic_millers_hollow: the two lovers are the final living players;
+ * - china_three_party: all remaining living players are among Cupid + the two
+ *   lovers. Cupid may already be dead and still shares the eventual team win.
+ *
+ * Once either lover dies, normal faction victory is allowed again. The linked
+ * death rule from B4 means the other lover will normally die in the same chain.
  */
 export function resolveLoversVictory<TRoleId extends string>(
   game: GameState,
   defaultWinner: WerewolfWinner | null,
   registry: LoversRoleRegistryLike<TRoleId>,
   ruleState: WerewolfRuleState,
+  variant: CupidRuleVariant = "classic_millers_hollow",
   resolveBaseTeam: LoversBaseTeamResolver = staticTeamResolver(game, registry),
 ): WerewolfWinner | null {
   for (const relationship of ruleState.relationships) {
@@ -83,21 +123,19 @@ export function resolveLoversVictory<TRoleId extends string>(
     const [leftPlayerId, rightPlayerId] = relationship.playerIds;
     const leftTeam = resolveBaseTeam(leftPlayerId);
     const rightTeam = resolveBaseTeam(rightPlayerId);
-    if (!isClassicMixedPair(leftTeam, rightTeam)) continue;
+    if (!isMixedPair(leftTeam, rightTeam)) continue;
 
-    const bothAlive =
+    const bothLoversAlive =
       !game.deadPlayerIds.includes(leftPlayerId) &&
       !game.deadPlayerIds.includes(rightPlayerId);
-    if (!bothAlive) continue;
+    if (!bothLoversAlive) continue;
 
+    const members = specialTeamMembers(relationship, variant);
     const livingPlayerIds = Object.keys(game.roles).filter(
       playerId => !game.deadPlayerIds.includes(playerId),
     );
-    if (
-      livingPlayerIds.length === 2 &&
-      livingPlayerIds.includes(leftPlayerId) &&
-      livingPlayerIds.includes(rightPlayerId)
-    ) {
+
+    if (livingPlayerIds.every(playerId => members.has(playerId))) {
       return "lovers";
     }
 
