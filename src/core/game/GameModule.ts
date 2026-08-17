@@ -7,6 +7,16 @@ export type GameCommandContext = {
   now: number;
 };
 
+export type GamePlayerRef = {
+  id: string;
+  name: string;
+  seat: number;
+};
+
+export type GameViewContext = {
+  players: readonly GamePlayerRef[];
+};
+
 export type GameModuleDependencies = {
   random: RandomProvider;
 };
@@ -35,9 +45,13 @@ export interface GameModule<
     dependencies: GameModuleDependencies,
   ): GameCommandResult<TState>;
 
-  getPlayerView(state: TState, playerId: string): TPlayerView;
+  getPlayerView(
+    state: TState,
+    playerId: string,
+    context: GameViewContext,
+  ): TPlayerView;
 
-  getHostView(state: TState): THostView;
+  getHostView(state: TState, context: GameViewContext): THostView;
 
-  getPublicView(state: TState): TPublicView;
+  getPublicView(state: TState, context: GameViewContext): TPublicView;
 }
