@@ -87,6 +87,19 @@ describe("B4.1 mixed Lovers alignment and victory spike", () => {
     expect(resolveLoversEffectiveTeam(game, "d", registry, ruleState)).toBe("village");
   });
 
+  it("composes with a caller-provided dynamic base-team resolver", () => {
+    const game = gameState();
+    const ruleState = mixedLovers();
+    const dynamicTeam = (playerId: string) => {
+      if (playerId === "a") return "village" as const;
+      return game.roles[playerId] === "werewolf" ? ("wolf" as const) : ("village" as const);
+    };
+
+    expect(resolveLoversEffectiveTeam(game, "a", registry, ruleState, dynamicTeam)).toBe("village");
+    expect(resolveLoversEffectiveTeam(game, "b", registry, ruleState, dynamicTeam)).toBe("village");
+    expect(resolveLoversVictory(game, "wolf", registry, ruleState, dynamicTeam)).toBe("wolf");
+  });
+
   it("suppresses the normal wolf parity victory while a mixed pair is alive", () => {
     const game = gameState();
     game.deadPlayerIds.push("d");
