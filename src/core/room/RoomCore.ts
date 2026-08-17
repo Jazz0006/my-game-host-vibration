@@ -88,7 +88,7 @@ export class RoomCore<
   movePlayerSeat(playerId: string, insertIndex: number): void {
     const originalIndex = this.state.players.findIndex(player => player.id === playerId);
     if (originalIndex < 0) throw new Error("player not found in room");
-    if (!Number.isInteger(insertIndex) || insertIndex < 0 || insertIndex >= this.state.players.length) {
+    if (!Number.isInteger(insertIndex) || insertIndex < 0 || insertIndex > this.state.players.length) {
       throw new Error("invalid seat index");
     }
 
