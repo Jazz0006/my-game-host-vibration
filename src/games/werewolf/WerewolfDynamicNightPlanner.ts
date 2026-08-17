@@ -1,6 +1,6 @@
 import type { PendingInteraction } from "../../core/interaction/PendingInteraction.js";
 import type { GameState } from "../../domain/game.js";
-import type { WerewolfRoleDefinition } from "./roles/RoleDefinition.js";
+import type { WerewolfRoleInteractionDefinition } from "./roles/RoleDefinition.js";
 
 export type WerewolfDynamicNightPlanningContext<TRoleId extends string> = {
   nightNumber: number;
@@ -8,10 +8,14 @@ export type WerewolfDynamicNightPlanningContext<TRoleId extends string> = {
   game: GameState;
 };
 
-export type WerewolfDynamicNightRegistry<
-  TRoleId extends string,
-  TInteractionKind extends string,
-> = Readonly<Record<string, WerewolfRoleDefinition<TRoleId, TInteractionKind>>>;
+export type WerewolfDynamicNightRoleDefinition<TInteractionKind extends string> = {
+  id: string;
+  interaction?: WerewolfRoleInteractionDefinition<TInteractionKind>;
+};
+
+export type WerewolfDynamicNightRegistry<TInteractionKind extends string> = Readonly<
+  Record<string, WerewolfDynamicNightRoleDefinition<TInteractionKind>>
+>;
 
 function scheduledForNight(schedule: "every_night" | "first_night_only", nightNumber: number): boolean {
   return schedule === "every_night" || nightNumber === 1;
@@ -23,13 +27,17 @@ function scheduledForNight(schedule: "every_night" | "first_night_only", nightNu
  * Unlike the legacy planner, this function does not inspect GamePhase and does
  * not use NIGHT_ORDER. The actual assigned roles plus role metadata determine
  * which interactions exist and in what order they should run.
+ *
+ * The registry projection deliberately contains only id + interaction. The
+ * orchestrator must not depend on lifecycle hooks, team rules, or other role
+ * implementation details.
  */
 export function planWerewolfNightInteractions<
   TRoleId extends string,
   TInteractionKind extends string,
 >(
   context: WerewolfDynamicNightPlanningContext<TRoleId>,
-  registry: WerewolfDynamicNightRegistry<TRoleId, TInteractionKind>,
+  registry: WerewolfDynamicNightRegistry<TInteractionKind>,
 ): Array<PendingInteraction<TInteractionKind>> {
   const planned: Array<{
     order: number;
