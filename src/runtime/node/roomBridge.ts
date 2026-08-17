@@ -2,9 +2,10 @@ import crypto from "node:crypto";
 import { RoomCore } from "../../core/room/RoomCore.js";
 import type { GameViewContext } from "../../core/game/GameModule.js";
 import type { RoomPlayer, RoomState } from "../../core/room/types.js";
-import { allAliveVoted, type GameConfig, type GameState } from "../../domain/game.js";
+import type { GameConfig, GameState } from "../../domain/game.js";
 import type { TestPrompt } from "../../domain/testPrompt.js";
 import {
+  allEligiblePlayersVoted,
   werewolfGameModule,
   type WerewolfCommand,
 } from "../../games/werewolf/WerewolfGameModule.js";
@@ -68,8 +69,6 @@ export function createWerewolfGame(room: RuntimeRoom, config: GameConfig): GameS
   return room.game;
 }
 
-// Translate pure game-command state changes into transport-agnostic orchestration
-// signals. Socket.IO decides how those signals become broadcasts/alerts/events.
 export function executeWerewolfCommand(
   room: RuntimeRoom,
   command: WerewolfCommand,
@@ -125,7 +124,7 @@ export function executeWerewolfCommand(
       return {
         kind: "vote",
         changed,
-        allEligibleVoted: changed && allAliveVoted(room.game),
+        allEligibleVoted: changed && allEligiblePlayersVoted(room.game),
       };
     }
 
