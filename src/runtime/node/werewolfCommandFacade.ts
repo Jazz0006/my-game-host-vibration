@@ -50,7 +50,7 @@ export function runPlayerCommandIdempotent(
     playerCommandScope(playerId),
     commandId,
     () => executeWerewolfCommand(room, command, { playerId }),
-  ) as Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }>;
+  );
 }
 
 export function runHostCommandIdempotent(
@@ -63,7 +63,7 @@ export function runHostCommandIdempotent(
     HOST_COMMAND_SCOPE,
     commandId,
     () => executeWerewolfCommand(room, command, { isHost: true }),
-  ) as Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }>;
+  );
 }
 
 /**
@@ -80,7 +80,7 @@ export function runHostRecoveryCommandIdempotent(
     HOST_COMMAND_SCOPE,
     commandId,
     delivery,
-  ) as Promise<{ outcome: HostRecoveryCommandOutcome; replayed: boolean }>;
+  );
 }
 
 export function runHostLifecycleMutationIdempotent(
@@ -97,8 +97,5 @@ export function runHostLifecycleMutationIdempotent(
     commandId,
     mutation,
     { resetReceiptHistory: true },
-  ) as Promise<{
-    outcome: WerewolfCommandOutcome;
-    replayed: boolean;
-  }>;
+  );
 }
