@@ -4,6 +4,20 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
+const IDEMPOTENT_SOCKET_EVENTS = new Set([
+  "player:confirm-role",
+  "player:submit-wolf-target",
+  "player:submit-witch-action",
+  "player:submit-seer-target",
+  "player:confirm-seer-result",
+  "player:submit-guard-target",
+  "player:submit-hunter-execution",
+  "player:submit-vote",
+  "host:start-night",
+  "host:close-voting",
+  "host:begin-night-start",
+]);
+let generatedCommandId = 0;
 
 function waitFor<T>(
   socket: ClientSocket,
@@ -26,8 +40,11 @@ function waitFor<T>(
 }
 
 function emitAck<T>(socket: ClientSocket, event: string, payload: unknown): Promise<T> {
+  const commandPayload = IDEMPOTENT_SOCKET_EVENTS.has(event) && payload && typeof payload === "object"
+    ? { commandId: `test-command-${generatedCommandId++}`, ...(payload as Record<string, unknown>) }
+    : payload;
   return new Promise((resolve, reject) => {
-    socket.timeout(TIMEOUT_MS).emit(event, payload, (error: Error | null, result: T) => {
+    socket.timeout(TIMEOUT_MS).emit(event, commandPayload, (error: Error | null, result: T) => {
       if (error) reject(error);
       else resolve(result);
     });
@@ -157,5 +174,73 @@ describe("five-player Socket.IO game flow", () => {
     for (const view of finalViews) {
       if (view.deaths) expect(view.deaths.map((player: { id: string }) => player.id)).toContain(victimId);
     }
+  });
+
+  it("dedupes Socket.IO command retries by stable actor without replaying the role-confirm transition", async () => {
+    const sockets = await Promise.all(Array.from({ length: 5 }, () => connect()));
+    const host = sockets[0]!;
+    const hostSession = await emitAck<JoinResult>(host, "host:create-room", { name: "房主" });
+    for (let index = 1; index < sockets.length; index += 1) {
+      await emitAck<JoinResult>(sockets[index]!, "player:join-room", {
+        roomId: hostSession.roomId,
+        name: `玩家${index + 1}`,
+      });
+    }
+
+    const roleViews = sockets.map(socket =>
+      waitFor<GameView>(socket, "player:game-state", view => view.mode === "role_reveal"),
+    );
+    expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {})).toEqual({ ok: true });
+    const dealt = await Promise.all(roleViews);
+    const commandId = "shared-retry-id";
+
+    expect(await emitAck<{ ok: boolean }>(sockets[0]!, "player:confirm-role", {
+      commandId,
+      actionId: dealt[0]!.actionId,
+    })).toEqual({ ok: true });
+    expect(await emitAck<{ ok: boolean }>(sockets[1]!, "player:confirm-role", {
+      commandId,
+      actionId: dealt[1]!.actionId,
+    })).toEqual({ ok: true });
+
+    const room = game.rooms.get(hostSession.roomId)!;
+    expect(room.game?.confirmedRolePlayerIds).toHaveLength(2);
+
+    for (let index = 2; index < sockets.length - 1; index += 1) {
+      expect(await emitAck<{ ok: boolean }>(sockets[index]!, "player:confirm-role", {
+        commandId: `confirm-${index}`,
+        actionId: dealt[index]!.actionId,
+      })).toEqual({ ok: true });
+    }
+    const reachedNightStart = waitFor<{ game: { phase: string } }>(
+      host,
+      "room:state",
+      state => state.game.phase === "night_start",
+    );
+    expect(await emitAck<{ ok: boolean }>(sockets[4]!, "player:confirm-role", {
+      commandId: "confirm-4",
+      actionId: dealt[4]!.actionId,
+    })).toEqual({ ok: true });
+    await reachedNightStart;
+    const actionIdAfterFirstDelivery = room.game?.actionId;
+    expect(room.game?.phase).toBe("night_start");
+
+    let replayedBroadcasts = 0;
+    const countReplayBroadcast = () => { replayedBroadcasts += 1; };
+    host.on("room:state", countReplayBroadcast);
+    expect(await emitAck<{ ok: boolean }>(sockets[4]!, "player:confirm-role", {
+      commandId: "confirm-4",
+      actionId: dealt[4]!.actionId,
+    })).toEqual({ ok: true });
+    await new Promise(resolve => setTimeout(resolve, 25));
+    host.off("room:state", countReplayBroadcast);
+    expect(replayedBroadcasts).toBe(0);
+    expect(room.game?.phase).toBe("night_start");
+    expect(room.game?.actionId).toBe(actionIdAfterFirstDelivery);
+
+    const missingCommandId = await new Promise<{ ok: boolean; message?: string }>(resolve => {
+      sockets[4]!.emit("player:confirm-role", { actionId: dealt[4]!.actionId }, resolve);
+    });
+    expect(missingCommandId).toEqual({ ok: false, message: "缺少有效的 commandId，请重试" });
   });
 });

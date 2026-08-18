@@ -186,6 +186,40 @@ function emitWithAck(event, data, onSuccess, onFailure) {
   });
 }
 
+// A command id represents one user intention, not one Socket.IO delivery.
+// Retrying after a lost acknowledgement deliberately keeps the same id so the
+// server can return the original result without repeating the game mutation.
+function emitCommandWithAck(event, payload, onSuccess, onFailure) {
+  const commandId = crypto.randomUUID();
+  let attempts = 0;
+
+  function send() {
+    socket.timeout(5000).emit(event, { ...payload, commandId }, (error, result) => {
+      if (error && attempts < 1) {
+        attempts += 1;
+        send();
+        return;
+      }
+      if (error) {
+        const message = "服务器响应超时，请重试";
+        setError(message);
+        onFailure?.(message);
+        return;
+      }
+      if (!result?.ok) {
+        const message = result?.message || "操作失败，请重试";
+        setError(message);
+        onFailure?.(message);
+        return;
+      }
+      setError("");
+      onSuccess?.(result);
+    });
+  }
+
+  send();
+}
+
 // ── Entry screen tabs ──────────────────────────────────────────────────────
 function showEntryTab(tab) {
   const isHost = tab === "host";
@@ -244,7 +278,7 @@ function renderGameState(state) {
     showGameView("wolf-view");
     renderTargets("wolf-targets", state.targets, target => {
       if (!confirm(`确定击杀 ${target.seat}号 ${target.name}？提交后不能修改。`)) return;
-      emitWithAck("player:submit-wolf-target", {
+      emitCommandWithAck("player:submit-wolf-target", {
         actionId: state.actionId,
         targetPlayerId: target.id,
       });
@@ -264,7 +298,7 @@ function renderGameState(state) {
       : "今晚没有玩家被狼人袭击";
     renderTargets("poison-targets", state.poisonTargets, target => {
       if (!confirm(`确定使用毒药毒杀 ${target.seat}号 ${target.name}？`)) return;
-      emitWithAck("player:submit-witch-action", {
+      emitCommandWithAck("player:submit-witch-action", {
         actionId: state.actionId,
         useAntidote: false,
         poisonTargetId: target.id,
@@ -277,7 +311,7 @@ function renderGameState(state) {
     showGameView("seer-view");
     renderTargets("seer-targets", state.targets, target => {
       if (!confirm(`确定查验 ${target.seat}号 ${target.name}？`)) return;
-      emitWithAck("player:submit-seer-target", {
+      emitCommandWithAck("player:submit-seer-target", {
         actionId: state.actionId,
         targetPlayerId: target.id,
       });
@@ -297,7 +331,7 @@ function renderGameState(state) {
     showGameView("guard-view");
     renderTargets("guard-targets", state.targets, target => {
       if (!confirm(`确定保护 ${target.seat}号 ${target.name}？`)) return;
-      emitWithAck("player:submit-guard-target", {
+      emitCommandWithAck("player:submit-guard-target", {
         actionId: state.actionId,
         targetPlayerId: target.id,
       });
@@ -309,7 +343,7 @@ function renderGameState(state) {
     showGameView("hunter-view");
     renderTargets("hunter-targets", state.targets, target => {
       if (!confirm(`确定带走 ${target.seat}号 ${target.name}？`)) return;
-      emitWithAck("player:submit-hunter-execution", {
+      emitCommandWithAck("player:submit-hunter-execution", {
         actionId: state.actionId,
         targetPlayerId: target.id,
       });
@@ -357,7 +391,7 @@ function renderGameState(state) {
       $("vote-submitted").classList.add("hidden");
       renderTargets("vote-targets", state.targets, target => {
         if (!confirm(`确定投票放逐 ${target.seat}号 ${target.name}？`)) return;
-        emitWithAck("player:submit-vote", { actionId: state.actionId, targetId: target.id });
+        emitCommandWithAck("player:submit-vote", { actionId: state.actionId, targetId: target.id });
       }, "danger");
     }
     return;
@@ -373,7 +407,7 @@ function renderGameState(state) {
       $("pk-submitted").classList.add("hidden");
       renderTargets("pk-targets", state.targets, target => {
         if (!confirm(`确定投票放逐 ${target.seat}号 ${target.name}？`)) return;
-        emitWithAck("player:submit-vote", { actionId: state.actionId, targetId: target.id });
+        emitCommandWithAck("player:submit-vote", { actionId: state.actionId, targetId: target.id });
       }, "danger");
     }
     return;
@@ -908,13 +942,13 @@ $("deal-roles").addEventListener("click", () => {
 });
 $("start-night").addEventListener("click", () => {
   if (!confirm("确定开始夜晚？所有玩家请闭眼。")) return;
-  emitWithAck("host:start-night", {});
+  emitCommandWithAck("host:start-night", {});
 });
 $("close-voting").addEventListener("click", () => {
   if (!confirm("确定关闭投票？")) return;
-  emitWithAck("host:close-voting", {});
+  emitCommandWithAck("host:close-voting", {});
 });
-$("begin-night-start").addEventListener("click", () => emitWithAck("host:begin-night-start", {}));
+$("begin-night-start").addEventListener("click", () => emitCommandWithAck("host:begin-night-start", {}));
 $("restart-game").addEventListener("click", () => {
   if (!confirm("确定重新开始游戏？所有进度将重置，重新随机发牌。")) return;
   emitWithAck("host:restart-game", {});
@@ -926,11 +960,11 @@ $("peek-role").addEventListener("click", () => {
 
 // ── Player actions ─────────────────────────────────────────────────────────
 $("confirm-role").addEventListener("click", () => {
-  emitWithAck("player:confirm-role", { actionId: currentGameState?.actionId });
+  emitCommandWithAck("player:confirm-role", { actionId: currentGameState?.actionId });
 });
 $("use-antidote").addEventListener("click", () => {
   if (!confirm("确定使用解药？本晚将不能再使用毒药。")) return;
-  emitWithAck("player:submit-witch-action", {
+  emitCommandWithAck("player:submit-witch-action", {
     actionId: currentGameState?.actionId,
     useAntidote: true,
     poisonTargetId: null,
@@ -945,32 +979,32 @@ $("show-poison").addEventListener("click", () => {
 $("cancel-poison").addEventListener("click", () => renderGameState(currentGameState));
 $("use-no-potion").addEventListener("click", () => {
   if (!confirm("确定本晚不使用任何药物？")) return;
-  emitWithAck("player:submit-witch-action", {
+  emitCommandWithAck("player:submit-witch-action", {
     actionId: currentGameState?.actionId,
     useAntidote: false,
     poisonTargetId: null,
   });
 });
 $("confirm-seer-result").addEventListener("click", () => {
-  emitWithAck("player:confirm-seer-result", { actionId: currentGameState?.actionId });
+  emitCommandWithAck("player:confirm-seer-result", { actionId: currentGameState?.actionId });
 });
 $("wolf-no-kill").addEventListener("click", () => {
   if (!confirm("确定今晚不击杀任何玩家？")) return;
-  emitWithAck("player:submit-wolf-target", {
+  emitCommandWithAck("player:submit-wolf-target", {
     actionId: currentGameState?.actionId,
     targetPlayerId: null,
   });
 });
 $("guard-no-protection").addEventListener("click", () => {
   if (!confirm("确定今晚不守护任何玩家？")) return;
-  emitWithAck("player:submit-guard-target", {
+  emitCommandWithAck("player:submit-guard-target", {
     actionId: currentGameState?.actionId,
     targetPlayerId: null,
   });
 });
 $("hunter-no-shot").addEventListener("click", () => {
   if (!confirm("确定放弃开枪？")) return;
-  emitWithAck("player:submit-hunter-execution", {
+  emitCommandWithAck("player:submit-hunter-execution", {
     actionId: currentGameState?.actionId,
     targetPlayerId: null,
   });

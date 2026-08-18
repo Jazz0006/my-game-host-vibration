@@ -14,7 +14,8 @@ import {
 } from "./domain/game.js";
 import {
   runHostCommand,
-  runPlayerCommand,
+  runHostCommandIdempotent,
+  runPlayerCommandIdempotent,
 } from "./runtime/node/werewolfCommandFacade.js";
 import {
   acknowledgePrompt,
@@ -247,6 +248,13 @@ function ruleError(ack: BasicAck, error: unknown): void {
     ok: false,
     message: error instanceof GameRuleError ? error.message : "操作失败，请重试",
   });
+}
+
+function requiredCommandId(data: { commandId?: string }, ack: BasicAck): string | null {
+  const commandId = data.commandId?.trim();
+  if (commandId) return commandId;
+  ack({ ok: false, message: "缺少有效的 commandId，请重试" });
+  return null;
 }
 
 export function createGameServer() {
@@ -577,15 +585,17 @@ export function createGameServer() {
       ack({ ok: true });
     });
 
-    socket.on("player:confirm-role", (data: { actionId?: string }, ack: BasicAck) => {
+    socket.on("player:confirm-role", async (data: { commandId?: string; actionId?: string }, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+      const commandId = requiredCommandId(data, ack);
+      if (!commandId) return;
       try {
-        runPlayerCommand(membership.room, membership.player.id, {
+        const { replayed } = await runPlayerCommandIdempotent(membership.room, membership.player.id, commandId, {
           type: "confirmRole",
           ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
         });
-        broadcastRoom(io, membership.room);
+        if (!replayed) broadcastRoom(io, membership.room);
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);
@@ -594,16 +604,18 @@ export function createGameServer() {
 
     socket.on(
       "player:submit-wolf-target",
-      (data: { actionId?: string; targetPlayerId?: string | null }, ack: BasicAck) => {
+      async (data: { commandId?: string; actionId?: string; targetPlayerId?: string | null }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+        const commandId = requiredCommandId(data, ack);
+        if (!commandId) return;
         try {
-          const outcome = runPlayerCommand(membership.room, membership.player.id, {
+          const { outcome, replayed } = await runPlayerCommandIdempotent(membership.room, membership.player.id, commandId, {
             type: "submitWolfTarget",
             ...(data.targetPlayerId === undefined ? {} : { targetPlayerId: data.targetPlayerId }),
             ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
           });
-          if (outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
+          if (!replayed && outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
           ack({ ok: true });
         } catch (error) {
           ruleError(ack, error);
@@ -613,20 +625,22 @@ export function createGameServer() {
 
     socket.on(
       "player:submit-witch-action",
-      (
-        data: { actionId?: string; useAntidote?: boolean; poisonTargetId?: string | null },
+      async (
+        data: { commandId?: string; actionId?: string; useAntidote?: boolean; poisonTargetId?: string | null },
         ack: BasicAck,
       ) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+        const commandId = requiredCommandId(data, ack);
+        if (!commandId) return;
         try {
-          const outcome = runPlayerCommand(membership.room, membership.player.id, {
+          const { outcome, replayed } = await runPlayerCommandIdempotent(membership.room, membership.player.id, commandId, {
             type: "submitWitchAction",
             ...(data.useAntidote === undefined ? {} : { useAntidote: data.useAntidote }),
             ...(data.poisonTargetId === undefined ? {} : { poisonTargetId: data.poisonTargetId }),
             ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
           });
-          if (outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
+          if (!replayed && outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
           ack({ ok: true });
         } catch (error) {
           ruleError(ack, error);
@@ -636,16 +650,18 @@ export function createGameServer() {
 
     socket.on(
       "player:submit-seer-target",
-      (data: { actionId?: string; targetPlayerId?: string }, ack: BasicAck) => {
+      async (data: { commandId?: string; actionId?: string; targetPlayerId?: string }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+        const commandId = requiredCommandId(data, ack);
+        if (!commandId) return;
         try {
-          runPlayerCommand(membership.room, membership.player.id, {
+          const { replayed } = await runPlayerCommandIdempotent(membership.room, membership.player.id, commandId, {
             type: "submitSeerTarget",
             ...(data.targetPlayerId === undefined ? {} : { targetPlayerId: data.targetPlayerId }),
             ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
           });
-          broadcastRoom(io, membership.room);
+          if (!replayed) broadcastRoom(io, membership.room);
           ack({ ok: true });
         } catch (error) {
           ruleError(ack, error);
@@ -653,15 +669,17 @@ export function createGameServer() {
       },
     );
 
-    socket.on("player:confirm-seer-result", (data: { actionId?: string }, ack: BasicAck) => {
+    socket.on("player:confirm-seer-result", async (data: { commandId?: string; actionId?: string }, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+      const commandId = requiredCommandId(data, ack);
+      if (!commandId) return;
       try {
-        const outcome = runPlayerCommand(membership.room, membership.player.id, {
+        const { outcome, replayed } = await runPlayerCommandIdempotent(membership.room, membership.player.id, commandId, {
           type: "confirmSeerResult",
           ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
         });
-        if (outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
+        if (!replayed && outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);
@@ -670,16 +688,18 @@ export function createGameServer() {
 
     socket.on(
       "player:submit-guard-target",
-      (data: { actionId?: string; targetPlayerId?: string | null }, ack: BasicAck) => {
+      async (data: { commandId?: string; actionId?: string; targetPlayerId?: string | null }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+        const commandId = requiredCommandId(data, ack);
+        if (!commandId) return;
         try {
-          const outcome = runPlayerCommand(membership.room, membership.player.id, {
+          const { outcome, replayed } = await runPlayerCommandIdempotent(membership.room, membership.player.id, commandId, {
             type: "submitGuardTarget",
             ...(data.targetPlayerId === undefined ? {} : { targetPlayerId: data.targetPlayerId }),
             ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
           });
-          if (outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
+          if (!replayed && outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
           ack({ ok: true });
         } catch (error) {
           ruleError(ack, error);
@@ -689,16 +709,18 @@ export function createGameServer() {
 
     socket.on(
       "player:submit-hunter-execution",
-      (data: { actionId?: string; targetPlayerId?: string | null }, ack: BasicAck) => {
+      async (data: { commandId?: string; actionId?: string; targetPlayerId?: string | null }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+        const commandId = requiredCommandId(data, ack);
+        if (!commandId) return;
         try {
-          const outcome = runPlayerCommand(membership.room, membership.player.id, {
+          const { outcome, replayed } = await runPlayerCommandIdempotent(membership.room, membership.player.id, commandId, {
             type: "submitHunterExecution",
             ...(data.targetPlayerId === undefined ? {} : { targetPlayerId: data.targetPlayerId }),
             ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
           });
-          if (outcome.kind === "hunterResolved") {
+          if (!replayed && outcome.kind === "hunterResolved") {
             const { game } = membership.room;
             if (game.phase === "game_over") {
               broadcastRoom(io, membership.room);
@@ -718,13 +740,15 @@ export function createGameServer() {
       },
     );
 
-    socket.on("host:start-night", (_data: unknown, ack: BasicAck) => {
+    socket.on("host:start-night", async (data: { commandId?: string }, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以开始夜晚" });
       if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+      const commandId = requiredCommandId(data, ack);
+      if (!commandId) return;
       try {
-        const outcome = runHostCommand(membership.room, { type: "startNight" });
-        if (outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
+        const { outcome, replayed } = await runHostCommandIdempotent(membership.room, commandId, { type: "startNight" });
+        if (!replayed && outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);
@@ -733,20 +757,23 @@ export function createGameServer() {
 
     socket.on(
       "player:submit-vote",
-      (data: { actionId?: string; targetId?: string }, ack: BasicAck) => {
+      async (data: { commandId?: string; actionId?: string; targetId?: string }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+        const commandId = requiredCommandId(data, ack);
+        if (!commandId) return;
         try {
-          const outcome = runPlayerCommand(
+          const { outcome, replayed } = await runPlayerCommandIdempotent(
             membership.room,
             membership.player.id,
+            commandId,
             {
               type: "submitVote",
               targetId: data.targetId ?? "",
               actionId: data.actionId ?? "",
             },
           );
-          if (outcome.kind === "vote" && outcome.changed) {
+          if (!replayed && outcome.kind === "vote" && outcome.changed) {
             broadcastRoom(io, membership.room);
             if (outcome.allEligibleVoted) {
               const closeOutcome = runHostCommand(membership.room, { type: "closeDayVote" });
@@ -763,14 +790,16 @@ export function createGameServer() {
       },
     );
 
-    socket.on("host:close-voting", (_data: unknown, ack: BasicAck) => {
+    socket.on("host:close-voting", async (data: { commandId?: string }, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以关闭投票" });
       if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+      const commandId = requiredCommandId(data, ack);
+      if (!commandId) return;
       try {
-        const outcome = runHostCommand(membership.room, { type: "closeDayVote" });
-        broadcastRoom(io, membership.room);
-        if (outcome.kind === "voteClosed") {
+        const { outcome, replayed } = await runHostCommandIdempotent(membership.room, commandId, { type: "closeDayVote" });
+        if (!replayed) broadcastRoom(io, membership.room);
+        if (!replayed && outcome.kind === "voteClosed") {
           afterCloseDayVote(io, membership.room, outcome.result);
         }
         ack({ ok: true });
@@ -779,13 +808,15 @@ export function createGameServer() {
       }
     });
 
-    socket.on("host:begin-night-start", (_data: unknown, ack: BasicAck) => {
+    socket.on("host:begin-night-start", async (data: { commandId?: string }, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以操作" });
       if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
+      const commandId = requiredCommandId(data, ack);
+      if (!commandId) return;
       try {
-        runHostCommand(membership.room, { type: "beginNightStart" });
-        broadcastRoom(io, membership.room);
+        const { replayed } = await runHostCommandIdempotent(membership.room, commandId, { type: "beginNightStart" });
+        if (!replayed) broadcastRoom(io, membership.room);
         ack({ ok: true });
       } catch (error) {
         ruleError(ack, error);
