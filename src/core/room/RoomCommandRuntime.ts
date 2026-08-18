@@ -36,13 +36,13 @@ export class RoomCommandRuntime<
     }
   }
 
-  async execute(
+  async execute<TOutcome extends TResult>(
     room: TRoom,
     scope: string,
     commandId: string,
-    mutation: () => TResult | Promise<TResult>,
+    mutation: () => TOutcome | Promise<TOutcome>,
     options: RoomCommandExecutionOptions = {},
-  ): Promise<RoomCommandExecution<TResult>> {
+  ): Promise<RoomCommandExecution<TOutcome>> {
     const scopedCommandId = this.scopedCommandId(scope, commandId);
     const ledger = this.commandLedger(room);
     const execution = await ledger.execute(scopedCommandId, mutation);
@@ -58,7 +58,7 @@ export class RoomCommandRuntime<
 
     room.commandReceipts = ledger.entries();
     return {
-      outcome: execution.result,
+      outcome: execution.result as TOutcome,
       replayed: execution.replayed,
     };
   }
