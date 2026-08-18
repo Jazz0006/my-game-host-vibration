@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { configFromPlayerCount } from "../src/domain/game.js";
+import { onlineActingPlayers } from "../src/runtime/node/hostRecovery.js";
 import {
   actingPlayerIds,
   createWerewolfGame,
@@ -51,54 +52,66 @@ function prepareActiveInteraction(currentRoom: RuntimeRoom): string[] {
 }
 
 describe("C4.1 host recovery runtime", () => {
-  it("dedupes a retried host reminder without mutating authoritative game state", async () => {
+  it("projects only online current actors for reminder delivery", () => {
     const currentRoom = room();
     const actors = prepareActiveInteraction(currentRoom);
+    const offlineActor = currentRoom.players.find(player => actors.includes(player.id));
+    expect(offlineActor).toBeDefined();
+
+    offlineActor!.connected = false;
+    offlineActor!.socketId = null;
+
+    const onlineActors = onlineActingPlayers(currentRoom);
+    expect(onlineActors.map(player => player.id)).not.toContain(offlineActor!.id);
+    expect(onlineActors.every(player => actors.includes(player.id))).toBe(true);
+    expect(onlineActors.every(player => player.connected && player.socketId)).toBe(true);
+  });
+
+  it("dedupes a retried host reminder without mutating authoritative game state", async () => {
+    const currentRoom = room();
+    prepareActiveInteraction(currentRoom);
     const gameBefore = JSON.stringify(currentRoom.game);
     let deliveries = 0;
+
+    const deliver = () => {
+      deliveries += 1;
+      return {
+        kind: "hostRecoveryReminder" as const,
+        actorPlayerIds: onlineActingPlayers(currentRoom).map(player => player.id),
+      };
+    };
 
     const first = await runHostRecoveryCommandIdempotent(
       currentRoom,
       "cmd-resend-current-action",
-      () => {
-        deliveries += 1;
-        return { kind: "hostRecoveryReminder", actorPlayerIds: actors };
-      },
+      deliver,
     );
 
-    expect(first).toEqual({
-      outcome: { kind: "hostRecoveryReminder", actorPlayerIds: actors },
-      replayed: false,
-    });
+    expect(first.replayed).toBe(false);
+    expect(first.outcome.kind).toBe("hostRecoveryReminder");
     expect(deliveries).toBe(1);
     expect(JSON.stringify(currentRoom.game)).toBe(gameBefore);
 
     const retry = await runHostRecoveryCommandIdempotent(
       currentRoom,
       "cmd-resend-current-action",
-      () => {
-        deliveries += 1;
-        return { kind: "hostRecoveryReminder", actorPlayerIds: actors };
-      },
+      deliver,
     );
 
-    expect(retry).toEqual({
-      outcome: { kind: "hostRecoveryReminder", actorPlayerIds: actors },
-      replayed: true,
-    });
+    expect(retry).toEqual({ outcome: first.outcome, replayed: true });
     expect(deliveries).toBe(1);
     expect(JSON.stringify(currentRoom.game)).toBe(gameBefore);
     expect(currentRoom.commandReceipts).toEqual([
       {
         commandId: "host:cmd-resend-current-action",
-        result: { kind: "hostRecoveryReminder", actorPlayerIds: actors },
+        result: first.outcome,
       },
     ]);
   });
 
   it("treats a new commandId as a deliberate second reminder", async () => {
     const currentRoom = room();
-    const actors = prepareActiveInteraction(currentRoom);
+    prepareActiveInteraction(currentRoom);
     let deliveries = 0;
 
     for (const commandId of ["cmd-remind-1", "cmd-remind-2"]) {
@@ -107,7 +120,10 @@ describe("C4.1 host recovery runtime", () => {
         commandId,
         () => {
           deliveries += 1;
-          return { kind: "hostRecoveryReminder", actorPlayerIds: actors };
+          return {
+            kind: "hostRecoveryReminder",
+            actorPlayerIds: onlineActingPlayers(currentRoom).map(player => player.id),
+          };
         },
       );
       expect(result.replayed).toBe(false);
