@@ -20,6 +20,34 @@ describe("C3 idempotent command ledger", () => {
     expect(mutations).toBe(1);
   });
 
+  it("shares one in-flight mutation when concurrent retries use the same commandId", async () => {
+    const ledger = new IdempotentCommandLedger<{ revision: number }>();
+    let mutations = 0;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+
+    const firstPromise = ledger.execute("cmd-concurrent", async () => {
+      mutations += 1;
+      await gate;
+      return { revision: mutations };
+    });
+    const retryPromise = ledger.execute("cmd-concurrent", async () => {
+      mutations += 1;
+      return { revision: mutations };
+    });
+
+    await Promise.resolve();
+    expect(mutations).toBe(1);
+    release();
+
+    const [first, retry] = await Promise.all([firstPromise, retryPromise]);
+    expect(first).toEqual({ result: { revision: 1 }, replayed: false });
+    expect(retry).toEqual({ result: { revision: 1 }, replayed: true });
+    expect(mutations).toBe(1);
+  });
+
   it("does not remember a command when the mutation fails", async () => {
     const ledger = new IdempotentCommandLedger<string>();
     let attempts = 0;
