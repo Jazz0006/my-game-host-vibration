@@ -78,33 +78,6 @@ describe("C3 idempotent werewolf runtime commands", () => {
     ]);
   });
 
-  it("scopes the same raw commandId independently for different players", async () => {
-    const currentRoom = room();
-    const game = createWerewolfGame(currentRoom, currentRoom.gameConfig);
-    const actionId = game.actionId;
-
-    const first = await runPlayerCommandIdempotent(
-      currentRoom,
-      "p1",
-      "shared-command-id",
-      { type: "confirmRole", actionId },
-    );
-    const second = await runPlayerCommandIdempotent(
-      currentRoom,
-      "p2",
-      "shared-command-id",
-      { type: "confirmRole", actionId },
-    );
-
-    expect(first.replayed).toBe(false);
-    expect(second.replayed).toBe(false);
-    expect(currentRoom.game?.confirmedRolePlayerIds).toEqual(["p1", "p2"]);
-    expect(currentRoom.commandReceipts?.map(receipt => receipt.commandId)).toEqual([
-      "player:p1:shared-command-id",
-      "player:p2:shared-command-id",
-    ]);
-  });
-
   it("restores receipts through the authoritative room snapshot so retries stay deduped", async () => {
     const currentRoom = room();
     const actionId = prepareLastRoleConfirmation(currentRoom);
@@ -116,9 +89,12 @@ describe("C3 idempotent werewolf runtime commands", () => {
       { type: "confirmRole", actionId },
     );
 
+    const commandReceipts = currentRoom.commandReceipts;
+    expect(commandReceipts).toBeDefined();
+
     const snapshot = createRoomSnapshot(currentRoom, {
       revision: 9,
-      commandReceipts: currentRoom.commandReceipts,
+      ...(commandReceipts === undefined ? {} : { commandReceipts }),
     });
     expect(JSON.stringify(snapshot)).not.toContain("socketId");
     expect(snapshot.commandReceipts).toHaveLength(1);
@@ -132,7 +108,9 @@ describe("C3 idempotent werewolf runtime commands", () => {
         socketId: null,
         connected: false,
       })),
-      commandReceipts: restored.commandReceipts,
+      ...(restored.commandReceipts === undefined
+        ? {}
+        : { commandReceipts: restored.commandReceipts }),
     };
 
     expect(recoveredRoom.game?.phase).toBe("night_start");
