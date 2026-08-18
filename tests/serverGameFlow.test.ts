@@ -13,6 +13,8 @@ const IDEMPOTENT_SOCKET_EVENTS = new Set([
   "player:submit-guard-target",
   "player:submit-hunter-execution",
   "player:submit-vote",
+  "host:start-game",
+  "host:restart-game",
   "host:start-night",
   "host:close-voting",
   "host:begin-night-start",
@@ -242,5 +244,60 @@ describe("five-player Socket.IO game flow", () => {
       sockets[4]!.emit("player:confirm-role", { actionId: dealt[4]!.actionId }, resolve);
     });
     expect(missingCommandId).toEqual({ ok: false, message: "缺少有效的 commandId，请重试" });
+  });
+
+  it("dedupes host start/restart lifecycle retries without recreating game state", async () => {
+    const sockets = await Promise.all(Array.from({ length: 5 }, () => connect()));
+    const host = sockets[0]!;
+    const hostSession = await emitAck<JoinResult>(host, "host:create-room", { name: "房主" });
+    for (let index = 1; index < sockets.length; index += 1) {
+      await emitAck<JoinResult>(sockets[index]!, "player:join-room", {
+        roomId: hostSession.roomId,
+        name: `玩家${index + 1}`,
+      });
+    }
+
+    expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {
+      commandId: "start-game-retry",
+    })).toEqual({ ok: true });
+
+    const room = game.rooms.get(hostSession.roomId)!;
+    const firstStartActionId = room.game?.actionId;
+    const firstStartRoles = JSON.stringify(room.game?.roles);
+
+    let startReplayBroadcasts = 0;
+    const countStartReplayBroadcast = () => { startReplayBroadcasts += 1; };
+    host.on("room:state", countStartReplayBroadcast);
+    expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {
+      commandId: "start-game-retry",
+    })).toEqual({ ok: true });
+    await new Promise(resolve => setTimeout(resolve, 25));
+    host.off("room:state", countStartReplayBroadcast);
+
+    expect(startReplayBroadcasts).toBe(0);
+    expect(room.game?.actionId).toBe(firstStartActionId);
+    expect(JSON.stringify(room.game?.roles)).toBe(firstStartRoles);
+
+    expect(await emitAck<{ ok: boolean }>(host, "host:restart-game", {
+      commandId: "restart-game-retry",
+    })).toEqual({ ok: true });
+    const firstRestartActionId = room.game?.actionId;
+    const firstRestartRoles = JSON.stringify(room.game?.roles);
+
+    let restartReplayBroadcasts = 0;
+    const countRestartReplayBroadcast = () => { restartReplayBroadcasts += 1; };
+    host.on("room:state", countRestartReplayBroadcast);
+    expect(await emitAck<{ ok: boolean }>(host, "host:restart-game", {
+      commandId: "restart-game-retry",
+    })).toEqual({ ok: true });
+    await new Promise(resolve => setTimeout(resolve, 25));
+    host.off("room:state", countRestartReplayBroadcast);
+
+    expect(restartReplayBroadcasts).toBe(0);
+    expect(room.game?.actionId).toBe(firstRestartActionId);
+    expect(JSON.stringify(room.game?.roles)).toBe(firstRestartRoles);
+    expect(room.commandReceipts).toEqual([
+      { commandId: "host:restart-game-retry", result: { kind: "broadcast" } },
+    ]);
   });
 });
