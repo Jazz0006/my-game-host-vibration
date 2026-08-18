@@ -117,14 +117,15 @@ export function resolveMechanicalWolfAbilityProfile<
 
   const sourceDefinition = registry[source.sourceRoleId];
   const abilityIsAvailable = game.nightNumber >= source.availableFromNightNumber;
+  const borrowedInteraction = abilityIsAvailable
+    ? projectBorrowedInteraction(sourceDefinition?.interaction)
+    : undefined;
 
   return {
     assignedRoleId,
     effectiveTeam: mechanicalWolfTeam,
     abilitySource: source,
     perceivedRoleId: source.sourceRoleId,
-    ...(abilityIsAvailable && sourceDefinition?.interaction
-      ? { borrowedInteraction: projectBorrowedInteraction(sourceDefinition.interaction) }
-      : {}),
+    ...(borrowedInteraction === undefined ? {} : { borrowedInteraction }),
   };
 }
