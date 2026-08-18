@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Android-first in-person Werewolf game host using private vibration prompts",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/timedServer.ts",
+    "start": "tsx src/timedServer.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "verify:flow": "node scripts/verify-flow.mjs",
