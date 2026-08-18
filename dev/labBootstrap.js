@@ -14,7 +14,7 @@ try {
         const recoveryRoom = document.querySelector("#recovery-test-room");
         if (recoveryRoom) recoveryRoom.value = state.roomId;
         const recoveryStatus = document.querySelector("#recovery-test-status");
-        if (recoveryStatus) recoveryStatus.textContent = \`\${player.name} 已模拟掉线；请在房主端生成恢复码，然后在这里接管。\`;
+        if (recoveryStatus) recoveryStatus.textContent = player.name + " 已模拟掉线；请在房主端生成恢复码，然后在这里接管。";
       }, "compact"));
     }
     card.append(head, detail, renderGameControls(player), recoveryActions);
@@ -25,12 +25,19 @@ try {
     .replace("\\d{6}", "\\d{4}")
     .replace("请输入正确的 6 位房间号。", "请输入正确的 4 位房间号。")
     .replace(
+      "socket.timeout(5000).emit(event, payload,",
+      "socket.timeout(5000).emit(event, { ...payload, commandId: crypto.randomUUID() },",
+    )
+    .replace(
       "    card.append(head, detail, renderGameControls(player));\n    return card;\n",
       disconnectInjection,
     );
 
   if (!source.includes("/^\\d{4}$/u")) {
     throw new Error("实验室 4 位房间号适配失败");
+  }
+  if (!source.includes("commandId: crypto.randomUUID()")) {
+    throw new Error("实验室 commandId 适配失败");
   }
   if (!source.includes("模拟掉线")) {
     throw new Error("实验室掉线测试控件注入失败");
