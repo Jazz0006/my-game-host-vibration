@@ -74,7 +74,34 @@ describe("C3 idempotent werewolf runtime commands", () => {
     expect(currentRoom.game?.phase).toBe("night_start");
     expect(currentRoom.game?.actionId).toBe(actionIdAfterFirst);
     expect(currentRoom.commandReceipts).toEqual([
-      { commandId: "cmd-confirm-p5", result: { kind: "broadcast" } },
+      { commandId: "player:p5:cmd-confirm-p5", result: { kind: "broadcast" } },
+    ]);
+  });
+
+  it("scopes the same raw commandId independently for different players", async () => {
+    const currentRoom = room();
+    const game = createWerewolfGame(currentRoom, currentRoom.gameConfig);
+    const actionId = game.actionId;
+
+    const first = await runPlayerCommandIdempotent(
+      currentRoom,
+      "p1",
+      "shared-command-id",
+      { type: "confirmRole", actionId },
+    );
+    const second = await runPlayerCommandIdempotent(
+      currentRoom,
+      "p2",
+      "shared-command-id",
+      { type: "confirmRole", actionId },
+    );
+
+    expect(first.replayed).toBe(false);
+    expect(second.replayed).toBe(false);
+    expect(currentRoom.game?.confirmedRolePlayerIds).toEqual(["p1", "p2"]);
+    expect(currentRoom.commandReceipts?.map(receipt => receipt.commandId)).toEqual([
+      "player:p1:shared-command-id",
+      "player:p2:shared-command-id",
     ]);
   });
 
