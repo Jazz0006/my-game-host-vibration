@@ -108,8 +108,8 @@ export function createRoomSnapshot<
 
 /**
  * Restores platform-neutral authoritative state. Runtime connection state is
- * deliberately not reconstructed here; the runtime must rebind it after C1
- * identity authentication.
+ * deliberately not reconstructed here; after restoration each runtime must
+ * rebind socket/client transport state through the C1 identity contract.
  */
 export function restoreRoomSnapshot<
   TGameState,
