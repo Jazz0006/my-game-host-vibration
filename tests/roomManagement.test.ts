@@ -208,7 +208,9 @@ describe("room member management", () => {
         name,
       });
     }
-    expect(await emitAck<Ack>(host, "host:start-game", {})).toEqual({ ok: true });
+    expect(await emitAck<Ack>(host, "host:start-game", {
+      commandId: "close-room-start-game",
+    })).toEqual({ ok: true });
     expect(await emitAck<Ack>(player, "host:close-room", {})).toEqual({
       ok: false,
       message: "只有房主可以关闭房间",
@@ -286,7 +288,9 @@ describe("room member management", () => {
       });
     }
 
-    expect(await emitAck<Ack>(host, "host:start-game", {})).toEqual({ ok: true });
+    expect(await emitAck<Ack>(host, "host:start-game", {
+      commandId: "seat-lock-start-game",
+    })).toEqual({ ok: true });
     expect(await emitAck<Ack>(host, "host:move-player-seat", {
       targetPlayerId: playerSession.playerId,
       insertIndex: 0,
