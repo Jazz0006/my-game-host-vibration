@@ -21,6 +21,7 @@ export type RoomSnapshot<
   TGameConfig = unknown,
   TRuleState = unknown,
   TPendingInteraction = unknown,
+  TCommandReceipt = unknown,
 > = {
   revision: number;
   metadata: RoomSnapshotMetadata;
@@ -29,12 +30,19 @@ export type RoomSnapshot<
   game?: TGameState;
   ruleState?: TRuleState;
   pendingInteraction?: TPendingInteraction;
+  /** Bounded C3 dedupe receipts; never an unbounded event history. */
+  commandReceipts?: TCommandReceipt[];
 };
 
-export type CreateRoomSnapshotOptions<TRuleState, TPendingInteraction> = {
+export type CreateRoomSnapshotOptions<
+  TRuleState,
+  TPendingInteraction,
+  TCommandReceipt = unknown,
+> = {
   revision: number;
   ruleState?: TRuleState;
   pendingInteraction?: TPendingInteraction;
+  commandReceipts?: TCommandReceipt[];
 };
 
 export type RestoredRoomSnapshot<
@@ -42,11 +50,13 @@ export type RestoredRoomSnapshot<
   TGameConfig,
   TRuleState,
   TPendingInteraction,
+  TCommandReceipt = unknown,
 > = {
   revision: number;
   room: RoomState<TGameState, TGameConfig, RoomPlayer>;
   ruleState?: TRuleState;
   pendingInteraction?: TPendingInteraction;
+  commandReceipts?: TCommandReceipt[];
 };
 
 function assertRoomRevision(revision: number): void {
@@ -67,8 +77,8 @@ export function nextRoomRevision(currentRevision: number): number {
  * Projects a room into the platform-neutral data required to recover it.
  * Extra runtime fields on players (for example socketId/connected) are dropped.
  *
- * Game/config/rule/interaction values are treated as immutable snapshot inputs;
- * the eventual persistence adapter is responsible for serialization/cloning.
+ * Game/config/rule/interaction/receipt values are treated as immutable snapshot
+ * inputs; the eventual persistence adapter is responsible for serialization.
  */
 export function createRoomSnapshot<
   TGameState,
@@ -76,10 +86,11 @@ export function createRoomSnapshot<
   TPlayer extends RoomPlayer,
   TRuleState = unknown,
   TPendingInteraction = unknown,
+  TCommandReceipt = unknown,
 >(
   room: RoomState<TGameState, TGameConfig, TPlayer>,
-  options: CreateRoomSnapshotOptions<TRuleState, TPendingInteraction>,
-): RoomSnapshot<TGameState, TGameConfig, TRuleState, TPendingInteraction> {
+  options: CreateRoomSnapshotOptions<TRuleState, TPendingInteraction, TCommandReceipt>,
+): RoomSnapshot<TGameState, TGameConfig, TRuleState, TPendingInteraction, TCommandReceipt> {
   assertRoomRevision(options.revision);
 
   return {
@@ -103,6 +114,9 @@ export function createRoomSnapshot<
     ...(options.pendingInteraction === undefined
       ? {}
       : { pendingInteraction: options.pendingInteraction }),
+    ...(options.commandReceipts === undefined
+      ? {}
+      : { commandReceipts: options.commandReceipts }),
   };
 }
 
@@ -116,9 +130,22 @@ export function restoreRoomSnapshot<
   TGameConfig,
   TRuleState = unknown,
   TPendingInteraction = unknown,
+  TCommandReceipt = unknown,
 >(
-  snapshot: RoomSnapshot<TGameState, TGameConfig, TRuleState, TPendingInteraction>,
-): RestoredRoomSnapshot<TGameState, TGameConfig, TRuleState, TPendingInteraction> {
+  snapshot: RoomSnapshot<
+    TGameState,
+    TGameConfig,
+    TRuleState,
+    TPendingInteraction,
+    TCommandReceipt
+  >,
+): RestoredRoomSnapshot<
+  TGameState,
+  TGameConfig,
+  TRuleState,
+  TPendingInteraction,
+  TCommandReceipt
+> {
   assertRoomRevision(snapshot.revision);
 
   return {
@@ -136,5 +163,8 @@ export function restoreRoomSnapshot<
     ...(snapshot.pendingInteraction === undefined
       ? {}
       : { pendingInteraction: snapshot.pendingInteraction }),
+    ...(snapshot.commandReceipts === undefined
+      ? {}
+      : { commandReceipts: snapshot.commandReceipts }),
   };
 }
