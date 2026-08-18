@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import {
+  createRoomSnapshot,
+  restoreRoomSnapshot,
+} from "../src/core/room/RoomSnapshot.js";
 import { configFromPlayerCount } from "../src/domain/game.js";
 import {
   createWerewolfGame,
@@ -74,7 +78,7 @@ describe("C3 idempotent werewolf runtime commands", () => {
     ]);
   });
 
-  it("restores receipts with room state so the same command remains deduped after recovery", async () => {
+  it("restores receipts through the authoritative room snapshot so retries stay deduped", async () => {
     const currentRoom = room();
     const actionId = prepareLastRoleConfirmation(currentRoom);
 
@@ -85,7 +89,25 @@ describe("C3 idempotent werewolf runtime commands", () => {
       { type: "confirmRole", actionId },
     );
 
-    const recoveredRoom = JSON.parse(JSON.stringify(currentRoom)) as RuntimeRoom;
+    const snapshot = createRoomSnapshot(currentRoom, {
+      revision: 9,
+      commandReceipts: currentRoom.commandReceipts,
+    });
+    expect(JSON.stringify(snapshot)).not.toContain("socketId");
+    expect(snapshot.commandReceipts).toHaveLength(1);
+
+    const persisted = JSON.parse(JSON.stringify(snapshot)) as typeof snapshot;
+    const restored = restoreRoomSnapshot(persisted);
+    const recoveredRoom: RuntimeRoom = {
+      ...restored.room,
+      players: restored.room.players.map(player => ({
+        ...player,
+        socketId: null,
+        connected: false,
+      })),
+      commandReceipts: restored.commandReceipts,
+    };
+
     expect(recoveredRoom.game?.phase).toBe("night_start");
     expect(recoveredRoom.commandReceipts).toHaveLength(1);
 
