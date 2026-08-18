@@ -50,7 +50,10 @@ describe("four-digit room code contract", () => {
     expect(recoveryUi).toContain('input.maxLength = 4');
     expect(recoveryUi).toContain('/^\\d{4}$/u');
     expect(labHtml).toContain('maxlength="4"');
-    expect(labBootstrap).toContain('/^\\\\d{4}$/u');
+    expect(labBootstrap).toContain('.replace("\\\\d{6}", "\\\\d{4}")');
+    expect(labBootstrap).toContain('source.includes("/^\\\\d{4}$/u")');
+    expect(labBootstrap).toContain('Function(source)();');
+    expect(labBootstrap).toContain('实验室启动失败');
     expect(labBootstrap).toContain('createButton("模拟掉线"');
     expect(recoveryLab).toContain('/^\\d{4}$/u');
     expect(recoveryLab).toContain('"player:claim-identity-recovery"');
