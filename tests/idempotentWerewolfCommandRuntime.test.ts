@@ -128,25 +128,32 @@ describe("C3 idempotent werewolf runtime commands", () => {
     expect(recoveredRoom.commandReceipts).toHaveLength(1);
   });
 
-  it("does not confuse a new commandId with a retry of an already-applied mutation", async () => {
+  it("treats a different commandId as a new delivery rather than replaying the old receipt", async () => {
     const currentRoom = room();
     const actionId = prepareLastRoleConfirmation(currentRoom);
 
-    await runPlayerCommandIdempotent(
+    const first = await runPlayerCommandIdempotent(
       currentRoom,
       "p5",
       "cmd-original",
       { type: "confirmRole", actionId },
     );
+    expect(first.replayed).toBe(false);
 
-    await expect(
-      runPlayerCommandIdempotent(
-        currentRoom,
-        "p5",
-        "cmd-different",
-        { type: "confirmRole", actionId },
-      ),
-    ).rejects.toThrow();
-    expect(currentRoom.commandReceipts).toHaveLength(1);
+    const actionIdAfterFirst = currentRoom.game?.actionId;
+    const second = await runPlayerCommandIdempotent(
+      currentRoom,
+      "p5",
+      "cmd-different",
+      { type: "confirmRole", actionId },
+    );
+
+    expect(second).toEqual({ outcome: { kind: "broadcast" }, replayed: false });
+    expect(currentRoom.game?.phase).toBe("night_start");
+    expect(currentRoom.game?.actionId).toBe(actionIdAfterFirst);
+    expect(currentRoom.commandReceipts).toEqual([
+      { commandId: "player:p5:cmd-original", result: { kind: "broadcast" } },
+      { commandId: "player:p5:cmd-different", result: { kind: "broadcast" } },
+    ]);
   });
 });
