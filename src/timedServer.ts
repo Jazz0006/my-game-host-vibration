@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Server, Socket } from "socket.io";
-import { GameRuleError } from "./domain/game.js";
+import { configFromPlayerCount, GameRuleError } from "./domain/game.js";
 import {
   InteractionTimeoutCoordinator,
   type InteractionTimeoutClientState,
@@ -15,7 +15,10 @@ import {
   type RuntimeRoom,
 } from "./runtime/node/roomBridge.js";
 import { recoverTimedOutWerewolfInteraction } from "./runtime/node/werewolfInteractionTimeout.js";
-import { runHostCommand } from "./runtime/node/werewolfCommandFacade.js";
+import {
+  runHostCommand,
+  runHostLifecycleMutationIdempotent,
+} from "./runtime/node/werewolfCommandFacade.js";
 import { createGameServer } from "./server.js";
 
 const MIN_PLAYERS = 5;
@@ -23,6 +26,16 @@ const MAX_PLAYERS = 12;
 const TIMER_TICK_MS = 200;
 const EXTENSION_RECEIPT_LIMIT = 128;
 
+const ROLE_CATALOG = [
+  { id: "werewolf", name: "狼人" },
+  { id: "seer", name: "预言家" },
+  { id: "witch", name: "女巫" },
+  { id: "guard", name: "守卫" },
+  { id: "hunter", name: "猎人" },
+  { id: "villager", name: "平民" },
+] as const;
+
+type BasicResult = { ok: true } | { ok: false; message: string };
 type TimeoutConfigResult =
   | { ok: true; timeoutSeconds: number }
   | { ok: false; message: string };
@@ -53,12 +66,39 @@ function publicPlayer(player: RuntimePlayer) {
   };
 }
 
+function lobbyView(room: RuntimeRoom) {
+  return {
+    phase: "lobby",
+    canStart:
+      room.players.length >= MIN_PLAYERS &&
+      room.players.every(player => player.connected),
+    minPlayers: MIN_PLAYERS,
+    maxPlayers: MAX_PLAYERS,
+    confirmedRoles: 0,
+    completedNightSteps: 0,
+    dayNumber: 0,
+    nightNumber: 0,
+    aliveCount: 0,
+    votesRequired: 0,
+    votesCast: 0,
+    pkCandidateIds: [],
+    noKillToday: false,
+    deadPlayerIds: [],
+  };
+}
+
 function roomView(room: RuntimeRoom, viewer: RuntimePlayer) {
   const gameView = roomGameView(room, viewer.isHost);
   return {
     roomId: room.id,
     viewer: { playerId: viewer.id, isHost: viewer.isHost },
     players: room.players.map(publicPlayer),
+    defaultRoleDeck: !room.game
+      ? (room.players.length >= MIN_PLAYERS
+          ? configFromPlayerCount(room.players.length).roleDeck
+          : room.gameConfig.roleDeck)
+      : undefined,
+    roleCatalog: !room.game ? ROLE_CATALOG : undefined,
     game: gameView
       ? {
           ...gameView,
@@ -66,7 +106,7 @@ function roomView(room: RuntimeRoom, viewer: RuntimePlayer) {
           minPlayers: MIN_PLAYERS,
           maxPlayers: MAX_PLAYERS,
         }
-      : undefined,
+      : lobbyView(room),
   };
 }
 
@@ -167,6 +207,16 @@ export function createTimedGameServer(): TimedServer {
     }
   }
 
+  function clearRoomInteractionTimeout(room: RuntimeRoom): void {
+    const cleared = interactionTimeouts.clear(room.id);
+    if (!cleared) return;
+    emitTimeoutState(io, room, cleared.actorPlayerIds, {
+      active: false,
+      actionId: cleared.actionId,
+    });
+    forgetTimeoutDeliveries(room.id, cleared.actionId);
+  }
+
   function syncTimeoutStateToCurrentSockets(
     room: RuntimeRoom,
     actorPlayerIds: readonly string[],
@@ -226,6 +276,47 @@ export function createTimedGameServer(): TimedServer {
           Number(data.timeoutSeconds),
         );
         ack({ ok: true, timeoutSeconds });
+      },
+    );
+
+    socket.on(
+      "host:abort-to-lobby",
+      async (data: { commandId?: string } | undefined, ack: (result: BasicResult) => void) => {
+        const membership = findMembership(rooms, socket.id);
+        if (!membership?.player.isHost) {
+          return ack({ ok: false, message: "只有房主可以中断当前游戏" });
+        }
+
+        const commandId = data?.commandId?.trim();
+        if (!commandId) {
+          return ack({ ok: false, message: "缺少有效的 commandId，请重试" });
+        }
+
+        const { room } = membership;
+        try {
+          const { replayed } = await runHostLifecycleMutationIdempotent(
+            room,
+            commandId,
+            () => {
+              if (!room.game) {
+                throw new GameRuleError("游戏尚未开始");
+              }
+              delete room.game;
+              delete room.activePrompt;
+              room.updatedAt = Date.now();
+              return { kind: "broadcast" };
+            },
+          );
+
+          if (!replayed) {
+            clearRoomInteractionTimeout(room);
+            broadcastCurrentState(io, room);
+            io.to(room.id).emit("game:aborted-to-lobby", { roomId: room.id });
+          }
+          ack({ ok: true });
+        } catch (error) {
+          ack({ ok: false, message: ruleMessage(error) });
+        }
       },
     );
 
@@ -293,14 +384,7 @@ export function createTimedGameServer(): TimedServer {
       const shouldTime = Boolean(room.game && interaction && isTimedSecretInteraction(room));
 
       if (!shouldTime || !room.game || !interaction) {
-        const cleared = interactionTimeouts.clear(room.id);
-        if (cleared) {
-          emitTimeoutState(io, room, cleared.actorPlayerIds, {
-            active: false,
-            actionId: cleared.actionId,
-          });
-          forgetTimeoutDeliveries(room.id, cleared.actionId);
-        }
+        clearRoomInteractionTimeout(room);
         continue;
       }
 
