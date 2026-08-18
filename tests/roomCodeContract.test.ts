@@ -38,11 +38,15 @@ describe("four-digit room code contract", () => {
   });
 
   it("keeps web recovery and the lab on the same four-digit contract", () => {
+    const indexHtml = source("public/index.html");
     const recoveryUi = source("public/recoveryIdentity.js");
     const labHtml = source("dev/lab.html");
     const labBootstrap = source("dev/labBootstrap.js");
     const recoveryLab = source("dev/recoveryLab.js");
 
+    expect(indexHtml).toContain('id="room-input" inputmode="numeric" maxlength="4"');
+    expect(indexHtml).toContain('id="recovery-room-input" inputmode="numeric" maxlength="4"');
+    expect(indexHtml).not.toContain('placeholder="6位房间号"');
     expect(recoveryUi).toContain('input.maxLength = 4');
     expect(recoveryUi).toContain('/^\\d{4}$/u');
     expect(labHtml).toContain('maxlength="4"');
