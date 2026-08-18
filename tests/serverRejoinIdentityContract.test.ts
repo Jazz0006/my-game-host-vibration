@@ -15,6 +15,15 @@ type SessionAck = {
   isHost?: boolean;
 };
 
+type ResumeAck = {
+  ok: true;
+  roomId: string;
+  playerId: string;
+  seat: number;
+  name?: string;
+  isHost: boolean;
+};
+
 type AckFailure = { ok: false; message: string };
 
 function waitFor<T>(socket: ClientSocket, event: string): Promise<T> {
@@ -101,7 +110,7 @@ describe("C1 server rejoin identity contract", () => {
     targetSocket.disconnect();
 
     const replacement = await connect();
-    const resumed = await emitAck<SessionAck | AckFailure>(replacement, "player:resume", {
+    const resumed = await emitAck<ResumeAck | AckFailure>(replacement, "player:resume", {
       roomId: targetSession.roomId,
       playerId: targetSession.playerId,
       resumeToken: targetSession.resumeToken,
