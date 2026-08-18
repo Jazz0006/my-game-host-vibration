@@ -29,7 +29,7 @@ describe("C4.4 interaction timeout coordinator", () => {
     const state = coordinator.ensure("room-1", "action-a", ["p1", "p2"], 1_000).state!;
     const originalDeadline = state.deadlineAt;
 
-    const extended = coordinator.extend("room-1", "action-a", "p2");
+    const extended = coordinator.extend("room-1", "action-a", "p2", 2_000);
     expect(extended.ok).toBe(true);
     if (!extended.ok) return;
     expect(extended.state.deadlineAt).toBe(
@@ -37,10 +37,21 @@ describe("C4.4 interaction timeout coordinator", () => {
     );
     expect(extended.state.extensionCount).toBe(1);
 
-    expect(coordinator.extend("room-1", "action-a", "p1")).toEqual({
+    expect(coordinator.extend("room-1", "action-a", "p1", 3_000)).toEqual({
       ok: false,
       message: "本次行动已经延长过一次",
     });
+  });
+
+  it("rejects an extension once the authoritative deadline has arrived", () => {
+    const coordinator = new InteractionTimeoutCoordinator();
+    const state = coordinator.ensure("room-1", "action-a", ["p1"], 1_000).state!;
+
+    expect(coordinator.extend("room-1", "action-a", "p1", state.deadlineAt)).toEqual({
+      ok: false,
+      message: "当前行动已经结束",
+    });
+    expect(state.extensionCount).toBe(0);
   });
 
   it("can disable automatic timeouts for a room", () => {
