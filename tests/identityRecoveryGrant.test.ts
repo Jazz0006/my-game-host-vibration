@@ -3,6 +3,7 @@ import { SessionTokenService } from "../src/core/session/SessionTokenService.js"
 import { DEFAULT_GAME_CONFIG } from "../src/domain/game.js";
 import { NodeSessionTokenCryptoProvider } from "../src/runtime/node/NodeSessionTokenCryptoProvider.js";
 import {
+  IDENTITY_RECOVERY_MAX_FAILED_ATTEMPTS,
   IDENTITY_RECOVERY_TTL_MS,
   consumeIdentityRecoveryGrant,
   issueIdentityRecoveryGrant,
@@ -11,7 +12,7 @@ import type { RuntimeRoom } from "../src/runtime/node/roomBridge.js";
 
 function room(): RuntimeRoom {
   return {
-    id: "123456",
+    id: "1234",
     gameType: "werewolf",
     players: [
       {
@@ -32,6 +33,13 @@ function room(): RuntimeRoom {
 
 describe("C4.3 identity recovery grants", () => {
   const tokens = new SessionTokenService(new NodeSessionTokenCryptoProvider());
+
+  it("issues a six-digit numeric recovery code", async () => {
+    const targetRoom = room();
+    const grant = await issueIdentityRecoveryGrant(targetRoom, "player-1", tokens, 1000);
+
+    expect(grant.recoveryCode).toMatch(/^\d{6}$/u);
+  });
 
   it("replaces older grants for the same player and consumes the new grant once", async () => {
     const targetRoom = room();
@@ -56,5 +64,23 @@ describe("C4.3 identity recovery grants", () => {
         1000 + IDENTITY_RECOVERY_TTL_MS,
       ),
     ).toBeNull();
+  });
+
+  it("invalidates active grants after repeated wrong guesses", async () => {
+    const targetRoom = room();
+    const grant = await issueIdentityRecoveryGrant(targetRoom, "player-1", tokens, 1000);
+
+    for (let attempt = 0; attempt < IDENTITY_RECOVERY_MAX_FAILED_ATTEMPTS; attempt += 1) {
+      expect(
+        await consumeIdentityRecoveryGrant(
+          targetRoom,
+          String(attempt).padStart(6, "0"),
+          tokens,
+          2000 + attempt,
+        ),
+      ).toBeNull();
+    }
+
+    expect(await consumeIdentityRecoveryGrant(targetRoom, grant.recoveryCode, tokens, 3000)).toBeNull();
   });
 });
