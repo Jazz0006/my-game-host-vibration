@@ -43,7 +43,12 @@ function emitAck<T>(
   });
 }
 
-type JoinResult = { ok: true; roomId: string; playerId: string };
+type JoinResult = {
+  ok: true;
+  roomId: string;
+  playerId: string;
+  resumeToken: string;
+};
 type BasicResult = { ok: boolean; message?: string };
 type GameView = {
   mode: string;
@@ -95,21 +100,24 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     return socket;
   }
 
-  it("warns, permits one extension, and then safely times out the current action", async () => {
+  it("warns, survives resume, permits one extension, and safely times out the current action", async () => {
     const sockets = await Promise.all(Array.from({ length: 5 }, () => connect()));
     const host = sockets[0]!;
+    const sessions: JoinResult[] = [];
     const hostSession = await new Promise<JoinResult>(resolve => {
       host.emit("host:create-room", { name: "房主" }, resolve);
     });
+    sessions.push(hostSession);
 
     for (let index = 1; index < sockets.length; index += 1) {
-      await new Promise<JoinResult>(resolve => {
+      const session = await new Promise<JoinResult>(resolve => {
         sockets[index]!.emit(
           "player:join-room",
           { roomId: hostSession.roomId, name: `玩家${index + 1}` },
           resolve,
         );
       });
+      sessions.push(session);
     }
 
     const configResult = await new Promise<{ ok: boolean; timeoutSeconds?: number }>(resolve => {
@@ -134,6 +142,7 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     const wolfIndex = dealt.findIndex(view => view.role === "werewolf");
     expect(wolfIndex).toBeGreaterThanOrEqual(0);
     const wolf = sockets[wolfIndex]!;
+    const wolfSession = sessions[wolfIndex]!;
     const timeoutStatePromise = waitFor<TimeoutState>(
       wolf,
       "player:interaction-timeout-state",
@@ -147,19 +156,45 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     expect(timeoutState.actionId).toBe(room.game?.actionId);
     expect(timeoutState.canExtend).toBe(true);
 
+    const originalDeadline = timeoutState.deadlineAt;
+    wolf.disconnect();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const resumedWolf = await connect();
+    const resumedTimeoutPromise = waitFor<TimeoutState>(
+      resumedWolf,
+      "player:interaction-timeout-state",
+      state => state.active && state.actionId === timeoutState.actionId,
+    );
+    const resumeResult = await new Promise<BasicResult>(resolve => {
+      resumedWolf.emit(
+        "player:resume",
+        {
+          roomId: wolfSession.roomId,
+          playerId: wolfSession.playerId,
+          resumeToken: wolfSession.resumeToken,
+        },
+        resolve,
+      );
+    });
+    expect(resumeResult.ok).toBe(true);
+    const resumedTimeout = await resumedTimeoutPromise;
+    expect(resumedTimeout.deadlineAt).toBe(originalDeadline);
+    expect(resumedTimeout.canExtend).toBe(true);
+
     const timer = game.interactionTimeouts.get(hostSession.roomId)!;
     timer.warningAt = Date.now() - 1;
     const warning = await waitFor<ActionAlert>(
-      wolf,
+      resumedWolf,
       "player:action-alert",
       alert => alert.timeoutWarning === true,
     );
     expect(warning.actionId).toBe(timeoutState.actionId);
 
-    const originalDeadline = timer.deadlineAt;
+    const deadlineBeforeExtension = timer.deadlineAt;
     const commandId = "same-extension-command";
     const firstExtension = await new Promise<ExtensionResult>(resolve => {
-      wolf.emit(
+      resumedWolf.emit(
         "player:extend-interaction-timeout",
         { commandId, actionId: timeoutState.actionId },
         resolve,
@@ -167,10 +202,10 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     });
     expect(firstExtension.ok).toBe(true);
     expect(firstExtension.canExtend).toBe(false);
-    expect(firstExtension.deadlineAt).toBe(originalDeadline + 30_000);
+    expect(firstExtension.deadlineAt).toBe(deadlineBeforeExtension + 30_000);
 
     const replayedExtension = await new Promise<ExtensionResult>(resolve => {
-      wolf.emit(
+      resumedWolf.emit(
         "player:extend-interaction-timeout",
         { commandId, actionId: timeoutState.actionId },
         resolve,
