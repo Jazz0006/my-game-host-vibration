@@ -70,6 +70,38 @@ describe("C3 idempotent command ledger", () => {
     expect(attempts).toBe(2);
   });
 
+  it("releases a failed in-flight command so a later retry can execute", async () => {
+    const ledger = new IdempotentCommandLedger<string>();
+    let attempts = 0;
+    let rejectFirst!: (error: Error) => void;
+    const gate = new Promise<never>((_resolve, reject) => {
+      rejectFirst = reject;
+    });
+
+    const first = ledger.execute("cmd-race-fail", async () => {
+      attempts += 1;
+      return await gate;
+    });
+    const concurrentRetry = ledger.execute("cmd-race-fail", () => {
+      attempts += 1;
+      return "should-not-run";
+    });
+
+    await Promise.resolve();
+    rejectFirst(new Error("network-adjacent failure"));
+    await expect(first).rejects.toThrow("network-adjacent failure");
+    await expect(concurrentRetry).rejects.toThrow("network-adjacent failure");
+    expect(attempts).toBe(1);
+    expect(ledger.has("cmd-race-fail")).toBe(false);
+
+    const laterRetry = await ledger.execute("cmd-race-fail", () => {
+      attempts += 1;
+      return "ok";
+    });
+    expect(laterRetry).toEqual({ result: "ok", replayed: false });
+    expect(attempts).toBe(2);
+  });
+
   it("keeps only the most recent bounded receipts", async () => {
     const ledger = new IdempotentCommandLedger<number>(2);
 
