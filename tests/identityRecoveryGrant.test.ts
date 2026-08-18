@@ -74,7 +74,7 @@ describe("C4.3 identity recovery grants", () => {
       expect(
         await consumeIdentityRecoveryGrant(
           targetRoom,
-          String(attempt).padStart(6, "0"),
+          `wrong-${attempt}`,
           tokens,
           2000 + attempt,
         ),
