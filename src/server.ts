@@ -4,14 +4,14 @@ import { onlineActingPlayers } from "./runtime/node/hostRecovery.js";
 import { runHostRecoveryCommandIdempotent } from "./runtime/node/werewolfCommandFacade.js";
 import {
   createGameServer as createBaseGameServer,
-  type Room,
+  type Room as ServerRoom,
 } from "./serverCore.js";
 
 export type { Player, Room } from "./serverCore.js";
 
 type BasicAck = (response: { ok: true } | { ok: false; message: string }) => void;
 
-function findMembership(rooms: Map<string, Room>, socketId: string) {
+function findMembership(rooms: Map<string, ServerRoom>, socketId: string) {
   for (const room of rooms.values()) {
     const player = room.players.find(item => item.socketId === socketId);
     if (player) return { room, player };
