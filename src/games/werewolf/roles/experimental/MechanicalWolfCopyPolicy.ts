@@ -130,18 +130,17 @@ export function availableMechanicalWolfCopiedInteractions<TInteractionKind exten
 export function consumeMechanicalWolfCopiedInteraction<TInteractionKind extends string>(
   ruleState: WerewolfRuleState,
   ownerPlayerId: string,
+  currentNightNumber: number,
   interactionKind: TInteractionKind,
   registry: MechanicalWolfCopyPolicyRegistry<TInteractionKind>,
 ): void {
-  const source = abilitySourceFor(ruleState, ownerPlayerId);
-  if (!source) throw new Error("机械狼尚未学习能力");
-  const policy = copyPolicyFor(source.sourceRoleId, registry);
-  const capability = policy?.capabilities.find(
-    item => item.type === "interaction" && item.interactionKind === interactionKind,
-  );
-  if (!capability || capability.type !== "interaction") {
-    throw new Error("该复制技能不可用");
-  }
+  const capability = availableMechanicalWolfCopiedInteractions(
+    ruleState,
+    ownerPlayerId,
+    currentNightNumber,
+    registry,
+  ).find(item => item.interactionKind === interactionKind);
+  if (!capability) throw new Error("该复制技能当前不可用");
   if (capability.resource) {
     spendAbilityResource(ruleState, ownerPlayerId, capability.resource.key);
   }
