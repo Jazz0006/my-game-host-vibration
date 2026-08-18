@@ -18,7 +18,7 @@
   <main>
     <section class="toolbar" aria-label="添加虚拟玩家">
       <label for="room-input">房间号</label>
-      <input id="room-input" class="room-input" inputmode="numeric" maxlength="6" autocomplete="off">
+      <input id="room-input" class="room-input" inputmode="numeric" maxlength="4" autocomplete="off">
       <button id="add-player" class="primary">添加虚拟玩家</button>
       <span class="server-name-hint">玩家名字由服务器自动分配</span>
       <div class="room-summary">
@@ -30,6 +30,15 @@
     <section class="summary compact-summary" aria-label="虚拟玩家摘要">
       <div><span>已添加</span><strong id="client-count">0</strong></div>
       <div><span>在线</span><strong id="online-count">0</strong></div>
+    </section>
+
+    <section class="toolbar" aria-label="身份恢复测试">
+      <label for="recovery-test-room">C4.3 身份恢复</label>
+      <input id="recovery-test-room" class="room-input" inputmode="numeric" maxlength="4" placeholder="4位房间号" autocomplete="off">
+      <input id="recovery-test-code" autocomplete="off" placeholder="房主生成的恢复码">
+      <button id="recovery-test-claim" class="primary">用新虚拟客户端接管</button>
+      <button id="recovery-test-disconnect" class="compact" disabled>断开恢复后的客户端</button>
+      <span id="recovery-test-status" class="server-name-hint">先让目标玩家离线，再在房主端生成恢复码。</span>
     </section>
 
     <div id="notice" class="notice" role="status">先在玩家端创建房间，再输入房间号添加虚拟玩家。</div>
@@ -59,6 +68,7 @@
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/dev/assets/lab.js"></script>
+  <script type="module" src="/dev/assets/labBootstrap.js"></script>
+  <script type="module" src="/dev/assets/recoveryLab.js"></script>
 </body>
 </html>
