@@ -154,6 +154,35 @@ export function createTimedGameServer(): TimedServer {
   const { io, rooms } = base;
   const interactionTimeouts = new InteractionTimeoutCoordinator();
   const extensionReceipts = new Map<string, ExtensionResult>();
+  const timeoutStateDeliveries = new Map<string, string>();
+
+  function timeoutDeliveryKey(roomId: string, actionId: string, playerId: string): string {
+    return `${roomId}:${actionId}:${playerId}`;
+  }
+
+  function forgetTimeoutDeliveries(roomId: string, actionId: string): void {
+    const prefix = `${roomId}:${actionId}:`;
+    for (const key of timeoutStateDeliveries.keys()) {
+      if (key.startsWith(prefix)) timeoutStateDeliveries.delete(key);
+    }
+  }
+
+  function syncTimeoutStateToCurrentSockets(
+    room: RuntimeRoom,
+    actorPlayerIds: readonly string[],
+    state: InteractionTimeoutClientState,
+  ): void {
+    const actionId = state.actionId;
+    if (!actionId) return;
+    for (const playerId of actorPlayerIds) {
+      const player = room.players.find(item => item.id === playerId);
+      if (!player?.socketId) continue;
+      const key = timeoutDeliveryKey(room.id, actionId, playerId);
+      if (timeoutStateDeliveries.get(key) === player.socketId) continue;
+      io.to(player.socketId).emit("player:interaction-timeout-state", state);
+      timeoutStateDeliveries.set(key, player.socketId);
+    }
+  }
 
   function rememberExtensionReceipt(key: string, result: ExtensionResult): void {
     extensionReceipts.set(key, result);
@@ -236,6 +265,15 @@ export function createTimedGameServer(): TimedServer {
           extension.state.actorPlayerIds,
           clientState,
         );
+        for (const playerId of extension.state.actorPlayerIds) {
+          const player = membership.room.players.find(item => item.id === playerId);
+          if (player?.socketId) {
+            timeoutStateDeliveries.set(
+              timeoutDeliveryKey(membership.room.id, extension.state.actionId, playerId),
+              player.socketId,
+            );
+          }
+        }
         const result: ExtensionResult = {
           ok: true,
           deadlineAt: extension.state.deadlineAt,
@@ -261,6 +299,7 @@ export function createTimedGameServer(): TimedServer {
             active: false,
             actionId: cleared.actionId,
           });
+          forgetTimeoutDeliveries(room.id, cleared.actionId);
         }
         continue;
       }
@@ -277,17 +316,15 @@ export function createTimedGameServer(): TimedServer {
           active: false,
           actionId: ensured.replaced.actionId,
         });
+        forgetTimeoutDeliveries(room.id, ensured.replaced.actionId);
       }
       if (!ensured.state) continue;
 
-      if (ensured.created) {
-        emitTimeoutState(
-          io,
-          room,
-          ensured.state.actorPlayerIds,
-          interactionTimeouts.clientState(ensured.state),
-        );
-      }
+      syncTimeoutStateToCurrentSockets(
+        room,
+        ensured.state.actorPlayerIds,
+        interactionTimeouts.clientState(ensured.state),
+      );
 
       const state = ensured.state;
       if (now >= state.warningAt && !state.warningSent) {
@@ -310,6 +347,7 @@ export function createTimedGameServer(): TimedServer {
         active: false,
         actionId: state.actionId,
       });
+      forgetTimeoutDeliveries(room.id, state.actionId);
 
       try {
         const result = recoverTimedOutWerewolfInteraction(room, state.actionId);
