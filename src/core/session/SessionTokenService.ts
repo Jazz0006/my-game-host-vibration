@@ -11,8 +11,11 @@ export type SessionToken = {
 export class SessionTokenService {
   constructor(private readonly crypto: SessionTokenCryptoProvider) {}
 
-  async createSessionToken(): Promise<SessionToken> {
-    const token = this.crypto.randomToken(TOKEN_BYTES);
+  async createSessionToken(byteLength = TOKEN_BYTES): Promise<SessionToken> {
+    if (!Number.isSafeInteger(byteLength) || byteLength < 8 || byteLength > TOKEN_BYTES) {
+      throw new Error("session token byte length must be between 8 and 32");
+    }
+    const token = this.crypto.randomToken(byteLength);
     return { token, hash: await this.hashSessionToken(token) };
   }
 
