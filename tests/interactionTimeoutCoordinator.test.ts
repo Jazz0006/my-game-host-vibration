@@ -48,7 +48,6 @@ describe("C4.4 interaction timeout coordinator", () => {
     expect(coordinator.setRoomTimeoutSeconds("room-1", 0)).toBe(0);
     expect(coordinator.ensure("room-1", "action-a", ["p1"], 1_000)).toEqual({
       created: false,
-      replaced: undefined,
     });
   });
 });
