@@ -4,6 +4,10 @@ const claimButton = document.querySelector("#recovery-test-claim");
 const disconnectButton = document.querySelector("#recovery-test-disconnect");
 const status = document.querySelector("#recovery-test-status");
 
+codeInput.maxLength = 6;
+codeInput.setAttribute("inputmode", "numeric");
+codeInput.placeholder = "6位恢复码";
+
 let recoveredSocket = null;
 let recoveredSession = null;
 
@@ -50,8 +54,8 @@ claimButton.addEventListener("click", async () => {
     setStatus("请输入正确的 4 位房间号。");
     return;
   }
-  if (!recoveryCode) {
-    setStatus("请输入房主生成的一次性恢复码。");
+  if (!/^\d{6}$/u.test(recoveryCode)) {
+    setStatus("请输入房主生成的 6 位数字恢复码。");
     return;
   }
 
