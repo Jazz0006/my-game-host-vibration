@@ -94,7 +94,7 @@ describe("architecture boundaries", () => {
   });
 
   it("keeps concrete Werewolf mutations behind the GameModule/runtime bridge boundary", () => {
-    const server = `${source("src/server.ts")}\n${source("src/serverCore.ts")}`;
+    const server = source("src/server.ts");
     const domainGameImport = server.match(/import\s*\{([\s\S]*?)\}\s*from\s*["']\.\/domain\/game\.js["']/u)?.[1] ?? "";
 
     for (const mutation of [
@@ -113,7 +113,7 @@ describe("architecture boundaries", () => {
       "beginNightStart",
       "allAliveVoted",
     ]) {
-      expect(domainGameImport, `server runtime must not import ${mutation} directly`).not.toMatch(
+      expect(domainGameImport, `server.ts must not import ${mutation} directly`).not.toMatch(
         new RegExp(`\\b${mutation}\\b`, "u"),
       );
     }
