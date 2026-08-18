@@ -96,6 +96,18 @@ export function runHostCommandIdempotent(
     executeWerewolfCommand(room, command, { isHost: true }));
 }
 
+/**
+ * C4 recovery entry point for host-triggered delivery effects that must be
+ * retry-safe but must not enter WerewolfCommand or mutate game state.
+ */
+export function runHostRecoveryCommandIdempotent(
+  room: RuntimeRoom,
+  commandId: string,
+  delivery: () => { kind: "hostRecoveryReminder"; actorPlayerIds: string[] },
+): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
+  return runIdempotent(room, hostCommandKey(commandId), delivery);
+}
+
 export function runHostLifecycleMutationIdempotent(
   room: RuntimeRoom,
   commandId: string,
