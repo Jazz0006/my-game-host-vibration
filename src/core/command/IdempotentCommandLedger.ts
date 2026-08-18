@@ -6,12 +6,14 @@ export type CommandReceipt<TResult> = {
 /**
  * Bounded in-memory dedupe ledger for mutation commands.
  *
- * The caller owns persistence/snapshotting. This core type only guarantees that
- * a repeated commandId can return the original result without re-running the
- * mutation while the receipt remains inside the bounded window.
+ * The caller owns persistence/snapshotting. This core type guarantees that a
+ * repeated commandId returns the original result without re-running the
+ * mutation while the receipt remains inside the bounded window. Concurrent
+ * retries also share the same in-flight mutation.
  */
 export class IdempotentCommandLedger<TResult> {
   private readonly receipts = new Map<string, TResult>();
+  private readonly inFlight = new Map<string, Promise<TResult>>();
 
   constructor(private readonly maxEntries = 128) {
     if (!Number.isSafeInteger(maxEntries) || maxEntries < 1) {
@@ -49,6 +51,9 @@ export class IdempotentCommandLedger<TResult> {
   }
 
   restore(receipts: readonly CommandReceipt<TResult>[]): void {
+    if (this.inFlight.size > 0) {
+      throw new Error("cannot restore command receipts while mutations are in flight");
+    }
     this.receipts.clear();
     for (const receipt of receipts.slice(-this.maxEntries)) {
       this.remember(receipt.commandId, receipt.result);
@@ -66,8 +71,19 @@ export class IdempotentCommandLedger<TResult> {
       return { result: this.receipts.get(id)!, replayed: true };
     }
 
-    const result = await mutation();
-    this.remember(id, result);
-    return { result, replayed: false };
+    const existing = this.inFlight.get(id);
+    if (existing) {
+      return { result: await existing, replayed: true };
+    }
+
+    const pending = Promise.resolve().then(mutation);
+    this.inFlight.set(id, pending);
+    try {
+      const result = await pending;
+      this.remember(id, result);
+      return { result, replayed: false };
+    } finally {
+      if (this.inFlight.get(id) === pending) this.inFlight.delete(id);
+    }
   }
 }
