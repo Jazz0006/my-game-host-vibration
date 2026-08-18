@@ -21,6 +21,11 @@ import {
 } from "./runtime/node/werewolfCommandFacade.js";
 import { onlineActingPlayers } from "./runtime/node/hostRecovery.js";
 import {
+  consumeIdentityRecoveryGrant,
+  invalidateIdentityRecoveryGrant,
+  issueIdentityRecoveryGrant,
+} from "./runtime/node/identityRecovery.js";
+import {
   acknowledgePrompt,
   createTestPrompt,
   submitPrompt,
@@ -388,6 +393,7 @@ export function createGameServer() {
           return ack({ ok: false, message: "恢复凭证无效" });
         }
 
+        invalidateIdentityRecoveryGrant(room, player.id);
         const previousSocketId = player.socketId;
         player.socketId = socket.id;
         player.connected = true;
@@ -406,6 +412,96 @@ export function createGameServer() {
           seat: player.seat,
           name: player.name,
           isHost: player.isHost,
+        });
+        broadcastRoom(io, room);
+        sendCurrentTestPrompt(socket, room, player);
+        if (room.game && moduleActingPlayerIds(room).includes(player.id)) {
+          alertCurrentActors(io, room, true);
+        }
+      },
+    );
+
+    socket.on(
+      "host:create-identity-recovery",
+      async (
+        data: { targetPlayerId?: string },
+        ack: ClientAck<
+          | { ok: true; recoveryCode: string; expiresAt: number }
+          | { ok: false; message: string }
+        >,
+      ) => {
+        const membership = findMembership(rooms, socket.id);
+        if (!membership?.player.isHost) {
+          return ack({ ok: false, message: "只有房主可以协助恢复身份" });
+        }
+        const target = membership.room.players.find(player => player.id === data.targetPlayerId);
+        if (!target || target.isHost) {
+          return ack({ ok: false, message: "请选择一名其他玩家" });
+        }
+        if (target.connected || target.socketId) {
+          return ack({ ok: false, message: "该玩家当前在线，不需要恢复身份" });
+        }
+        try {
+          const grant = await issueIdentityRecoveryGrant(
+            membership.room,
+            target.id,
+            sessionTokens,
+          );
+          ack({ ok: true, recoveryCode: grant.recoveryCode, expiresAt: grant.expiresAt });
+        } catch {
+          ack({ ok: false, message: "生成恢复码失败，请重试" });
+        }
+      },
+    );
+
+    socket.on(
+      "player:claim-identity-recovery",
+      async (
+        data: { roomId?: string; recoveryCode?: string },
+        ack: ClientAck<unknown>,
+      ) => {
+        const roomId = data.roomId?.trim();
+        const recoveryCode = data.recoveryCode?.trim();
+        if (!roomId || !recoveryCode) {
+          return ack({ ok: false, message: "请输入房间号和恢复码" });
+        }
+        if (findMembership(rooms, socket.id)) {
+          return ack({ ok: false, message: "当前连接已经加入房间" });
+        }
+        const room = rooms.get(roomId);
+        if (!room) return ack({ ok: false, message: "恢复码无效或已过期" });
+
+        const playerId = await consumeIdentityRecoveryGrant(
+          room,
+          recoveryCode,
+          sessionTokens,
+        ).catch(() => null);
+        if (!playerId) return ack({ ok: false, message: "恢复码无效或已过期" });
+
+        const player = room.players.find(item => item.id === playerId);
+        if (!player || player.isHost || player.connected || player.socketId) {
+          return ack({ ok: false, message: "该身份当前无法恢复，请让房主重新生成恢复码" });
+        }
+
+        const replacementSession = await sessionTokens.createSessionToken().catch(() => null);
+        if (!replacementSession) {
+          return ack({ ok: false, message: "恢复身份失败，请让房主重新生成恢复码" });
+        }
+
+        // Recovery rotates the long-lived credential so a lost device cannot resume later.
+        player.resumeTokenHash = replacementSession.hash;
+        player.socketId = socket.id;
+        player.connected = true;
+        void socket.join(room.id);
+
+        ack({
+          ok: true,
+          roomId: room.id,
+          playerId: player.id,
+          seat: player.seat,
+          name: player.name,
+          isHost: false,
+          resumeToken: replacementSession.token,
         });
         broadcastRoom(io, room);
         sendCurrentTestPrompt(socket, room, player);
@@ -531,6 +627,7 @@ socket.on(
         }
 
         const targetSocket = target.socketId ? io.sockets.sockets.get(target.socketId) : undefined;
+        invalidateIdentityRecoveryGrant(membership.room, target.id);
         removePlayer(membership.room, target.id);
         targetSocket?.emit("room:removed", { roomId: membership.room.id, reason: "removed" });
         if (process.env.NODE_ENV !== "production") {
@@ -615,6 +712,7 @@ socket.on(
         return ack({ ok: false, message: "请先指定新的房主，再退出房间" });
       }
 
+      invalidateIdentityRecoveryGrant(membership.room, membership.player.id);
       removePlayer(membership.room, membership.player.id);
       void socket.leave(membership.room.id);
       if (membership.room.players.length === 0) rooms.delete(membership.room.id);
