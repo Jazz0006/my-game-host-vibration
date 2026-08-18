@@ -14,7 +14,7 @@ try {
         const recoveryRoom = document.querySelector("#recovery-test-room");
         if (recoveryRoom) recoveryRoom.value = state.roomId;
         const recoveryStatus = document.querySelector("#recovery-test-status");
-        if (recoveryStatus) recoveryStatus.textContent = \`${player.name} 已模拟掉线；请在房主端生成恢复码，然后在这里接管。\`;
+        if (recoveryStatus) recoveryStatus.textContent = \`\${player.name} 已模拟掉线；请在房主端生成恢复码，然后在这里接管。\`;
       }, "compact"));
     }
     card.append(head, detail, renderGameControls(player), recoveryActions);
