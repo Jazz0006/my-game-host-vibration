@@ -107,9 +107,10 @@ export class InteractionTimeoutCoordinator {
     roomId: string,
     actionId: string,
     playerId: string,
+    now: number = Date.now(),
   ): { ok: true; state: InteractionTimeoutState } | { ok: false; message: string } {
     const state = this.timers.get(roomId);
-    if (!state || state.actionId !== actionId) {
+    if (!state || state.actionId !== actionId || now >= state.deadlineAt) {
       return { ok: false, message: "当前行动已经结束" };
     }
     if (!state.actorPlayerIds.includes(playerId)) {
