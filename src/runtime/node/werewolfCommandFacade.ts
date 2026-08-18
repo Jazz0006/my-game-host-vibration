@@ -31,13 +31,30 @@ async function runIdempotent(
   room: RuntimeRoom,
   scopedCommandId: string,
   mutation: () => WerewolfCommandOutcome,
+  resetReceiptHistory = false,
 ): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
   const ledger = commandLedger(room);
-  const execution = await ledger.execute(scopedCommandId, mutation);
-  room.commandReceipts = ledger.entries();
-  return { outcome: execution.result, replayed: execution.replayed };
-}
+  const execution = await ledger.execute(
+    scopedCommandId,
+    mutation,
+  );
 
+  if (!execution.replayed && resetReceiptHistory) {
+    ledger.restore([
+      {
+        commandId: scopedCommandId,
+        result: execution.result,
+      },
+    ]);
+  }
+
+  room.commandReceipts = ledger.entries();
+
+  return {
+    outcome: execution.result,
+    replayed: execution.replayed,
+  };
+}
 // Stable Node-runtime entry points: transport handlers provide identity/authority,
 // while WerewolfGameModule owns rule-specific command handling and projections.
 export function runPlayerCommand(
@@ -77,4 +94,20 @@ export function runHostCommandIdempotent(
 ): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
   return runIdempotent(room, hostCommandKey(commandId), () =>
     executeWerewolfCommand(room, command, { isHost: true }));
+}
+
+export function runHostLifecycleMutationIdempotent(
+  room: RuntimeRoom,
+  commandId: string,
+  mutation: () => WerewolfCommandOutcome,
+): Promise<{
+  outcome: WerewolfCommandOutcome;
+  replayed: boolean;
+}> {
+  return runIdempotent(
+    room,
+    hostCommandKey(commandId),
+    mutation,
+    true,
+  );
 }

@@ -938,7 +938,7 @@ $("deal-roles").addEventListener("click", () => {
     Array.from({ length: configCounts[role.id] || 0 }, () => role.id)
   );
   if (!confirm("确定发送身份？发送后不能再调整玩家和本局配置。")) return;
-  emitWithAck("host:start-game", { roleDeck });
+  emitCommandWithAck("host:start-game", { roleDeck });
 });
 $("start-night").addEventListener("click", () => {
   if (!confirm("确定开始夜晚？所有玩家请闭眼。")) return;
@@ -951,7 +951,7 @@ $("close-voting").addEventListener("click", () => {
 $("begin-night-start").addEventListener("click", () => emitCommandWithAck("host:begin-night-start", {}));
 $("restart-game").addEventListener("click", () => {
   if (!confirm("确定重新开始游戏？所有进度将重置，重新随机发牌。")) return;
-  emitWithAck("host:restart-game", {});
+  emitCommandWithAck("host:restart-game", {});
 });
 $("peek-role").addEventListener("click", () => {
   if (!currentGameState?.roleName) return;
