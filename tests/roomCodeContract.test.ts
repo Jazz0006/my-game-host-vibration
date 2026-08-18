@@ -51,6 +51,8 @@ describe("four-digit room code contract", () => {
     expect(recoveryUi).toContain('/^\\d{4}$/u');
     expect(labHtml).toContain('maxlength="4"');
     expect(labBootstrap).toContain('/^\\\\d{4}$/u');
+    expect(labBootstrap).toContain('createButton("模拟掉线"');
     expect(recoveryLab).toContain('/^\\d{4}$/u');
+    expect(recoveryLab).toContain('"player:claim-identity-recovery"');
   });
 });
