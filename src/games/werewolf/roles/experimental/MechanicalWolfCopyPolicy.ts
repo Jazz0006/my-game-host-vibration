@@ -1,3 +1,4 @@
+import type { GameState } from "../../../../domain/game.js";
 import type {
   WerewolfDeathCause,
   WerewolfInteractionEffect,
@@ -149,8 +150,13 @@ export function consumeMechanicalWolfCopiedInteraction<TInteractionKind extends 
 /**
  * Resolves only explicitly copyable self-death capabilities. It does not invoke
  * or delegate the source role's full lifecycle hook bundle.
+ *
+ * Like the production Hunter rule, a shot interaction is emitted only when
+ * another living player exists. The dying owner is excluded explicitly because
+ * death-chain evaluation may run before the owner is added to deadPlayerIds.
  */
 export function resolveMechanicalWolfCopiedSelfDeathEffects<TInteractionKind extends string>(
+  game: GameState,
   ruleState: WerewolfRuleState,
   ownerPlayerId: string,
   deadPlayerId: string,
@@ -158,6 +164,11 @@ export function resolveMechanicalWolfCopiedSelfDeathEffects<TInteractionKind ext
   registry: MechanicalWolfCopyPolicyRegistry<TInteractionKind>,
 ): readonly WerewolfInteractionEffect<TInteractionKind>[] {
   if (ownerPlayerId !== deadPlayerId) return [];
+  const hasLivingTarget = Object.keys(game.roles).some(
+    playerId => playerId !== ownerPlayerId && !game.deadPlayerIds.includes(playerId),
+  );
+  if (!hasLivingTarget) return [];
+
   const source = abilitySourceFor(ruleState, ownerPlayerId);
   if (!source) return [];
   const policy = copyPolicyFor(source.sourceRoleId, registry);
