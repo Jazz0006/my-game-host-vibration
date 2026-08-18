@@ -19,13 +19,21 @@ function commandLedger(room: RuntimeRoom): IdempotentCommandLedger<WerewolfComma
   return ledger;
 }
 
+function playerCommandKey(playerId: string, commandId: string): string {
+  return `player:${playerId}:${commandId}`;
+}
+
+function hostCommandKey(commandId: string): string {
+  return `host:${commandId}`;
+}
+
 async function runIdempotent(
   room: RuntimeRoom,
-  commandId: string,
+  scopedCommandId: string,
   mutation: () => WerewolfCommandOutcome,
 ): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
   const ledger = commandLedger(room);
-  const execution = await ledger.execute(commandId, mutation);
+  const execution = await ledger.execute(scopedCommandId, mutation);
   room.commandReceipts = ledger.entries();
   return { outcome: execution.result, replayed: execution.replayed };
 }
@@ -50,6 +58,7 @@ export function runHostCommand(
 /**
  * C3 transport/runtime mutation entry point. The game module never sees the
  * commandId; duplicate network delivery is absorbed before domain mutation.
+ * Player command ids are scoped by stable playerId so two clients cannot collide.
  */
 export function runPlayerCommandIdempotent(
   room: RuntimeRoom,
@@ -57,7 +66,7 @@ export function runPlayerCommandIdempotent(
   commandId: string,
   command: WerewolfCommand,
 ): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
-  return runIdempotent(room, commandId, () =>
+  return runIdempotent(room, playerCommandKey(playerId, commandId), () =>
     executeWerewolfCommand(room, command, { playerId }));
 }
 
@@ -66,6 +75,6 @@ export function runHostCommandIdempotent(
   commandId: string,
   command: WerewolfCommand,
 ): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
-  return runIdempotent(room, commandId, () =>
+  return runIdempotent(room, hostCommandKey(commandId), () =>
     executeWerewolfCommand(room, command, { isHost: true }));
 }
