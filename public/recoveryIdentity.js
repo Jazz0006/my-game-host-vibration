@@ -8,6 +8,13 @@ for (const inputId of ["room-input", "recovery-room-input"]) {
   if (inputId === "room-input") input.placeholder = "4位房间号";
 }
 
+const recoveryCodeInput = document.getElementById("recovery-code-input");
+if (recoveryCodeInput) {
+  recoveryCodeInput.maxLength = 6;
+  recoveryCodeInput.setAttribute("inputmode", "numeric");
+  recoveryCodeInput.placeholder = "6位恢复码";
+}
+
 function recoveryOfflineCandidates(state) {
   if (!state?.viewer?.isHost) return [];
   return state.players.filter(player => !player.isHost && !player.connected);
@@ -70,7 +77,7 @@ document.getElementById("create-identity-recovery").addEventListener("click", ()
         return;
       }
       errorNode.textContent = "";
-      codeNode.textContent = `恢复码：${result.recoveryCode}（5分钟内使用一次）`;
+      codeNode.textContent = `恢复码：${result.recoveryCode}（6位数字 · 5分钟内使用一次）`;
     },
   );
 });
@@ -83,8 +90,8 @@ document.getElementById("claim-identity-recovery").addEventListener("click", () 
     errorNode.textContent = "请输入4位房间号";
     return;
   }
-  if (!recoveryCode) {
-    errorNode.textContent = "请输入恢复码";
+  if (!/^\d{6}$/u.test(recoveryCode)) {
+    errorNode.textContent = "请输入6位数字恢复码";
     return;
   }
 
