@@ -94,6 +94,13 @@ describe("C4.4 werewolf interaction timeout recovery", () => {
   it("turns a night-triggered hunter timeout into no shot", () => {
     const currentRoom = room();
     const game = currentRoom.game!;
+    game.roles = {
+      p1: "hunter",
+      p2: "werewolf",
+      p3: "witch",
+      p4: "seer",
+      p5: "villager",
+    };
     game.deadPlayerIds = ["p1"];
     game.phase = "day_hunter";
     game.actionId = "hunter-action";
