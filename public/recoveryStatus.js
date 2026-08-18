@@ -1,6 +1,6 @@
-// C4 recovery diagnostics plus C4.4 interaction timeout UI. This script keeps
-// secret actor identity private: players receive only their own timeout state,
-// while the host configures a room-wide duration before the game starts.
+// C4 recovery diagnostics plus C4.4/C4.5 recovery UI. Secret actor identity
+// remains private: players receive only their own timeout state, while host
+// lifecycle recovery never exposes roles, targets, or secret answers.
 const hostRecoveryStatusNode = document.getElementById("host-recovery-status");
 
 socket.on("room:state", state => {
@@ -20,6 +20,7 @@ socket.on("room:state", state => {
   }
 
   renderInteractionTimeoutConfig(state);
+  renderAbortToLobbyControl(state);
 });
 
 // ── C4.4 Host timeout configuration ────────────────────────────────────────
@@ -192,3 +193,37 @@ socket.on("player:interaction-timeout-error", payload => {
 });
 
 setInterval(renderTimeoutCountdown, 250);
+
+// ── C4.5 Abort current game and return to lobby ─────────────────────────────
+function ensureAbortToLobbyControl() {
+  let button = document.getElementById("abort-to-lobby");
+  if (button) return button;
+
+  const controls = document.getElementById("game-host-controls");
+  if (!controls) return null;
+
+  button = document.createElement("button");
+  button.id = "abort-to-lobby";
+  button.type = "button";
+  button.className = "danger-outline hidden";
+  button.textContent = "中断本局并返回房间";
+  button.title = "保留房间、玩家、座位和身份恢复凭证，仅清除当前局游戏进度";
+  button.addEventListener("click", () => {
+    if (!confirm("确定中断当前游戏并返回房间？本局身份、投票和夜间进度都会清除，但玩家和座位会保留。")) {
+      return;
+    }
+    emitCommandWithAck("host:abort-to-lobby", {});
+  });
+
+  const exitButton = document.getElementById("game-exit-room");
+  if (exitButton) controls.insertBefore(button, exitButton);
+  else controls.append(button);
+  return button;
+}
+
+function renderAbortToLobbyControl(state) {
+  const button = ensureAbortToLobbyControl();
+  if (!button) return;
+  const canAbort = state?.viewer?.isHost && state?.game?.phase !== "lobby";
+  button.classList.toggle("hidden", !canAbort);
+}
