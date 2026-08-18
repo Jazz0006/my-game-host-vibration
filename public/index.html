@@ -36,6 +36,16 @@
       <button id="join-room">加入房间</button>
     </section>
 
+    <details id="identity-recovery-entry" class="panel">
+      <summary>本机身份丢失？使用房主恢复码</summary>
+      <label for="recovery-room-input">房间号</label>
+      <input id="recovery-room-input" inputmode="numeric" maxlength="6" placeholder="6位房间号">
+      <label for="recovery-code-input">恢复码</label>
+      <input id="recovery-code-input" autocomplete="one-time-code" placeholder="向房主索取5分钟恢复码">
+      <button id="claim-identity-recovery" class="secondary">恢复原身份</button>
+      <p id="entry-recovery-error" class="error"></p>
+    </details>
+
     <p id="entry-error" class="error entry-error"></p>
   </main>
 
@@ -77,6 +87,7 @@
 
       <section class="management-actions">
         <button id="open-config" disabled>进入游戏配置</button>
+        <button data-open-identity-recovery class="secondary hidden">协助离线玩家恢复身份</button>
         <button id="leave-room" class="danger-outline">退出房间</button>
       </section>
 
@@ -125,6 +136,7 @@
       <button id="restart-game" class="hidden danger">重新开始游戏</button>
       <div id="host-recovery-status" class="status">恢复状态：正在读取……</div>
       <button id="resend-current-action" class="secondary" title="仅重新提醒当前在线行动玩家，不改变游戏状态" onclick="emitCommandWithAck('host:resend-current-action', {})">重新提醒当前行动玩家</button>
+      <button data-open-identity-recovery class="secondary hidden">协助离线玩家恢复身份</button>
       <button id="game-exit-room" class="danger-outline">退出或关闭房间</button>
       </section>
 
@@ -270,6 +282,22 @@
     </div>
   </section>
 
+  <!-- ===== IDENTITY RECOVERY DIALOG ===== -->
+  <section id="identity-recovery-dialog" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="identity-recovery-title">
+    <div class="exit-dialog-card">
+      <p class="eyebrow">身份恢复</p>
+      <h2 id="identity-recovery-title">协助离线玩家恢复</h2>
+      <p class="muted">只为现场确认的离线玩家生成。恢复码5分钟有效且只能使用一次。</p>
+      <label for="identity-recovery-target">离线玩家</label>
+      <select id="identity-recovery-target"></select>
+      <button id="create-identity-recovery">生成一次性恢复码</button>
+      <div id="identity-recovery-code" class="status"></div>
+      <p class="muted">恢复成功后，该玩家旧设备上的长期恢复凭证会立即失效。</p>
+      <p id="identity-recovery-error" class="error"></p>
+      <button id="cancel-identity-recovery" class="secondary">关闭</button>
+    </div>
+  </section>
+
   <!-- ===== EXIT ROOM DIALOG ===== -->
   <section id="exit-room-dialog" class="overlay exit-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="exit-room-title">
     <div class="exit-dialog-card">
@@ -317,5 +345,6 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/app.js"></script>
   <script src="/recoveryStatus.js"></script>
+  <script src="/recoveryIdentity.js"></script>
 </body>
 </html>
