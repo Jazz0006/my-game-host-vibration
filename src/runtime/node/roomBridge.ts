@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import type { CommandReceipt } from "../../core/command/IdempotentCommandLedger.js";
 import type { GameViewContext } from "../../core/game/GameModule.js";
 import { interactionForPlayer } from "../../core/interaction/PendingInteraction.js";
 import { RoomCore } from "../../core/room/RoomCore.js";
@@ -22,6 +23,8 @@ export type RuntimePlayer = RoomPlayer & {
 
 export type RuntimeRoom = RoomState<GameState, GameConfig, RuntimePlayer> & {
   activePrompt?: TestPrompt;
+  /** Recent mutation receipts used by C3 retry dedupe and later room recovery. */
+  commandReceipts?: CommandReceipt<WerewolfCommandOutcome>[];
 };
 
 export type WerewolfCommandOutcome =
@@ -88,6 +91,7 @@ export function createWerewolfGame(room: RuntimeRoom, config: GameConfig): GameS
     { playerIds: room.players.map(player => player.id), config },
     commandDependencies,
   );
+  room.commandReceipts = [];
   room.updatedAt = Date.now();
   return room.game;
 }
