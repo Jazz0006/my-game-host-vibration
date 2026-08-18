@@ -62,7 +62,7 @@ const ROLE_INFO: Record<Role, { name: string; description: string }> = {
 
 function createRoomId(rooms: Map<string, Room>): string {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const roomId = String(crypto.randomInt(100000, 1000000));
+    const roomId = String(crypto.randomInt(1000, 10000));
     if (!rooms.has(roomId)) return roomId;
   }
   throw new Error("暂时无法创建房间号");
@@ -488,7 +488,6 @@ export function createGameServer() {
           return ack({ ok: false, message: "恢复身份失败，请让房主重新生成恢复码" });
         }
 
-        // Recovery rotates the long-lived credential so a lost device cannot resume later.
         player.resumeTokenHash = replacementSession.hash;
         player.socketId = socket.id;
         player.connected = true;
