@@ -16,8 +16,10 @@ import {
   runHostCommand,
   runHostCommandIdempotent,
   runHostLifecycleMutationIdempotent,
+  runHostRecoveryCommandIdempotent,
   runPlayerCommandIdempotent,
 } from "./runtime/node/werewolfCommandFacade.js";
+import { onlineActingPlayers } from "./runtime/node/hostRecovery.js";
 import {
   acknowledgePrompt,
   createTestPrompt,
@@ -789,6 +791,48 @@ socket.on(
         ruleError(ack, error);
       }
     });
+
+    socket.on(
+      "host:resend-current-action",
+      async (data: { commandId?: string } | undefined, ack: BasicAck) => {
+        const membership = findMembership(rooms, socket.id);
+        if (!membership?.player.isHost) {
+          return ack({ ok: false, message: "只有房主可以重新提醒当前行动" });
+        }
+        if (!membership.room.game) {
+          return ack({ ok: false, message: "游戏尚未开始" });
+        }
+
+        const commandId = requiredCommandId(data ?? {}, ack);
+        if (!commandId) return;
+
+        const { room } = membership;
+        try {
+          await runHostRecoveryCommandIdempotent(room, commandId, () => {
+            const actors = onlineActingPlayers(room);
+            if (actors.length === 0) {
+              throw new GameRuleError("当前没有在线的行动玩家需要提醒");
+            }
+
+            for (const actor of actors) {
+              io.to(actor.socketId!).emit("player:action-alert", {
+                actionId: room.game!.actionId,
+                phase: room.game!.phase,
+                resumed: true,
+              });
+            }
+
+            return {
+              kind: "hostRecoveryReminder",
+              actorPlayerIds: actors.map(actor => actor.id),
+            };
+          });
+          ack({ ok: true });
+        } catch (error) {
+          ruleError(ack, error);
+        }
+      },
+    );
 
     socket.on(
       "player:submit-vote",

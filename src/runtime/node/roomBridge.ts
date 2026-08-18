@@ -21,12 +21,6 @@ export type RuntimePlayer = RoomPlayer & {
   connected: boolean;
 };
 
-export type RuntimeRoom = RoomState<GameState, GameConfig, RuntimePlayer> & {
-  activePrompt?: TestPrompt;
-  /** Recent mutation receipts used by C3 retry dedupe and later room recovery. */
-  commandReceipts?: CommandReceipt<WerewolfCommandOutcome>[];
-};
-
 export type WerewolfCommandOutcome =
   | { kind: "none" }
   | { kind: "broadcast" }
@@ -34,6 +28,19 @@ export type WerewolfCommandOutcome =
   | { kind: "hunterResolved" }
   | { kind: "vote"; changed: boolean; allEligibleVoted: boolean }
   | { kind: "voteClosed"; result: string };
+
+export type HostRecoveryCommandOutcome = {
+  kind: "hostRecoveryReminder";
+  actorPlayerIds: string[];
+};
+
+export type RuntimeCommandOutcome = WerewolfCommandOutcome | HostRecoveryCommandOutcome;
+
+export type RuntimeRoom = RoomState<GameState, GameConfig, RuntimePlayer> & {
+  activePrompt?: TestPrompt;
+  /** Recent mutation/effect receipts used by retry dedupe and room recovery. */
+  commandReceipts?: CommandReceipt<RuntimeCommandOutcome>[];
+};
 
 const commandDependencies = {
   random: {
