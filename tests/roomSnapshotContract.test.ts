@@ -35,7 +35,7 @@ describe("C2 room snapshot contract", () => {
       RepresentativeGameState,
       RepresentativeGameConfig,
       RepresentativeRuleState,
-      PendingInteraction<"wolf_action">
+      PendingInteraction<"wolf_kill">
     > = {
       revision: 7,
       metadata: {
@@ -65,7 +65,7 @@ describe("C2 room snapshot contract", () => {
       },
       pendingInteraction: {
         id: "interaction-7",
-        kind: "wolf_action",
+        kind: "wolf_kill",
         actorPlayerIds: ["player-1"],
         mode: "single",
         wakePolicy: { vibrate: true },
@@ -125,9 +125,9 @@ describe("C2 room snapshot contract", () => {
       lovers: [["host-1", "player-2"]],
       copiedAbilityByPlayerId: { "player-2": "hunter" },
     };
-    const pendingInteraction: PendingInteraction<"wolf_action"> = {
+    const pendingInteraction: PendingInteraction<"wolf_kill"> = {
       id: "interaction-42",
-      kind: "wolf_action",
+      kind: "wolf_kill",
       actorPlayerIds: ["host-1"],
       mode: "single",
       wakePolicy: { vibrate: true, audioCue: "wake" },
