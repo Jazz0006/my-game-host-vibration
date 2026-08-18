@@ -1,5 +1,13 @@
 let latestRecoveryRoomState = null;
 
+for (const inputId of ["room-input", "recovery-room-input"]) {
+  const input = document.getElementById(inputId);
+  if (!input) continue;
+  input.maxLength = 4;
+  input.setAttribute("inputmode", "numeric");
+  if (inputId === "room-input") input.placeholder = "4位房间号";
+}
+
 function recoveryOfflineCandidates(state) {
   if (!state?.viewer?.isHost) return [];
   return state.players.filter(player => !player.isHost && !player.connected);
@@ -71,8 +79,12 @@ document.getElementById("claim-identity-recovery").addEventListener("click", () 
   const roomId = document.getElementById("recovery-room-input").value.trim();
   const recoveryCode = document.getElementById("recovery-code-input").value.trim();
   const errorNode = document.getElementById("entry-recovery-error");
-  if (!roomId || !recoveryCode) {
-    errorNode.textContent = "请输入房间号和恢复码";
+  if (!/^\d{4}$/u.test(roomId)) {
+    errorNode.textContent = "请输入4位房间号";
+    return;
+  }
+  if (!recoveryCode) {
+    errorNode.textContent = "请输入恢复码";
     return;
   }
 
