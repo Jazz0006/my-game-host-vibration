@@ -66,6 +66,9 @@ export function nextRoomRevision(currentRevision: number): number {
 /**
  * Projects a room into the platform-neutral data required to recover it.
  * Extra runtime fields on players (for example socketId/connected) are dropped.
+ *
+ * Game/config/rule/interaction values are treated as immutable snapshot inputs;
+ * the eventual persistence adapter is responsible for serialization/cloning.
  */
 export function createRoomSnapshot<
   TGameState,
