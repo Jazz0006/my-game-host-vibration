@@ -106,7 +106,7 @@ describe("C4.3 Socket.IO identity recovery", () => {
     });
     expect(grant.ok).toBe(true);
     if (!grant.ok) throw new Error(grant.message);
-    expect(grant.recoveryCode.length).toBeGreaterThanOrEqual(10);
+    expect(grant.recoveryCode).toMatch(/^\d{6}$/u);
     expect(grant.expiresAt).toBeGreaterThan(Date.now());
 
     const wrongDevice = await connect();
