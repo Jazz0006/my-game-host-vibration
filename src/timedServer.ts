@@ -2,7 +2,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Server, Socket } from "socket.io";
 import { GameRuleError } from "./domain/game.js";
-import { recoverTimedOutWerewolfInteraction } from "./games/werewolf/WerewolfInteractionTimeout.js";
 import {
   InteractionTimeoutCoordinator,
   type InteractionTimeoutClientState,
@@ -15,6 +14,7 @@ import {
   type RuntimePlayer,
   type RuntimeRoom,
 } from "./runtime/node/roomBridge.js";
+import { recoverTimedOutWerewolfInteraction } from "./runtime/node/werewolfInteractionTimeout.js";
 import { runHostCommand } from "./runtime/node/werewolfCommandFacade.js";
 import { createGameServer } from "./server.js";
 
@@ -23,7 +23,6 @@ const MAX_PLAYERS = 12;
 const TIMER_TICK_MS = 200;
 const EXTENSION_RECEIPT_LIMIT = 128;
 
-type BasicResult = { ok: true } | { ok: false; message: string };
 type TimeoutConfigResult =
   | { ok: true; timeoutSeconds: number }
   | { ok: false; message: string };
