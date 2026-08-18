@@ -42,6 +42,13 @@ export type RuntimeRoom = RoomState<GameState, GameConfig, RuntimePlayer> & {
   commandReceipts?: CommandReceipt<RuntimeCommandOutcome>[];
 };
 
+export type HostRecoveryStatus = {
+  hasPendingInteraction: boolean;
+  waitingCount: number;
+  onlineWaitingCount: number;
+  offlineWaitingCount: number;
+};
+
 const commandDependencies = {
   random: {
     randomInt(maxExclusive: number) {
@@ -77,18 +84,45 @@ export function playerGameView(room: RuntimeRoom, playerId: string): unknown {
     : view;
 }
 
-export function roomGameView(room: RuntimeRoom, isHost: boolean): Record<string, unknown> | undefined {
-  if (!room.game) return undefined;
-  const context = gameViewContext(room);
-  return isHost
-    ? werewolfGameModule.getHostView(room.game, context)
-    : werewolfGameModule.getPublicView(room.game, context);
-}
-
 export function actingPlayerIds(room: RuntimeRoom): string[] {
   if (!room.game) return [];
   const interaction = activeInteraction(room);
   return interaction?.actorPlayerIds ?? werewolfGameModule.getActingPlayerIds(room.game);
+}
+
+export function hostRecoveryStatus(room: RuntimeRoom): HostRecoveryStatus {
+  if (!room.game) {
+    return {
+      hasPendingInteraction: false,
+      waitingCount: 0,
+      onlineWaitingCount: 0,
+      offlineWaitingCount: 0,
+    };
+  }
+
+  const interaction = activeInteraction(room);
+  const actorIds = interaction?.actorPlayerIds ?? werewolfGameModule.getActingPlayerIds(room.game);
+  const actorIdSet = new Set(actorIds);
+  const onlineWaitingCount = room.players.filter(
+    player => actorIdSet.has(player.id) && player.connected && Boolean(player.socketId),
+  ).length;
+
+  return {
+    hasPendingInteraction: Boolean(interaction),
+    waitingCount: actorIds.length,
+    onlineWaitingCount,
+    offlineWaitingCount: actorIds.length - onlineWaitingCount,
+  };
+}
+
+export function roomGameView(room: RuntimeRoom, isHost: boolean): Record<string, unknown> | undefined {
+  if (!room.game) return undefined;
+  const context = gameViewContext(room);
+  if (!isHost) return werewolfGameModule.getPublicView(room.game, context);
+  return {
+    ...werewolfGameModule.getHostView(room.game, context),
+    recovery: hostRecoveryStatus(room),
+  };
 }
 
 export function createWerewolfGame(room: RuntimeRoom, config: GameConfig): GameState {
