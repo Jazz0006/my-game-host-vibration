@@ -1,0 +1,33 @@
+name: Run C3.1 hardening
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/c3-1-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: python3 .github/c3-1-hardening.py
+      - run: npm run typecheck
+      - run: npm test
+      - name: Commit hardening
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/app.js src/server.ts src/runtime/node/werewolfCommandFacade.ts tests/serverGameFlow.test.ts "开发计划_V4_架构验证后实施路线.md"
+          git commit -m "Harden C3.1 lifecycle command idempotency"
+          git push origin HEAD:main
