@@ -1,4 +1,4 @@
-import { IdempotentCommandLedger } from "../../core/command/IdempotentCommandLedger.js";
+import { RoomCommandRuntime } from "../../core/room/RoomCommandRuntime.js";
 import type { WerewolfCommand } from "../../games/werewolf/WerewolfGameModule.js";
 import {
   executeWerewolfCommand,
@@ -8,52 +8,13 @@ import {
   type WerewolfCommandOutcome,
 } from "./roomBridge.js";
 
-const COMMAND_RECEIPT_LIMIT = 128;
-const roomLedgers = new WeakMap<RuntimeRoom, IdempotentCommandLedger<RuntimeCommandOutcome>>();
+const roomCommands = new RoomCommandRuntime<RuntimeCommandOutcome, RuntimeRoom>();
 
-function commandLedger(room: RuntimeRoom): IdempotentCommandLedger<RuntimeCommandOutcome> {
-  const existing = roomLedgers.get(room);
-  if (existing) return existing;
-
-  const ledger = new IdempotentCommandLedger<RuntimeCommandOutcome>(COMMAND_RECEIPT_LIMIT);
-  ledger.restore(room.commandReceipts ?? []);
-  roomLedgers.set(room, ledger);
-  return ledger;
+function playerCommandScope(playerId: string): string {
+  return `player:${playerId}`;
 }
 
-function playerCommandKey(playerId: string, commandId: string): string {
-  return `player:${playerId}:${commandId}`;
-}
-
-function hostCommandKey(commandId: string): string {
-  return `host:${commandId}`;
-}
-
-async function runIdempotent<TOutcome extends RuntimeCommandOutcome>(
-  room: RuntimeRoom,
-  scopedCommandId: string,
-  mutation: () => TOutcome,
-  resetReceiptHistory = false,
-): Promise<{ outcome: TOutcome; replayed: boolean }> {
-  const ledger = commandLedger(room);
-  const execution = await ledger.execute(scopedCommandId, mutation);
-
-  if (!execution.replayed && resetReceiptHistory) {
-    ledger.restore([
-      {
-        commandId: scopedCommandId,
-        result: execution.result,
-      },
-    ]);
-  }
-
-  room.commandReceipts = ledger.entries();
-
-  return {
-    outcome: execution.result as TOutcome,
-    replayed: execution.replayed,
-  };
-}
+const HOST_COMMAND_SCOPE = "host";
 
 // Stable Node-runtime entry points: transport handlers provide identity/authority,
 // while WerewolfGameModule owns rule-specific command handling and projections.
@@ -73,9 +34,10 @@ export function runHostCommand(
 }
 
 /**
- * C3 transport/runtime mutation entry point. The game module never sees the
- * commandId; duplicate network delivery is absorbed before domain mutation.
- * Player command ids are scoped by stable playerId so two clients cannot collide.
+ * C3/D1 transport-runtime mutation entry point. The game module never sees the
+ * commandId; duplicate delivery is absorbed by the transport-neutral room
+ * command runtime before domain mutation. Player command ids are scoped by the
+ * stable playerId so two clients cannot collide.
  */
 export function runPlayerCommandIdempotent(
   room: RuntimeRoom,
@@ -83,8 +45,12 @@ export function runPlayerCommandIdempotent(
   commandId: string,
   command: WerewolfCommand,
 ): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
-  return runIdempotent(room, playerCommandKey(playerId, commandId), () =>
-    executeWerewolfCommand(room, command, { playerId }));
+  return roomCommands.execute(
+    room,
+    playerCommandScope(playerId),
+    commandId,
+    () => executeWerewolfCommand(room, command, { playerId }),
+  ) as Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }>;
 }
 
 export function runHostCommandIdempotent(
@@ -92,8 +58,12 @@ export function runHostCommandIdempotent(
   commandId: string,
   command: WerewolfCommand,
 ): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
-  return runIdempotent(room, hostCommandKey(commandId), () =>
-    executeWerewolfCommand(room, command, { isHost: true }));
+  return roomCommands.execute(
+    room,
+    HOST_COMMAND_SCOPE,
+    commandId,
+    () => executeWerewolfCommand(room, command, { isHost: true }),
+  ) as Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }>;
 }
 
 /**
@@ -105,7 +75,12 @@ export function runHostRecoveryCommandIdempotent(
   commandId: string,
   delivery: () => HostRecoveryCommandOutcome,
 ): Promise<{ outcome: HostRecoveryCommandOutcome; replayed: boolean }> {
-  return runIdempotent(room, hostCommandKey(commandId), delivery);
+  return roomCommands.execute(
+    room,
+    HOST_COMMAND_SCOPE,
+    commandId,
+    delivery,
+  ) as Promise<{ outcome: HostRecoveryCommandOutcome; replayed: boolean }>;
 }
 
 export function runHostLifecycleMutationIdempotent(
@@ -116,10 +91,14 @@ export function runHostLifecycleMutationIdempotent(
   outcome: WerewolfCommandOutcome;
   replayed: boolean;
 }> {
-  return runIdempotent(
+  return roomCommands.execute(
     room,
-    hostCommandKey(commandId),
+    HOST_COMMAND_SCOPE,
+    commandId,
     mutation,
-    true,
-  );
+    { resetReceiptHistory: true },
+  ) as Promise<{
+    outcome: WerewolfCommandOutcome;
+    replayed: boolean;
+  }>;
 }
