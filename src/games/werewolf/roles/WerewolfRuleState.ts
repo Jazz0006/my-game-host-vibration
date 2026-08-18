@@ -22,13 +22,21 @@ export type WerewolfAbilitySource = {
   availableFromNightNumber: number;
 };
 
+/** Serializable resource owned by a delegated/copied ability. */
+export type WerewolfAbilityResource = {
+  ownerPlayerId: string;
+  key: string;
+  remainingUses: number;
+};
+
 export type WerewolfRuleState = {
   relationships: WerewolfRelationship[];
   abilitySources: WerewolfAbilitySource[];
+  abilityResources: WerewolfAbilityResource[];
 };
 
 export function createEmptyWerewolfRuleState(): WerewolfRuleState {
-  return { relationships: [], abilitySources: [] };
+  return { relationships: [], abilitySources: [], abilityResources: [] };
 }
 
 export function addLoversRelationship(
@@ -84,4 +92,43 @@ export function abilitySourceFor(
   ownerPlayerId: string,
 ): WerewolfAbilitySource | undefined {
   return state.abilitySources.find(item => item.ownerPlayerId === ownerPlayerId);
+}
+
+export function addAbilityResource(
+  state: WerewolfRuleState,
+  resource: WerewolfAbilityResource,
+): void {
+  if (!Number.isInteger(resource.remainingUses) || resource.remainingUses < 0) {
+    throw new Error("能力资源次数无效");
+  }
+  if (
+    state.abilityResources.some(
+      item => item.ownerPlayerId === resource.ownerPlayerId && item.key === resource.key,
+    )
+  ) {
+    throw new Error(`重复的能力资源: ${resource.key}`);
+  }
+  state.abilityResources.push(resource);
+}
+
+export function abilityResourceFor(
+  state: WerewolfRuleState,
+  ownerPlayerId: string,
+  key: string,
+): WerewolfAbilityResource | undefined {
+  return state.abilityResources.find(
+    item => item.ownerPlayerId === ownerPlayerId && item.key === key,
+  );
+}
+
+export function spendAbilityResource(
+  state: WerewolfRuleState,
+  ownerPlayerId: string,
+  key: string,
+): void {
+  const resource = abilityResourceFor(state, ownerPlayerId, key);
+  if (!resource || resource.remainingUses <= 0) {
+    throw new Error(`能力资源已耗尽: ${key}`);
+  }
+  resource.remainingUses -= 1;
 }
