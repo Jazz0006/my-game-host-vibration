@@ -66,8 +66,11 @@ export class InteractionTimeoutCoordinator {
     const existing = this.timers.get(roomId);
 
     if (timeoutSeconds <= 0 || actorPlayerIds.length === 0) {
-      if (existing) this.timers.delete(roomId);
-      return { created: false, replaced: existing };
+      if (existing) {
+        this.timers.delete(roomId);
+        return { created: false, replaced: existing };
+      }
+      return { created: false };
     }
 
     if (existing?.actionId === actionId) return { state: existing, created: false };
@@ -88,7 +91,9 @@ export class InteractionTimeoutCoordinator {
       extensionCount: 0,
     };
     this.timers.set(roomId, state);
-    return { state, created: true, replaced: existing };
+    return existing
+      ? { state, created: true, replaced: existing }
+      : { state, created: true };
   }
 
   markWarningSent(roomId: string, actionId: string): InteractionTimeoutState | undefined {
