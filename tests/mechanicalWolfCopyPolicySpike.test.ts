@@ -49,6 +49,7 @@ describe("B5.1 Mechanical Wolf explicit copy policy spike", () => {
 
     expect(
       resolveMechanicalWolfCopiedSelfDeathEffects(
+        game,
         ruleState,
         "mech",
         "mech",
@@ -65,6 +66,7 @@ describe("B5.1 Mechanical Wolf explicit copy policy spike", () => {
 
     expect(
       resolveMechanicalWolfCopiedSelfDeathEffects(
+        game,
         ruleState,
         "mech",
         "mech",
@@ -74,6 +76,7 @@ describe("B5.1 Mechanical Wolf explicit copy policy spike", () => {
     ).toHaveLength(1);
     expect(
       resolveMechanicalWolfCopiedSelfDeathEffects(
+        game,
         ruleState,
         "mech",
         "mech",
@@ -90,9 +93,28 @@ describe("B5.1 Mechanical Wolf explicit copy policy spike", () => {
 
     expect(
       resolveMechanicalWolfCopiedSelfDeathEffects(
+        game,
         ruleState,
         "mech",
         "villager",
+        "night_attack",
+        MECHANICAL_WOLF_COPY_POLICIES,
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not trigger copied Hunter when no other living target remains", () => {
+    const game = gameState();
+    game.deadPlayerIds.push("hunter", "witch", "villager");
+    const ruleState = createEmptyWerewolfRuleState();
+    learnMechanicalWolfAbility(game, ruleState, "mech", "hunter");
+
+    expect(
+      resolveMechanicalWolfCopiedSelfDeathEffects(
+        game,
+        ruleState,
+        "mech",
+        "mech",
         "night_attack",
         MECHANICAL_WOLF_COPY_POLICIES,
       ),
