@@ -37,7 +37,7 @@ describe("four-digit room code contract", () => {
     expect(result.roomId).toMatch(/^\d{4}$/u);
   });
 
-  it("keeps web recovery and the lab on the same four-digit contract", () => {
+  it("keeps web recovery and the lab on the same room and command contracts", () => {
     const indexHtml = source("public/index.html");
     const recoveryUi = source("public/recoveryIdentity.js");
     const labHtml = source("dev/lab.html");
@@ -49,13 +49,17 @@ describe("four-digit room code contract", () => {
     expect(indexHtml).not.toContain('placeholder="6位房间号"');
     expect(recoveryUi).toContain('input.maxLength = 4');
     expect(recoveryUi).toContain('/^\\d{4}$/u');
+    expect(recoveryUi).toContain('recoveryCodeInput.maxLength = 6');
+    expect(recoveryUi).toContain('/^\\d{6}$/u');
     expect(labHtml).toContain('maxlength="4"');
     expect(labBootstrap).toContain('.replace("\\\\d{6}", "\\\\d{4}")');
     expect(labBootstrap).toContain('source.includes("/^\\\\d{4}$/u")');
+    expect(labBootstrap).toContain('commandId: crypto.randomUUID()');
     expect(labBootstrap).toContain('Function(source)();');
     expect(labBootstrap).toContain('实验室启动失败');
     expect(labBootstrap).toContain('createButton("模拟掉线"');
     expect(recoveryLab).toContain('/^\\d{4}$/u');
+    expect(recoveryLab).toContain('/^\\d{6}$/u');
     expect(recoveryLab).toContain('"player:claim-identity-recovery"');
   });
 });
