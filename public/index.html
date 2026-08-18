@@ -123,6 +123,7 @@
       <div id="vote-tally" class="hidden status"></div>
       <button id="begin-night-start" class="hidden">宣布结果，准备下一夜</button>
       <button id="restart-game" class="hidden danger">重新开始游戏</button>
+      <button id="resend-current-action" class="secondary" title="仅重新提醒当前在线行动玩家，不改变游戏状态" onclick="emitCommandWithAck('host:resend-current-action', {})">重新提醒当前行动玩家</button>
       <button id="game-exit-room" class="danger-outline">退出或关闭房间</button>
       </section>
 
