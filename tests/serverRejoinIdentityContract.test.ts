@@ -95,7 +95,9 @@ describe("C1 server rejoin identity contract", () => {
       );
     }
 
-    expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {})).toEqual({ ok: true });
+    expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {
+      commandId: "rejoin-start-game",
+    })).toEqual({ ok: true });
 
     const targetIndex = 2;
     const targetSocket = sockets[targetIndex]!;
