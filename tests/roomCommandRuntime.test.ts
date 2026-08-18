@@ -49,7 +49,9 @@ describe("D1.1 RoomCommandRuntime", () => {
 
     const restoredRoom: TestRoom = {
       value: firstRoom.value,
-      commandReceipts: structuredClone(firstRoom.commandReceipts),
+      ...(firstRoom.commandReceipts
+        ? { commandReceipts: structuredClone(firstRoom.commandReceipts) }
+        : {}),
     };
     const restoredRuntime = new RoomCommandRuntime<Outcome, TestRoom>();
     const replay = await restoredRuntime.execute(restoredRoom, "host", "restore-me", () => ({
