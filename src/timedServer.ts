@@ -58,7 +58,6 @@ function emitTimeoutState(
     const player = room.players.find(item => item.id === playerId);
     if (player?.socketId) {
       emitClientInteractionTimeoutState(io, player.socketId, room.id, state);
-      io.to(player.socketId).emit("player:interaction-timeout-state", state);
     }
   }
 }
@@ -153,7 +152,6 @@ export function createTimedGameServer(): TimedServer {
       const key = timeoutDeliveryKey(room.id, actionId, playerId);
       if (timeoutStateDeliveries.get(key) === player.socketId) continue;
       emitClientInteractionTimeoutState(io, player.socketId, room.id, state);
-      io.to(player.socketId).emit("player:interaction-timeout-state", state);
       timeoutStateDeliveries.set(key, player.socketId);
     }
   }
@@ -190,7 +188,7 @@ export function createTimedGameServer(): TimedServer {
       ) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.player.isHost) {
-          return ack({ ok: false, message: "只有房主可以修改超时设置" });
+          return ack({ ok: false, message: "只有房主可以修改行动超时" });
         }
         if (membership.room.game) {
           return ack({ ok: false, message: "游戏开始后不能修改行动超时" });
@@ -371,10 +369,6 @@ export function createTimedGameServer(): TimedServer {
               message: ruleMessage(error),
             };
             emitClientInteractionTimeoutError(io, player.socketId, payload);
-            io.to(player.socketId).emit("player:interaction-timeout-error", {
-              actionId: payload.actionId,
-              message: payload.message,
-            });
           }
         }
       }
