@@ -30,11 +30,12 @@ describe("E2.3b lifecycle legacy event contraction", () => {
     expect(count(server, "emitGameOverEffects(io, membership.room);")).toBe(1);
   });
 
-  it("keeps lifecycle effect ownership out of the legacy Web app", () => {
+  it("keeps lifecycle event ownership out of raw Web Socket.IO listeners", () => {
     expect(app).not.toContain('socket.on("game:night-complete"');
     expect(app).not.toContain('socket.on("game:over"');
     expect(app).not.toContain("function playNightEndAudio");
-    expect(app).toContain('socket.on("room:removed"');
-    expect(app).toContain('socket.on("room:closed"');
+    expect(app).not.toContain('socket.on("room:removed"');
+    expect(app).not.toContain('socket.on("room:closed"');
+    expect(app).toContain("attachBrowserRoomLifecycle");
   });
 });

@@ -26,6 +26,7 @@ let webClientSession = null;
 let unsubscribeClientSession = null;
 let detachClientLifecycle = null;
 let detachSessionReplaced = null;
+let detachRoomLifecycle = null;
 let pendingEntryResult = null;
 let clientSessionActivationId = 0;
 let clientRuntimePromise = null;
@@ -194,6 +195,8 @@ function roomIsVisible() {
 function teardownClientSession() {
   const session = webClientSession;
   webClientSession = null;
+  detachRoomLifecycle?.();
+  detachRoomLifecycle = null;
   detachSessionReplaced?.();
   detachSessionReplaced = null;
   detachClientLifecycle?.();
@@ -303,6 +306,7 @@ async function activateClientSession(result) {
   try {
     const {
       createWebClientSession,
+      attachBrowserRoomLifecycle,
       attachBrowserSessionLifecycle,
       attachBrowserSessionReplaced,
     } = await loadClientRuntime();
@@ -320,6 +324,18 @@ async function activateClientSession(result) {
       setConnectionStatus("身份已在另一台设备恢复", "replaced");
       setError("你的身份已在另一台设备恢复，本设备连接已断开");
       $("prompt-overlay").classList.add("hidden");
+    });
+    detachRoomLifecycle = attachBrowserRoomLifecycle(session, {
+      onRemoved(payload) {
+        if (payload.roomId !== currentRoomId) return;
+        clearSession();
+        returnToEntry("你已被房主移出房间");
+      },
+      onClosed(payload) {
+        if (payload.roomId !== currentRoomId) return;
+        clearSession();
+        returnToEntry("房主已关闭房间");
+      },
     });
     unsubscribeClientSession = session.subscribe(snapshot => {
       renderClientSessionSnapshot(session, snapshot);
@@ -1034,16 +1050,8 @@ socket.on("room:state", state => {
 });
 
 // ── Game events ────────────────────────────────────────────────────────────
-// Authoritative private PlayerView and migrated lifecycle effects now arrive
+// Authoritative private PlayerView and migrated lifecycle events now arrive
 // through ClientSession/client:state and ClientSession/client:event.
-socket.on("room:removed", () => {
-  clearSession();
-  returnToEntry("你已被房主移出房间");
-});
-socket.on("room:closed", () => {
-  clearSession();
-  returnToEntry("房主已关闭房间");
-});
 
 // ── Host controls ──────────────────────────────────────────────────────────
 $("open-config").addEventListener("click", () => {

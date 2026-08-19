@@ -53,7 +53,7 @@ function emitAck<T>(socket: ClientSocket, event: string, payload: unknown): Prom
   });
 }
 
-describe("E2.3e2 room lifecycle delivery", () => {
+describe("E2.3e3 room lifecycle delivery", () => {
   let game: ReturnType<typeof createGameServer>;
   let baseUrl: string;
   let clients: ClientSocket[];
@@ -92,12 +92,11 @@ describe("E2.3e2 room lifecycle delivery", () => {
     return { host, player, hostSession, playerSession };
   }
 
-  it("delivers stable and legacy room removal events to the removed player", async () => {
+  it("delivers stable room removal event to the removed player", async () => {
     const { host, player, hostSession, playerSession } = await createRoomWithPlayer();
     const stable = waitFor<
       ClientRealtimeEventEnvelope<typeof CLIENT_ROOM_REMOVED, ClientRoomRemovedPayload>
     >(player, "client:event", event => event.type === CLIENT_ROOM_REMOVED);
-    const legacy = waitFor<{ roomId: string; reason: string }>(player, "room:removed");
 
     expect(await emitAck<Ack>(host, "host:remove-player", {
       targetPlayerId: playerSession.playerId,
@@ -109,11 +108,10 @@ describe("E2.3e2 room lifecycle delivery", () => {
       type: CLIENT_ROOM_REMOVED,
       payload: { roomId: hostSession.roomId, reason: "removed" },
     });
-    expect(await legacy).toEqual({ roomId: hostSession.roomId, reason: "removed" });
     expect(game.rooms.get(hostSession.roomId)?.players).toHaveLength(1);
   });
 
-  it("delivers stable and legacy room closed events to every room member", async () => {
+  it("delivers stable room closed event to every room member", async () => {
     const { host, player, hostSession } = await createRoomWithPlayer();
     const hostStable = waitFor<
       ClientRealtimeEventEnvelope<typeof CLIENT_ROOM_CLOSED, ClientRoomClosedPayload>
@@ -121,8 +119,6 @@ describe("E2.3e2 room lifecycle delivery", () => {
     const playerStable = waitFor<
       ClientRealtimeEventEnvelope<typeof CLIENT_ROOM_CLOSED, ClientRoomClosedPayload>
     >(player, "client:event", event => event.type === CLIENT_ROOM_CLOSED);
-    const hostLegacy = waitFor<{ roomId: string; reason: string }>(host, "room:closed");
-    const playerLegacy = waitFor<{ roomId: string; reason: string }>(player, "room:closed");
 
     expect(await emitAck<Ack>(host, "host:close-room", {})).toEqual({ ok: true });
 
@@ -134,8 +130,6 @@ describe("E2.3e2 room lifecycle delivery", () => {
     };
     expect(await hostStable).toEqual(expectedStable);
     expect(await playerStable).toEqual(expectedStable);
-    expect(await hostLegacy).toEqual({ roomId: hostSession.roomId, reason: "host_closed" });
-    expect(await playerLegacy).toEqual({ roomId: hostSession.roomId, reason: "host_closed" });
     expect(game.rooms.has(hostSession.roomId)).toBe(false);
   });
 });
