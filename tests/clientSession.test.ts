@@ -86,8 +86,8 @@ function delivery(
   generation: number,
   revision: number,
   phase: string,
-  roomId = credentials.roomId,
-  playerId = credentials.playerId,
+  roomId: string = credentials.roomId,
+  playerId: string = credentials.playerId,
 ): ClientAuthoritativeStateDelivery<View> {
   return {
     generation,
