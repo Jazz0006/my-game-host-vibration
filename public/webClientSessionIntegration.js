@@ -130,6 +130,9 @@
     }
 
     const myActivationId = ++activationId;
+    const previous = webClientSession;
+    if (previous) teardownClientSession();
+
     currentRoomId = credentials.roomId;
     currentPlayerId = credentials.playerId;
     pendingEntryResult = {
@@ -137,9 +140,6 @@
       roomId: credentials.roomId,
       playerId: credentials.playerId,
     };
-
-    const previous = webClientSession;
-    if (previous) teardownClientSession();
 
     try {
       const { createWebClientSession } = await runtimePromise;
