@@ -25,6 +25,7 @@ export type ClientConnectionContext = {
 export type ClientConnectionEvent =
   | { type: "connectRequested" }
   | { type: "reconnectRequested" }
+  | { type: "resyncRequested" }
   | { type: "transportOpened"; generation: number }
   | { type: "transportClosed"; generation: number }
   | { type: "authoritativeStateSynchronized"; generation: number }
@@ -83,9 +84,11 @@ function shouldCloseTransport(status: ClientConnectionStatus): boolean {
 }
 
 /**
- * Pure E2.2a connection state machine. Transport connectivity is deliberately
+ * Pure E2.2 connection state machine. Transport connectivity is deliberately
  * distinct from session synchronization: transportOpened enters Syncing, and
- * only authoritativeStateSynchronized may enter Connected.
+ * only authoritativeStateSynchronized may enter Connected. A healthy Connected
+ * transport can also re-enter Syncing without changing generation when browser
+ * lifecycle recovery needs to revalidate the authoritative PlayerView.
  */
 export function transitionClientConnection(
   context: ClientConnectionContext,
@@ -121,6 +124,16 @@ export function transitionClientConnection(
         effects: [{ type: "openTransport", generation, reconnect: true }],
       };
     }
+
+    case "resyncRequested":
+      if (context.status !== "Connected") return unchanged(context);
+      return {
+        context: { status: "Syncing", generation: context.generation },
+        effects: [{
+          type: "synchronizeAuthoritativeState",
+          generation: context.generation,
+        }],
+      };
 
     case "transportOpened":
       if (context.status !== "Connecting" && context.status !== "Reconnecting") {
