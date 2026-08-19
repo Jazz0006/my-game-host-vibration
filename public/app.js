@@ -1051,7 +1051,6 @@ function playNightEndAudio() {
 
 // ── Game events ────────────────────────────────────────────────────────────
 // Authoritative private PlayerView now arrives through ClientSession/client:state.
-socket.on("player:action-alert", () => vibrate([300, 150, 300]));
 socket.on("game:night-complete", () => {
   vibrate([160, 100, 160, 100, 500]);
   if (isHost) playNightEndAudio();

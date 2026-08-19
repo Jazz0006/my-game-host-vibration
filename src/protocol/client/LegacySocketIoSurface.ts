@@ -23,9 +23,10 @@ export type LegacySocketSurfaceEntry = {
  * the four stable protocol families instead of becoming a fifth transport API.
  *
  * E2 records the stable Socket.IO transport events used during incremental Web
- * migration: `client:command` carries versioned command envelopes, while
+ * migration: `client:command` carries versioned command envelopes,
  * `client:sync-state`/`client:state` expose revised authoritative PlayerView
- * state without removing the legacy delivery surface yet.
+ * state, and `client:event` carries transient realtime event envelopes without
+ * removing the legacy delivery surface yet.
  */
 export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "client:command", direction: "client-to-server", family: "command", category: "delivery", protocolTarget: "command.envelope" },
@@ -68,6 +69,7 @@ export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "player:submit-test-choice", direction: "client-to-server", family: "command", category: "test-support" },
 
   { event: "client:state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.player" },
+  { event: "client:event", direction: "server-to-client", family: "event", category: "delivery", protocolTarget: "event.envelope" },
   { event: "room:state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.room" },
   { event: "player:game-state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.player" },
   { event: "session:replaced", direction: "server-to-client", family: "event", category: "session", protocolTarget: "session.replaced" },
