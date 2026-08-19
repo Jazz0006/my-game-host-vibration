@@ -21,6 +21,8 @@
     <view><text class="label">Revision</text><text>{{revision === null ? '-' : revision}}</text></view>
     <view><text class="label">Screen</text><text>{{screen}}</text></view>
     <view><text class="label">Network</text><text>{{networkStatus}}</text></view>
+    <view wx:if="{{failureCode}}"><text class="label">Failure code</text><text class="mono">{{failureCode}}</text></view>
+    <view wx:if="{{failureMessage}}"><text class="label">Failure message</text><text class="mono">{{failureMessage}}</text></view>
     <view wx:if="{{roleName}}"><text class="label">Role</text><text>{{roleName}}</text></view>
     <view wx:if="{{actionId}}"><text class="label">Action ID</text><text class="mono">{{actionId}}</text></view>
   </view>
