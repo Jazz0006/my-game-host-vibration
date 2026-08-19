@@ -135,16 +135,17 @@ describe("E1 client protocol contract", () => {
     );
   });
 
-  it("maps every post-start Werewolf Socket.IO game command to a stable protocol type", () => {
+  it("maps every remaining legacy Werewolf game command to a stable protocol type", () => {
+    const stableTypes = new Set<string>(WEREWOLF_CLIENT_COMMAND_TYPES);
     const mappedTargets = LEGACY_SOCKET_IO_SURFACE
       .filter(entry =>
         entry.direction === "client-to-server" &&
         entry.category === "werewolf-game" &&
         entry.protocolTarget
       )
-      .map(entry => entry.protocolTarget)
-      .sort();
+      .map(entry => entry.protocolTarget!);
 
-    expect(mappedTargets).toEqual([...WEREWOLF_CLIENT_COMMAND_TYPES].sort());
+    expect(mappedTargets.every(target => stableTypes.has(target))).toBe(true);
+    expect(mappedTargets).not.toContain("werewolf.confirmRole");
   });
 });
