@@ -15,6 +15,7 @@ export type BrowserSocketIoLike = {
   connect(): unknown;
   disconnect(): unknown;
   on(event: string, listener: (...args: any[]) => void): unknown;
+  off?(event: string, listener: (...args: any[]) => void): unknown;
   timeout(ms: number): {
     emit(
       event: string,
@@ -86,6 +87,33 @@ implements ClientRealtimeTransport<TStatePayload> {
   private activeGeneration = 0;
   private readonly timeoutMs: number;
   private readonly commandRetries: number;
+  private detached = false;
+
+  private readonly handleConnect = () => {
+    if (this.activeGeneration > 0) this.listener?.onOpen(this.activeGeneration);
+  };
+
+  private readonly handleDisconnect = (reason: unknown) => {
+    if (this.activeGeneration <= 0) return;
+    this.listener?.onClose(
+      this.activeGeneration,
+      typeof reason === "string" ? reason : undefined,
+    );
+  };
+
+  private readonly handleState = (value: unknown) => {
+    if (this.activeGeneration <= 0) return;
+    try {
+      this.listener?.onState(
+        parseStateDelivery<TStatePayload>(value, this.activeGeneration),
+      );
+    } catch (error) {
+      this.listener?.onError(this.activeGeneration, {
+        code: "invalid-authoritative-state",
+        ...(error instanceof Error && error.message ? { message: error.message } : {}),
+      });
+    }
+  };
 
   constructor(
     private readonly socket: BrowserSocketIoLike,
@@ -96,29 +124,9 @@ implements ClientRealtimeTransport<TStatePayload> {
       ? Math.max(0, Number(options.commandRetries))
       : 1;
 
-    socket.on("connect", () => {
-      if (this.activeGeneration > 0) this.listener?.onOpen(this.activeGeneration);
-    });
-    socket.on("disconnect", (reason: unknown) => {
-      if (this.activeGeneration <= 0) return;
-      this.listener?.onClose(
-        this.activeGeneration,
-        typeof reason === "string" ? reason : undefined,
-      );
-    });
-    socket.on("client:state", (value: unknown) => {
-      if (this.activeGeneration <= 0) return;
-      try {
-        this.listener?.onState(
-          parseStateDelivery<TStatePayload>(value, this.activeGeneration),
-        );
-      } catch (error) {
-        this.listener?.onError(this.activeGeneration, {
-          code: "invalid-authoritative-state",
-          ...(error instanceof Error && error.message ? { message: error.message } : {}),
-        });
-      }
-    });
+    socket.on("connect", this.handleConnect);
+    socket.on("disconnect", this.handleDisconnect);
+    socket.on("client:state", this.handleState);
   }
 
   setListener(listener: ClientRealtimeTransportListener<TStatePayload>): void {
@@ -126,10 +134,13 @@ implements ClientRealtimeTransport<TStatePayload> {
   }
 
   connect(generation: number): void {
+    if (this.detached) return;
     this.activeGeneration = generation;
     if (this.socket.connected) {
       queueMicrotask(() => {
-        if (this.activeGeneration === generation) this.listener?.onOpen(generation);
+        if (!this.detached && this.activeGeneration === generation) {
+          this.listener?.onOpen(generation);
+        }
       });
       return;
     }
@@ -138,6 +149,7 @@ implements ClientRealtimeTransport<TStatePayload> {
 
   disconnect(generation: number): void {
     if (generation !== this.activeGeneration) return;
+    this.detach();
     this.socket.disconnect();
   }
 
@@ -169,6 +181,15 @@ implements ClientRealtimeTransport<TStatePayload> {
       return Promise.reject(new Error(`Socket.IO client transport cannot send ${message.kind} messages`));
     }
     return this.emitAckWithRetry("client:command", message, this.commandRetries);
+  }
+
+  private detach(): void {
+    if (this.detached) return;
+    this.detached = true;
+    this.listener = null;
+    this.socket.off?.("connect", this.handleConnect);
+    this.socket.off?.("disconnect", this.handleDisconnect);
+    this.socket.off?.("client:state", this.handleState);
   }
 
   private emitAck<T>(event: string, payload: unknown): Promise<T> {

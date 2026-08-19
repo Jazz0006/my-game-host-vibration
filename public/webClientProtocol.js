@@ -113,7 +113,14 @@
 
     const originalIo = global.io;
     function bridgedIo(...args) {
-      return wrapSocket(originalIo(...args));
+      // The production app calls io() without arguments. E2.2 ClientSession now
+      // owns the moment that transport connection begins, so only that default
+      // call is changed to autoConnect:false. Explicit Socket.IO options from
+      // other callers remain untouched.
+      const socket = args.length === 0
+        ? originalIo({ autoConnect: false })
+        : originalIo(...args);
+      return wrapSocket(socket);
     }
     Object.assign(bridgedIo, originalIo);
     Object.defineProperty(bridgedIo, "__webClientProtocolBridge", {
@@ -125,6 +132,26 @@
     return true;
   }
 
+  function installClientSessionIntegrationLoader() {
+    const document = global.document;
+    if (!document?.createElement) return false;
+
+    const load = () => {
+      if (document.querySelector?.('script[data-web-client-session-integration]')) return;
+      const script = document.createElement("script");
+      script.src = "/webClientSessionIntegration.js";
+      script.dataset.webClientSessionIntegration = "true";
+      document.body.appendChild(script);
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", load, { once: true });
+    } else {
+      load();
+    }
+    return true;
+  }
+
   global.WebClientProtocol = Object.freeze({
     CLIENT_PROTOCOL_VERSION,
     SOCKET_COMMAND_EVENT,
@@ -132,10 +159,13 @@
     createCommandEnvelope,
     createSocketIoAdapter,
     installSocketIoLegacyCommandBridge,
+    installClientSessionIntegrationLoader,
   });
 
-  // index.html loads this file after Socket.IO and before app.js. Installing the
-  // bridge here lets E2 migrate transport semantics without editing the large
-  // UI file; non-migrated room/session/recovery events pass through unchanged.
+  // index.html loads this file after Socket.IO and before app.js. The command
+  // bridge is installed synchronously; the E2.2 integration shim is loaded only
+  // after app.js has registered its legacy handlers so it can replace just the
+  // connection/session boundary without rewriting the large UI file.
   installSocketIoLegacyCommandBridge();
+  installClientSessionIntegrationLoader();
 })(globalThis);
