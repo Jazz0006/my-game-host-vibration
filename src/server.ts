@@ -10,6 +10,10 @@ import {
   emitGameOverEffects,
   emitNightCompleteEffects,
 } from "./runtime/node/SocketIoClientEffectDelivery.js";
+import {
+  emitClientRoomClosed,
+  emitClientRoomRemoved,
+} from "./runtime/node/SocketIoClientRoomEventDelivery.js";
 import { emitClientSessionReplaced } from "./runtime/node/SocketIoClientSessionEventDelivery.js";
 import { emitPrivatePlayerState } from "./runtime/node/SocketIoClientStateDelivery.js";
 import {
@@ -622,7 +626,12 @@ socket.on(
         const targetSocket = target.socketId ? io.sockets.sockets.get(target.socketId) : undefined;
         invalidateIdentityRecoveryGrant(membership.room, target.id);
         removePlayer(membership.room, target.id);
-        targetSocket?.emit("room:removed", { roomId: membership.room.id, reason: "removed" });
+        if (targetSocket) {
+          emitClientRoomRemoved(targetSocket, membership.room.id);
+          // Temporary E2.3e2 compatibility until production Web consumes room.removed
+          // through ClientSession's canonical client:event channel.
+          targetSocket.emit("room:removed", { roomId: membership.room.id, reason: "removed" });
+        }
         if (process.env.NODE_ENV !== "production") {
           io.emit("dev:player-removed", {
             roomId: membership.room.id,
@@ -690,6 +699,9 @@ socket.on(
       }
       const roomId = membership.room.id;
       rooms.delete(roomId);
+      emitClientRoomClosed(io, roomId);
+      // Temporary E2.3e2 compatibility until production Web consumes room.closed
+      // through ClientSession's canonical client:event channel.
       io.to(roomId).emit("room:closed", { roomId, reason: "host_closed" });
       io.in(roomId).socketsLeave(roomId);
       ack({ ok: true });
