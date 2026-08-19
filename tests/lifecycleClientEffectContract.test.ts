@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 
+const delivery = fs.readFileSync(
+  new URL("../src/runtime/node/SocketIoClientEffectDelivery.ts", import.meta.url),
+  "utf8",
+);
 const server = fs.readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
 const app = fs.readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 
@@ -9,15 +13,18 @@ function count(source: string, value: string): number {
 }
 
 describe("E2.2c3 lifecycle client effects", () => {
-  it("routes night-complete and game-over effects through client:event while retaining legacy server compatibility", () => {
-    expect(server).toContain("createClientAudioCueEffectEvent");
-    expect(server).toContain("CLIENT_AUDIO_CUE_NIGHT_COMPLETE");
-    expect(server).toContain("function emitNightCompleteEffects");
-    expect(server).toContain("function emitGameOverEffects");
-    expect(server).toContain('reason: "night-complete"');
-    expect(server).toContain('reason: "game-over"');
-    expect(server).toContain('emit("game:night-complete", context)');
-    expect(server).toContain('emit("game:over", context)');
+  it("dual-publishes lifecycle effects only from the canonical Node effect delivery boundary", () => {
+    expect(delivery).toContain("createClientAudioCueEffectEvent");
+    expect(delivery).toContain("CLIENT_AUDIO_CUE_NIGHT_COMPLETE");
+    expect(delivery).toContain("function emitNightCompleteEffects");
+    expect(delivery).toContain("function emitGameOverEffects");
+    expect(delivery).toContain('reason: "night-complete"');
+    expect(delivery).toContain('reason: "game-over"');
+    expect(delivery).toContain('emit("game:night-complete", context)');
+    expect(delivery).toContain('emit("game:over", context)');
+
+    expect(server).not.toContain('emit("game:night-complete"');
+    expect(server).not.toContain('emit("game:over"');
     expect(count(server, "emitNightCompleteEffects(io, room);")).toBe(2);
     expect(count(server, "emitGameOverEffects(io, room);")).toBe(2);
     expect(count(server, "emitGameOverEffects(io, membership.room);")).toBe(1);
