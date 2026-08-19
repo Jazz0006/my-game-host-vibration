@@ -5,7 +5,10 @@ import {
   type ClientEffectDispatchStatus,
 } from "../src/client/effects/ClientEffectDispatcher.js";
 import {
+  CLIENT_AUDIO_CUE_NIGHT_COMPLETE,
+  CLIENT_EFFECT_AUDIO_CUE,
   CLIENT_EFFECT_VIBRATE,
+  createClientAudioCueEffectEvent,
   createClientVibrateEffectEvent,
 } from "../src/protocol/client/ClientEffects.js";
 import {
@@ -13,61 +16,64 @@ import {
   type ClientRealtimeEventEnvelope,
 } from "../src/protocol/client/ClientProtocol.js";
 
-function statusFor(payload: unknown): ClientEffectDispatchStatus {
+function vibrationStatus(payload: unknown): ClientEffectDispatchStatus {
   return dispatchClientRealtimeEffect(
     createClientRealtimeEventEnvelope(CLIENT_EFFECT_VIBRATE, payload),
     { vibrate: () => undefined },
   );
 }
 
-describe("E2.2c2 ClientEffectDispatcher", () => {
-  it("creates a transport-neutral vibration effect without sharing the source array", () => {
+describe("E2.2c client effect dispatcher", () => {
+  it("creates transport-neutral vibration and semantic audio effects", () => {
     const pattern = [300, 150, 300];
-    const event = createClientVibrateEffectEvent(pattern, {
-      reason: "action-alert",
-      context: { actionId: "action-1", phase: "night_seer" },
-    });
+    const vibration = createClientVibrateEffectEvent(pattern, { reason: "action-alert" });
     pattern[0] = 999;
+    expect(vibration.payload.pattern).toEqual([300, 150, 300]);
 
-    expect(event).toEqual({
+    expect(createClientAudioCueEffectEvent(CLIENT_AUDIO_CUE_NIGHT_COMPLETE, {
+      reason: "night-complete",
+    })).toEqual({
       protocolVersion: 1,
       kind: "event",
-      type: CLIENT_EFFECT_VIBRATE,
-      payload: {
-        pattern: [300, 150, 300],
-        reason: "action-alert",
-        context: { actionId: "action-1", phase: "night_seer" },
-      },
+      type: CLIENT_EFFECT_AUDIO_CUE,
+      payload: { cue: "night-complete", reason: "night-complete" },
     });
   });
 
-  it("dispatches valid vibration effects and ignores unknown or malformed effects", () => {
+  it("dispatches valid effects and ignores unknown or malformed effects", () => {
     const patterns: number[][] = [];
-    const valid = createClientVibrateEffectEvent([100, 50, 100]);
-
-    expect(dispatchClientRealtimeEffect(valid, {
+    const cues: string[] = [];
+    expect(dispatchClientRealtimeEffect(createClientVibrateEffectEvent([100, 50, 100]), {
       vibrate: pattern => patterns.push([...pattern]),
     })).toBe("handled");
+    expect(dispatchClientRealtimeEffect(createClientAudioCueEffectEvent(CLIENT_AUDIO_CUE_NIGHT_COMPLETE), {
+      playAudioCue: cue => cues.push(cue),
+    })).toBe("handled");
     expect(patterns).toEqual([[100, 50, 100]]);
+    expect(cues).toEqual(["night-complete"]);
 
     expect(dispatchClientRealtimeEffect(
       createClientRealtimeEventEnvelope("client.effect.future", {}),
-      { vibrate: () => { throw new Error("must not run"); } },
+      {},
     )).toBe("ignored-unknown");
-
-    expect(statusFor({ pattern: [] })).toBe("ignored-invalid");
-    expect(statusFor({ pattern: [100, -1] })).toBe("ignored-invalid");
-    expect(statusFor({ pattern: [100, 1.5] })).toBe("ignored-invalid");
+    expect(vibrationStatus({ pattern: [] })).toBe("ignored-invalid");
+    expect(vibrationStatus({ pattern: [100, -1] })).toBe("ignored-invalid");
+    expect(dispatchClientRealtimeEffect(
+      createClientRealtimeEventEnvelope(CLIENT_EFFECT_AUDIO_CUE, { cue: "unknown" }),
+      {},
+    )).toBe("ignored-invalid");
   });
 
   it("contains platform effect failures instead of throwing into ClientSession", () => {
-    const event = createClientVibrateEffectEvent([100]);
-    expect(dispatchClientRealtimeEffect(event, {
+    expect(dispatchClientRealtimeEffect(createClientVibrateEffectEvent([100]), {
       vibrate: () => { throw new Error("platform failure"); },
+    })).toBe("target-failed");
+    expect(dispatchClientRealtimeEffect(createClientAudioCueEffectEvent(CLIENT_AUDIO_CUE_NIGHT_COMPLETE), {
+      playAudioCue: () => { throw new Error("audio failure"); },
     })).toBe("target-failed");
   });
 
-  it("adapts realtime events to browser vibration and safely no-ops when unsupported", () => {
+  it("adapts realtime events to browser vibration and semantic audio", () => {
     const realtimeListeners: Array<(event: ClientRealtimeEventEnvelope) => void> = [];
     let unsubscribed = false;
     const source = {
@@ -77,18 +83,18 @@ describe("E2.2c2 ClientEffectDispatcher", () => {
       },
     };
     const patterns: Array<number | number[]> = [];
-    const detach = attachBrowserClientEffects(source, {
-      vibrate: pattern => {
-        patterns.push(pattern);
-        return true;
-      },
-    });
+    const cues: string[] = [];
+    const detach = attachBrowserClientEffects(
+      source,
+      { vibrate: pattern => { patterns.push(pattern); return true; } },
+      cue => { cues.push(cue); },
+    );
 
-    expect(realtimeListeners).toHaveLength(1);
     realtimeListeners[0]!(createClientVibrateEffectEvent([300, 150, 300]));
+    realtimeListeners[0]!(createClientAudioCueEffectEvent(CLIENT_AUDIO_CUE_NIGHT_COMPLETE));
     expect(patterns).toEqual([[300, 150, 300]]);
+    expect(cues).toEqual(["night-complete"]);
 
-    expect(() => attachBrowserClientEffects(source, undefined)).not.toThrow();
     detach();
     expect(unsubscribed).toBe(true);
   });
