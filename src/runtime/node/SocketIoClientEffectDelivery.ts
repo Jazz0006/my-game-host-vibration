@@ -14,8 +14,8 @@ export type ActionAlertEffectOptions = {
 /**
  * Canonical Node/Socket.IO delivery boundary for transient client effects.
  *
- * E2.3 keeps legacy Socket.IO events only as compatibility deliveries. New Web
- * clients consume the stable `client:event` envelope through ClientSession.
+ * E2.3b removes the retired legacy effect event names. Web clients consume the
+ * stable `client:event` envelope through ClientSession.
  */
 export function emitActionAlertEffects(
   io: Server,
@@ -44,9 +44,6 @@ export function emitActionAlertEffects(
         context,
       }),
     );
-
-    // E2.3 compatibility only. Current Web does not consume this event.
-    io.to(player.socketId).emit("player:action-alert", context);
   }
 }
 
@@ -72,9 +69,6 @@ export function emitNightCompleteEffects(io: Server, room: RuntimeRoom): void {
       }),
     );
   }
-
-  // E2.3 compatibility only. Current Web does not consume this event.
-  io.to(room.id).emit("game:night-complete", context);
 }
 
 export function emitGameOverEffects(io: Server, room: RuntimeRoom): void {
@@ -89,7 +83,4 @@ export function emitGameOverEffects(io: Server, room: RuntimeRoom): void {
       context,
     }),
   );
-
-  // E2.3 compatibility only. Current Web does not consume this event.
-  io.to(room.id).emit("game:over", context);
 }
