@@ -15,6 +15,7 @@ describe("C4.3 identity recovery UI contract", () => {
     expect(script).toContain('"host:create-identity-recovery"');
     expect(script).toContain('"player:claim-identity-recovery"');
     expect(script).toContain("saveSession(result)");
+    expect(script).toContain("activateClientSession(result)");
   });
 
   it("does not add transient recovery grants or plaintext credentials to RoomSnapshot", () => {

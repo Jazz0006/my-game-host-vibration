@@ -109,7 +109,7 @@ document.getElementById("claim-identity-recovery").addEventListener("click", () 
       }
       errorNode.textContent = "";
       saveSession(result);
-      enterRoom(result);
+      activateClientSession(result);
     },
   );
 });
