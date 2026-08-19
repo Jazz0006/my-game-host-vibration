@@ -56,14 +56,19 @@ function emitAck<T>(
   });
 }
 
-function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResult> {
+function sendGameCommand(
+  socket: ClientSocket,
+  type: "werewolf.confirmRole" | "werewolf.startNight",
+  payload: Record<string, unknown>,
+  commandPrefix: string,
+): Promise<BasicResult> {
   return new Promise((resolve, reject) => {
     socket.timeout(TIMEOUT_MS).emit(
       "client:command",
       createClientCommandEnvelope(
-        "werewolf.confirmRole",
-        { actionId },
-        `timeout-confirm-${commandSequence++}`,
+        type,
+        payload,
+        `${commandPrefix}-${commandSequence++}`,
       ),
       (error: Error | null, result: BasicResult) => {
         if (error) reject(error);
@@ -71,6 +76,14 @@ function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResul
       },
     );
   });
+}
+
+function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResult> {
+  return sendGameCommand(socket, "werewolf.confirmRole", { actionId }, "timeout-confirm");
+}
+
+function startNight(socket: ClientSocket): Promise<BasicResult> {
+  return sendGameCommand(socket, "werewolf.startNight", {}, "timeout-start-night");
 }
 
 type JoinResult = {
@@ -187,7 +200,7 @@ describe("C4.4 Socket.IO interaction timeout", () => {
       event => event.type === CLIENT_INTERACTION_TIMEOUT_STATE && event.payload.active,
     );
 
-    expect(await emitAck<BasicResult>(host, "host:start-night")).toEqual({ ok: true });
+    expect(await startNight(host)).toEqual({ ok: true });
     const stableTimeoutState = await stableTimeoutStatePromise;
     const room = game.rooms.get(hostSession.roomId)!;
     expect(room.game?.phase).toBe("night_werewolf");
