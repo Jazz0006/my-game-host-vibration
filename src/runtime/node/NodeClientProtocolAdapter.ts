@@ -1,5 +1,5 @@
-import type { WerewolfClientCommandEnvelope } from "../../games/werewolf/WerewolfClientProtocol.js";
-import { mapWerewolfClientCommand } from "../../games/werewolf/WerewolfClientProtocol.js";
+import type { WerewolfClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
+import { mapWerewolfClientCommand } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
 import { createPlayerStateEnvelope } from "../../protocol/client/ClientProtocol.js";
 import type { WerewolfCommandEnvironment } from "../shared/werewolfRoomCommand.js";
 import { werewolfPlayerGameView } from "../shared/werewolfRoomView.js";
