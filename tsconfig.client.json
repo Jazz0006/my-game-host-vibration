@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "types": [],
+    "rootDir": "./src",
+    "outDir": "./public/client-runtime",
+    "sourceMap": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": false
+  },
+  "include": [
+    "src/client/**/*.ts",
+    "src/protocol/client/ClientProtocol.ts",
+    "src/core/command/CommandEnvelope.ts"
+  ]
+}
