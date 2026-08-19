@@ -4,12 +4,9 @@ export const CLIENT_PROTOCOL_VERSION = 1 as const;
 
 export type ClientProtocolVersion = typeof CLIENT_PROTOCOL_VERSION;
 
-export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
-
 export type ClientCommandEnvelope<
   TType extends string = string,
-  TPayload extends JsonValue = JsonValue,
+  TPayload = unknown,
 > = {
   protocolVersion: ClientProtocolVersion;
   kind: "command";
@@ -64,7 +61,7 @@ function requireNonEmptyString(value: unknown, fieldName: string): string {
 
 export function createClientCommandEnvelope<
   TType extends string,
-  TPayload extends JsonValue,
+  TPayload,
 >(
   type: TType,
   payload: TPayload,
@@ -122,8 +119,10 @@ export function createReconnectEnvelope(
 }
 
 /**
- * E1 transport contract. Reconnect always returns authoritative state/view;
- * protocol clients do not replay a missed realtime-event history.
+ * E1 transport contract. Payloads must be JSON-serializable at adapter
+ * boundaries, but TypeScript payload types may naturally use optional fields.
+ * Reconnect always returns authoritative state/view; protocol clients do not
+ * replay a missed realtime-event history.
  */
 export const CLIENT_RECONNECT_POLICY = {
   sourceOfTruth: "authoritative-state" as const,
