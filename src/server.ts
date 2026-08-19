@@ -395,7 +395,6 @@ export function createGameServer() {
           if (previousSocket) {
             const replacement = { roomId: room.id, playerId: player.id };
             emitClientSessionReplaced(previousSocket, replacement);
-            previousSocket.emit("session:replaced", replacement);
             previousSocket.disconnect(true);
           }
         }

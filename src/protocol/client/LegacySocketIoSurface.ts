@@ -68,7 +68,6 @@ export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "client:state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.player" },
   { event: "client:event", direction: "server-to-client", family: "event", category: "delivery", protocolTarget: "event.envelope" },
   { event: "room:state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.room" },
-  { event: "session:replaced", direction: "server-to-client", family: "event", category: "session", protocolTarget: "session.replaced" },
   { event: "room:removed", direction: "server-to-client", family: "event", category: "room-management", protocolTarget: "room.removed" },
   { event: "room:closed", direction: "server-to-client", family: "event", category: "room-management", protocolTarget: "room.closed" },
   { event: "game:aborted-to-lobby", direction: "server-to-client", family: "event", category: "recovery", protocolTarget: "game.abortedToLobby" },

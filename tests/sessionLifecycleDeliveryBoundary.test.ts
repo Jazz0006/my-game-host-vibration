@@ -11,8 +11,8 @@ function source(relativePath: string): string {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
 
-describe("E2.3d2 session lifecycle delivery boundary", () => {
-  it("delivers session replacement through the stable client:event envelope", () => {
+describe("E2.3d3 session lifecycle delivery boundary", () => {
+  it("keeps session replacement on the stable client:event delivery path", () => {
     const delivery = source("src/runtime/node/SocketIoClientSessionEventDelivery.ts");
     const server = source("src/server.ts");
 
@@ -20,11 +20,23 @@ describe("E2.3d2 session lifecycle delivery boundary", () => {
     expect(server).toContain("emitClientSessionReplaced(previousSocket, replacement)");
   });
 
-  it("keeps the legacy replacement event only during the consumer migration window", () => {
-    const server = source("src/server.ts");
+  it("keeps the Web UI behind the semantic browser session event adapter", () => {
+    const webSession = source("src/client/browser/WebClientSession.ts");
+    const adapter = source("src/client/browser/BrowserSessionEvents.ts");
     const web = source("public/app.js");
 
-    expect(server).toContain('previousSocket.emit("session:replaced", replacement)');
-    expect(web).toContain('socket.on("session:replaced"');
+    expect(webSession).toContain('export { attachBrowserSessionReplaced } from "./BrowserSessionEvents.js"');
+    expect(adapter).toContain("CLIENT_SESSION_REPLACED");
+    expect(adapter).toContain("session.subscribeRealtimeEvents");
+    expect(web).toContain("attachBrowserSessionReplaced");
+    expect(web).not.toContain('socket.on("session:replaced"');
+  });
+
+  it("removes the retired raw session replacement event from server and inventory", () => {
+    const server = source("src/server.ts");
+    const inventory = source("src/protocol/client/LegacySocketIoSurface.ts");
+
+    expect(server).not.toContain('emit("session:replaced"');
+    expect(inventory).not.toContain('event: "session:replaced"');
   });
 });
