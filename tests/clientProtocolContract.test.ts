@@ -23,6 +23,7 @@ const SOCKET_SERVER_SOURCES = [
   "src/timedServer.ts",
   "src/runtime/node/SocketIoClientProtocolTransport.ts",
   "src/runtime/node/SocketIoClientEffectDelivery.ts",
+  "src/runtime/node/SocketIoClientStateDelivery.ts",
 ] as const;
 
 function source(relativePath: string): string {
