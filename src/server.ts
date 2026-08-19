@@ -10,6 +10,7 @@ import {
   emitGameOverEffects,
   emitNightCompleteEffects,
 } from "./runtime/node/SocketIoClientEffectDelivery.js";
+import { emitPrivatePlayerState } from "./runtime/node/SocketIoClientStateDelivery.js";
 import {
   configFromRoleDeck,
   configFromPlayerCount,
@@ -38,7 +39,6 @@ import {
 import { NodeSessionTokenCryptoProvider } from "./runtime/node/NodeSessionTokenCryptoProvider.js";
 import {
   createWerewolfGame,
-  playerGameView as modulePlayerGameView,
   roomCore,
   roomGameView,
   type RuntimePlayer,
@@ -177,7 +177,7 @@ function roomView(room: Room, viewer: Player) {
 
 function sendPrivateState(io: Server, room: Room, player: Player): void {
   if (!player.socketId) return;
-  io.to(player.socketId).emit("player:game-state", modulePlayerGameView(room, player.id));
+  emitPrivatePlayerState(io, room, player.id);
 }
 
 function sendCurrentTestPrompt(socket: Socket, room: Room, player: Player): void {
