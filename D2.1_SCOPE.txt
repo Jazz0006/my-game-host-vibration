@@ -1,0 +1,1 @@
+D2.1 scope guard: Worker + Durable Object skeleton only. Persistence, alarms, Hibernation WebSocket, parity migration, and client cutover remain deferred.
