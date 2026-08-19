@@ -22,12 +22,12 @@ describe("E2.3f1 abort recovery delivery boundary", () => {
     expect(webRecovery).not.toContain('socket.on("game:aborted-to-lobby"');
   });
 
-  it("removes the retired server-to-client event from the legacy inventory", () => {
+  it("keeps recovery commands while retired server events stay out of the inventory", () => {
     const inventory = source("src/protocol/client/LegacySocketIoSurface.ts");
 
     expect(inventory).not.toContain('event: "game:aborted-to-lobby"');
     expect(inventory).toContain('event: "host:abort-to-lobby"');
-    expect(inventory).toContain('event: "player:interaction-timeout-state"');
-    expect(inventory).toContain('event: "player:interaction-timeout-error"');
+    expect(inventory).not.toContain('event: "player:interaction-timeout-state"');
+    expect(inventory).not.toContain('event: "player:interaction-timeout-error"');
   });
 });

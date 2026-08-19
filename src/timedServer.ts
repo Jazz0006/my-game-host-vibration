@@ -58,7 +58,6 @@ function emitTimeoutState(
     const player = room.players.find(item => item.id === playerId);
     if (player?.socketId) {
       emitClientInteractionTimeoutState(io, player.socketId, room.id, state);
-      io.to(player.socketId).emit("player:interaction-timeout-state", state);
     }
   }
 }
@@ -153,7 +152,6 @@ export function createTimedGameServer(): TimedServer {
       const key = timeoutDeliveryKey(room.id, actionId, playerId);
       if (timeoutStateDeliveries.get(key) === player.socketId) continue;
       emitClientInteractionTimeoutState(io, player.socketId, room.id, state);
-      io.to(player.socketId).emit("player:interaction-timeout-state", state);
       timeoutStateDeliveries.set(key, player.socketId);
     }
   }
@@ -371,10 +369,6 @@ export function createTimedGameServer(): TimedServer {
               message: ruleMessage(error),
             };
             emitClientInteractionTimeoutError(io, player.socketId, payload);
-            io.to(player.socketId).emit("player:interaction-timeout-error", {
-              actionId: payload.actionId,
-              message: payload.message,
-            });
           }
         }
       }

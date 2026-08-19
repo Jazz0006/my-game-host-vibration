@@ -177,20 +177,22 @@ function renderTimeoutCountdown() {
   extend.disabled = !state.canExtend;
 }
 
-socket.on("player:interaction-timeout-state", state => {
-  if (!state?.active) {
-    if (!currentTimeoutState || !state?.actionId || currentTimeoutState.actionId === state.actionId) {
+function handleInteractionTimeoutState(state) {
+  if (state?.roomId !== currentRoomId) return;
+  if (!state.active) {
+    if (!currentTimeoutState || currentTimeoutState.actionId === state.actionId) {
       currentTimeoutState = null;
     }
   } else {
     currentTimeoutState = state;
   }
   renderTimeoutCountdown();
-});
+}
 
-socket.on("player:interaction-timeout-error", payload => {
-  if (payload?.message) setError(payload.message);
-});
+function handleInteractionTimeoutError(payload) {
+  if (payload?.roomId !== currentRoomId) return;
+  if (payload.message) setError(payload.message);
+}
 
 setInterval(renderTimeoutCountdown, 250);
 

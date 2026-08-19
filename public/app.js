@@ -27,6 +27,7 @@ let unsubscribeClientSession = null;
 let detachClientLifecycle = null;
 let detachSessionReplaced = null;
 let detachRoomLifecycle = null;
+let detachInteractionTimeout = null;
 let pendingEntryResult = null;
 let clientSessionActivationId = 0;
 let clientRuntimePromise = null;
@@ -195,6 +196,8 @@ function roomIsVisible() {
 function teardownClientSession() {
   const session = webClientSession;
   webClientSession = null;
+  detachInteractionTimeout?.();
+  detachInteractionTimeout = null;
   detachRoomLifecycle?.();
   detachRoomLifecycle = null;
   detachSessionReplaced?.();
@@ -306,6 +309,7 @@ async function activateClientSession(result) {
   try {
     const {
       createWebClientSession,
+      attachBrowserInteractionTimeoutEvents,
       attachBrowserRoomLifecycle,
       attachBrowserSessionLifecycle,
       attachBrowserSessionReplaced,
@@ -335,6 +339,14 @@ async function activateClientSession(result) {
         if (payload.roomId !== currentRoomId) return;
         clearSession();
         returnToEntry("房主已关闭房间");
+      },
+    });
+    detachInteractionTimeout = attachBrowserInteractionTimeoutEvents(session, {
+      onState(payload) {
+        handleInteractionTimeoutState(payload);
+      },
+      onError(payload) {
+        handleInteractionTimeoutError(payload);
       },
     });
     unsubscribeClientSession = session.subscribe(snapshot => {
