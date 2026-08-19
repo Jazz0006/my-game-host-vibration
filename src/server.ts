@@ -188,11 +188,6 @@ function sendPrivateState(io: Server, room: Room, player: Player): void {
 function sendCurrentTestPrompt(socket: Socket, room: Room, player: Player): void {
   const prompt = room.activePrompt;
   if (!prompt || prompt.targetPlayerId !== player.id) return;
-  socket.emit("player:test-prompt-state", {
-    promptId: prompt.id,
-    status: prompt.status,
-    choice: prompt.status === "submitted" ? prompt.choice : undefined,
-  });
   if (prompt.status === "sent") {
     socket.emit("player:test-prompt", { promptId: prompt.id, resumed: true });
   }
