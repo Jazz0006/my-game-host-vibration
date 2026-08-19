@@ -25,18 +25,18 @@ import {
 } from "./CloudflareRoomSnapshotRepository.js";
 import { CloudflareRandomProvider } from "./CloudflareRandomProvider.js";
 
-type WerewolfReceipt = CommandReceipt<WerewolfCommandOutcome>;
+type RoomReceipt = CommandReceipt<unknown>;
 
 type WerewolfSnapshot = RoomSnapshot<
   GameState,
   GameConfig,
   unknown,
   WerewolfInteraction,
-  WerewolfReceipt
+  RoomReceipt
 >;
 
 type CloudflareWerewolfRoom = RoomState<GameState, GameConfig, RoomPlayer> & {
-  commandReceipts?: WerewolfReceipt[];
+  commandReceipts?: RoomReceipt[];
 };
 
 export type CloudflareWerewolfCommandExecution = {
@@ -70,10 +70,7 @@ function defaultEnvironment(): WerewolfCommandEnvironment {
  */
 export class CloudflareWerewolfCommandRuntime {
   private readonly snapshots: CloudflareRoomSnapshotRepository<WerewolfSnapshot>;
-  private readonly commands = new RoomCommandRuntime<
-    WerewolfCommandOutcome,
-    CloudflareWerewolfRoom
-  >();
+  private readonly commands = new RoomCommandRuntime<unknown, CloudflareWerewolfRoom>();
 
   constructor(
     storage: DurableObjectStorageLike,
@@ -130,10 +127,11 @@ export class CloudflareWerewolfCommandRuntime {
       commandId,
       () => executeWerewolfRoomCommand(room, command, actor, this.environment),
     );
+    const outcome = execution.outcome as WerewolfCommandOutcome;
 
     if (execution.replayed) {
       return {
-        outcome: execution.outcome,
+        outcome,
         replayed: true,
         revision: snapshot.revision,
         snapshot,
@@ -155,7 +153,7 @@ export class CloudflareWerewolfCommandRuntime {
 
     await this.snapshots.save(nextSnapshot);
     return {
-      outcome: execution.outcome,
+      outcome,
       replayed: false,
       revision,
       snapshot: nextSnapshot,
