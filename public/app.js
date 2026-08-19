@@ -1030,32 +1030,9 @@ socket.on("room:state", state => {
   }
 });
 
-// ── Audio ──────────────────────────────────────────────────────────────────
-function playNightEndAudio() {
-  try {
-    const ctx = new AudioContext();
-    const notes = [880, 1108, 1318, 880];
-    let t = ctx.currentTime;
-    for (const freq of notes) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.25, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-      osc.start(t); osc.stop(t + 0.4);
-      t += 0.35;
-    }
-  } catch {}
-}
-
 // ── Game events ────────────────────────────────────────────────────────────
-// Authoritative private PlayerView now arrives through ClientSession/client:state.
-socket.on("game:night-complete", () => {
-  vibrate([160, 100, 160, 100, 500]);
-  if (isHost) playNightEndAudio();
-});
-socket.on("game:over", () => vibrate([500, 200, 500, 200, 500]));
+// Authoritative private PlayerView and migrated lifecycle effects now arrive
+// through ClientSession/client:state and ClientSession/client:event.
 socket.on("room:removed", () => {
   clearSession();
   returnToEntry("你已被房主移出房间");

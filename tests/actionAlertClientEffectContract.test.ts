@@ -15,6 +15,17 @@ describe("E2.2c2 action-alert client effect migration", () => {
     expect(server).toContain('emit("player:action-alert", context)');
   });
 
+  it("routes host resend reminders through the same dual-publish action alert helper", () => {
+    const server = source("src/server.ts");
+    const handlerStart = server.indexOf('socket.on(\n      "host:resend-current-action"');
+    const handlerEnd = server.indexOf('socket.on(', handlerStart + 1);
+    const handler = server.slice(handlerStart, handlerEnd === -1 ? undefined : handlerEnd);
+
+    expect(handlerStart).toBeGreaterThanOrEqual(0);
+    expect(handler).toContain("alertCurrentActors(io, room, true)");
+    expect(handler).not.toContain('emit("player:action-alert"');
+  });
+
   it("makes the new Web runtime consume action vibration only through ClientSession effects", () => {
     const app = source("public/app.js");
     const webSession = source("src/client/browser/WebClientSession.ts");
