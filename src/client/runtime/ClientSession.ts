@@ -59,7 +59,7 @@ function sessionMismatchFailure(): ClientConnectionFailure {
 }
 
 /**
- * E2.2b transport-neutral client session manager.
+ * E2.2 transport-neutral client session manager.
  *
  * The session is intentionally imperative while ClientConnectionFSM remains a
  * pure reducer. ClientSession interprets FSM effects, keeps the state store and
@@ -139,6 +139,20 @@ export class ClientSession<TStatePayload = unknown> {
       this.stateStore.advanceGeneration(this.connection.generation);
       this.notify();
     }
+    this.runEffects(transition.effects);
+  }
+
+  /**
+   * Revalidates a healthy connected session against the current authoritative
+   * PlayerView without opening a new transport generation. Browser foreground /
+   * online recovery uses this when connectivity appears healthy but background
+   * suspension makes local synchronization uncertain.
+   */
+  resync(): void {
+    const transition = transitionClientConnection(this.connection, { type: "resyncRequested" });
+    const changed = transition.context !== this.connection;
+    this.connection = transition.context;
+    if (changed) this.notify();
     this.runEffects(transition.effects);
   }
 
