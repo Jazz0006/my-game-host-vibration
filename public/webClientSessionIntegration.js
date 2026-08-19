@@ -178,6 +178,10 @@
       webClientSession &&
       webClientSession.getConnectionState().status !== "Connected"
     ) {
+      // Legacy room:state sets membershipActive=true immediately before calling
+      // setConnectionStatus("已连接"). Keep that compatibility state aligned
+      // with the E2.2 invariant until authoritative PlayerView sync completes.
+      membershipActive = false;
       return;
     }
     legacySetConnectionStatus(message, kind);
