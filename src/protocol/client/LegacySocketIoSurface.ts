@@ -22,12 +22,14 @@ export type LegacySocketSurfaceEntry = {
  * handler. The important boundary is that every legacy event belongs to one of
  * the four stable protocol families instead of becoming a fifth transport API.
  *
- * E2 also records the single stable Socket.IO transport event (`client:command`)
- * used to carry versioned command envelopes while legacy handlers remain during
- * incremental Web migration.
+ * E2 records the stable Socket.IO transport events used during incremental Web
+ * migration: `client:command` carries versioned command envelopes, while
+ * `client:sync-state`/`client:state` expose revised authoritative PlayerView
+ * state without removing the legacy delivery surface yet.
  */
 export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "client:command", direction: "client-to-server", family: "command", category: "delivery", protocolTarget: "command.envelope" },
+  { event: "client:sync-state", direction: "client-to-server", family: "reconnect", category: "delivery", protocolTarget: "state.sync" },
   { event: "host:create-room", direction: "client-to-server", family: "command", category: "session" },
   { event: "player:join-room", direction: "client-to-server", family: "command", category: "session" },
   { event: "player:resume", direction: "client-to-server", family: "reconnect", category: "session", protocolTarget: "reconnect.resume" },
@@ -65,6 +67,7 @@ export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "player:ack-test-prompt", direction: "client-to-server", family: "command", category: "test-support" },
   { event: "player:submit-test-choice", direction: "client-to-server", family: "command", category: "test-support" },
 
+  { event: "client:state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.player" },
   { event: "room:state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.room" },
   { event: "player:game-state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.player" },
   { event: "session:replaced", direction: "server-to-client", family: "event", category: "session", protocolTarget: "session.replaced" },
