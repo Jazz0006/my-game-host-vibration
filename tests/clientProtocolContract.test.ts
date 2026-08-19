@@ -18,6 +18,11 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..");
+const SOCKET_SERVER_SOURCES = [
+  "src/server.ts",
+  "src/timedServer.ts",
+  "src/runtime/node/SocketIoClientProtocolTransport.ts",
+] as const;
 
 function source(relativePath: string): string {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
@@ -28,14 +33,14 @@ function matches(contents: string, pattern: RegExp): string[] {
 }
 
 function applicationSocketHandlers(): string[] {
-  const eventNames = ["src/server.ts", "src/timedServer.ts"].flatMap(relativePath =>
+  const eventNames = SOCKET_SERVER_SOURCES.flatMap(relativePath =>
     matches(source(relativePath), /socket\.on\(\s*["']([^"']+)["']/gu),
   );
   return eventNames.filter(event => event !== "disconnect");
 }
 
 function applicationServerEmits(): string[] {
-  const eventNames = ["src/server.ts", "src/timedServer.ts"].flatMap(relativePath =>
+  const eventNames = SOCKET_SERVER_SOURCES.flatMap(relativePath =>
     matches(source(relativePath), /\.emit\(\s*["']([^"']+)["']/gu),
   );
   return eventNames.filter(event => !event.startsWith("dev:"));
@@ -102,7 +107,7 @@ describe("E1 client protocol contract", () => {
     });
   });
 
-  it("keeps the legacy Socket.IO audit complete for current application handlers and deliveries", () => {
+  it("keeps the Socket.IO audit complete for current application handlers and deliveries", () => {
     const clientToServerInventory = new Set(
       LEGACY_SOCKET_IO_SURFACE
         .filter(entry => entry.direction === "client-to-server")

@@ -21,8 +21,13 @@ export type LegacySocketSurfaceEntry = {
  * Web client. Entries are inventory, not a promise that E1 rewrites every
  * handler. The important boundary is that every legacy event belongs to one of
  * the four stable protocol families instead of becoming a fifth transport API.
+ *
+ * E2 also records the single stable Socket.IO transport event (`client:command`)
+ * used to carry versioned command envelopes while legacy handlers remain during
+ * incremental Web migration.
  */
 export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
+  { event: "client:command", direction: "client-to-server", family: "command", category: "delivery", protocolTarget: "command.envelope" },
   { event: "host:create-room", direction: "client-to-server", family: "command", category: "session" },
   { event: "player:join-room", direction: "client-to-server", family: "command", category: "session" },
   { event: "player:resume", direction: "client-to-server", family: "reconnect", category: "session", protocolTarget: "reconnect.resume" },

@@ -6,6 +6,7 @@ import {
   InteractionTimeoutCoordinator,
   type InteractionTimeoutClientState,
 } from "./runtime/node/InteractionTimeoutCoordinator.js";
+import { attachSocketIoClientProtocolTransport } from "./runtime/node/SocketIoClientProtocolTransport.js";
 import {
   actingPlayerIds,
   activeInteraction,
@@ -119,6 +120,7 @@ function ruleMessage(error: unknown): string {
 
 export function createTimedGameServer(): TimedServer {
   const base = createGameServer();
+  attachSocketIoClientProtocolTransport(base);
   const { io, rooms, delivery } = base;
   const interactionTimeouts = new InteractionTimeoutCoordinator();
   const extensionReceipts = new Map<string, ExtensionResult>();
