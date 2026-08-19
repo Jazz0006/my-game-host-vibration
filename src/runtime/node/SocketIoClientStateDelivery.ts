@@ -23,10 +23,7 @@ export function currentClientStateDelivery(
 
 /**
  * Canonical Node/Socket.IO delivery boundary for private authoritative PlayerView.
- *
- * Stable clients consume `client:state`. `player:game-state` remains a temporary
- * compatibility delivery until E2.3c2 migrates the remaining integration tests
- * and removes that retired wire event.
+ * Stable clients consume `client:state` exclusively.
  */
 export function emitPrivatePlayerState(
   io: Server,
@@ -46,7 +43,4 @@ export function emitPrivatePlayerState(
   } satisfies ClientStateDelivery;
 
   socket.emit("client:state", delivery);
-
-  // E2.3c1 compatibility only. Production Web consumes `client:state`.
-  socket.emit("player:game-state", envelope.payload);
 }
