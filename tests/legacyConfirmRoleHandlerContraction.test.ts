@@ -18,6 +18,8 @@ const retiredLegacyCommands = [
   ["player:submit-guard-target", "werewolf.submitGuardTarget"],
   ["player:submit-hunter-execution", "werewolf.submitHunterExecution"],
   ["player:submit-vote", "werewolf.submitVote"],
+  ["host:start-game", "werewolf.startGame"],
+  ["host:restart-game", "werewolf.restartGame"],
 ] as const;
 
 describe("E2.3 legacy game handler contraction", () => {
