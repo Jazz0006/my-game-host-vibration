@@ -7,7 +7,6 @@ import type { RoomPlayer, RoomState } from "../../core/room/types.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
 import type { TestPrompt } from "../../domain/testPrompt.js";
 import {
-  allEligiblePlayersVoted,
   werewolfGameModule,
   type WerewolfCommand,
 } from "../../games/werewolf/WerewolfGameModule.js";
@@ -15,19 +14,18 @@ import {
   getActiveWerewolfInteraction,
   type WerewolfInteraction,
 } from "../../games/werewolf/WerewolfNightPlanner.js";
+import {
+  executeWerewolfRoomCommand,
+  type WerewolfCommandEnvironment,
+  type WerewolfCommandOutcome,
+} from "../shared/werewolfRoomCommand.js";
+
+export type { WerewolfCommandOutcome } from "../shared/werewolfRoomCommand.js";
 
 export type RuntimePlayer = RoomPlayer & {
   socketId: string | null;
   connected: boolean;
 };
-
-export type WerewolfCommandOutcome =
-  | { kind: "none" }
-  | { kind: "broadcast" }
-  | { kind: "afterNightAction" }
-  | { kind: "hunterResolved" }
-  | { kind: "vote"; changed: boolean; allEligibleVoted: boolean }
-  | { kind: "voteClosed"; result: string };
 
 export type HostRecoveryCommandOutcome = {
   kind: "hostRecoveryReminder";
@@ -58,6 +56,11 @@ const commandDependencies = {
       return crypto.randomUUID();
     },
   },
+};
+
+const nodeCommandEnvironment: WerewolfCommandEnvironment = {
+  random: commandDependencies.random,
+  now: Date.now,
 };
 
 export function roomCore(room: RuntimeRoom): RoomCore<GameState, GameConfig, RuntimePlayer> {
@@ -141,45 +144,7 @@ export function executeWerewolfCommand(
   room: RuntimeRoom,
   command: WerewolfCommand,
   context: { playerId?: string; isHost?: boolean } = {},
+  environment: WerewolfCommandEnvironment = nodeCommandEnvironment,
 ): WerewolfCommandOutcome {
-  if (!room.game) throw new Error("game has not started");
-
-  const result = werewolfGameModule.handleCommand(
-    room.game,
-    {
-      ...(context.playerId === undefined ? {} : { playerId: context.playerId }),
-      isHost: context.isHost ?? false,
-      now: Date.now(),
-    },
-    command,
-    commandDependencies,
-  );
-  room.updatedAt = Date.now();
-
-  switch (result.outcome.kind) {
-    case "roleConfirmed":
-    case "stateChanged":
-      return { kind: "broadcast" };
-
-    case "nightAdvanced":
-      return result.outcome.advanced
-        ? { kind: "afterNightAction" }
-        : { kind: "none" };
-
-    case "hunterResolved":
-      return result.outcome.advanced
-        ? { kind: "hunterResolved" }
-        : { kind: "none" };
-
-    case "voteSubmitted":
-      return {
-        kind: "vote",
-        changed: result.outcome.changed,
-        allEligibleVoted:
-          result.outcome.changed && allEligiblePlayersVoted(room.game),
-      };
-
-    case "voteClosed":
-      return { kind: "voteClosed", result: result.outcome.result };
-  }
+  return executeWerewolfRoomCommand(room, command, context, environment);
 }
