@@ -20,6 +20,15 @@ class IdentityNamespace implements DurableObjectNamespaceLike {
   }
 }
 
+function emptyStorage() {
+  const values = new Map<string, unknown>();
+  return {
+    get: async <T>(key: string) => values.get(key) as T | undefined,
+    put: async <T>(key: string, value: T) => { values.set(key, value); },
+    delete: async (key: string) => values.delete(key),
+  };
+}
+
 describe("D2.1 Cloudflare runtime skeleton", () => {
   it("serves a runtime health endpoint without touching a room", async () => {
     const namespace = new IdentityNamespace();
@@ -50,6 +59,7 @@ describe("D2.1 Cloudflare runtime skeleton", () => {
   it("exposes the minimal Durable Object identity endpoint", async () => {
     const room = new GameRoomDurableObject({
       id: { toString: () => "object-123" },
+      storage: emptyStorage(),
     });
     const response = await room.fetch(new Request("https://room.internal/identity"));
 
