@@ -69,7 +69,7 @@ replaceExact(
   serverPath,
   "alertCurrentActors(io, room, true);",
   "emitActionAlertEffects(io, room, { resumed: true });",
-  1,
+  3,
 );
 
 // ── SocketIoClientProtocolTransport.ts ─────────────────────────────────────
