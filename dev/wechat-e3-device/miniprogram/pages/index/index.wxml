@@ -1,0 +1,64 @@
+<view class="page">
+  <view class="card">
+    <view class="title">E3.7 Device Validation</view>
+    <view class="muted">{{baseUrl}}</view>
+
+    <view class="field-label">Room ID</view>
+    <input class="input" value="{{roomId}}" data-field="roomId" bindinput="onFieldInput" maxlength="4" />
+
+    <view class="field-label">Player ID</view>
+    <input class="input" value="{{playerId}}" data-field="playerId" bindinput="onFieldInput" />
+
+    <view class="field-label">Resume Token</view>
+    <input class="input" password="true" value="{{resumeToken}}" data-field="resumeToken" bindinput="onFieldInput" />
+
+    <button type="primary" bindtap="startSession">Start session</button>
+  </view>
+
+  <view class="card status-grid">
+    <view><text class="label">Status</text><text>{{connectionStatus}}</text></view>
+    <view><text class="label">Generation</text><text>{{generation}}</text></view>
+    <view><text class="label">Revision</text><text>{{revision === null ? '-' : revision}}</text></view>
+    <view><text class="label">Screen</text><text>{{screen}}</text></view>
+    <view><text class="label">Network</text><text>{{networkStatus}}</text></view>
+    <view wx:if="{{failureCode}}"><text class="label">Failure code</text><text class="mono">{{failureCode}}</text></view>
+    <view wx:if="{{failureMessage}}"><text class="label">Failure message</text><text class="mono">{{failureMessage}}</text></view>
+    <view wx:if="{{roleName}}"><text class="label">Role</text><text>{{roleName}}</text></view>
+    <view wx:if="{{actionId}}"><text class="label">Action ID</text><text class="mono">{{actionId}}</text></view>
+  </view>
+
+  <view class="card button-row">
+    <button size="mini" bindtap="manualResync">Resync</button>
+    <button size="mini" bindtap="manualReconnect">Reconnect</button>
+    <button size="mini" bindtap="testShortVibration">Short vibration</button>
+    <button size="mini" bindtap="testLongVibration">Long vibration</button>
+  </view>
+
+  <view class="card" wx:if="{{screen === 'seer-action'}}">
+    <view class="section-title">Authoritative seer targets</view>
+    <button
+      wx:for="{{targets}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      bindtap="submitTarget"
+    >
+      Seat {{item.seat}} · {{item.name}}
+    </button>
+  </view>
+
+  <view class="card" wx:if="{{screen === 'seer-result'}}">
+    <view class="section-title">Authoritative seer result</view>
+    <view>{{checkedPlayer.name}} · {{checkedAlignment}}</view>
+  </view>
+
+  <view class="card">
+    <view class="log-header">
+      <view class="section-title">Lifecycle / session log</view>
+      <button size="mini" bindtap="clearLog">Clear</button>
+    </view>
+    <scroll-view class="log" scroll-y="true" scroll-into-view="log-end">
+      <view wx:for="{{logLines}}" wx:key="*this" class="log-line">{{item}}</view>
+      <view id="log-end"></view>
+    </scroll-view>
+  </view>
+</view>

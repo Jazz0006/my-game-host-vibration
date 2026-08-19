@@ -13,6 +13,13 @@ export {
   type WeChatCommandRetryOptions,
 } from "./WeChatCommandRetry.js";
 export {
+  createWeChatMiniProgramBindings,
+  type WeChatMiniProgramApi,
+  type WeChatMiniProgramBindings,
+  type WeChatMiniProgramLifecycleApi,
+  type WeChatMiniProgramNetworkStatus,
+} from "./WeChatMiniProgramBindings.js";
+export {
   WeChatRealtimeTransport,
   type WeChatRealtimePlatform,
   type WeChatRealtimeTransportOptions,

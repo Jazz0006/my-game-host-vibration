@@ -1,0 +1,112 @@
+page {
+  background: #f3f4f6;
+  color: #111827;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+
+.page {
+  padding: 24rpx;
+}
+
+.card {
+  margin-bottom: 24rpx;
+  padding: 28rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 18rpx rgba(15, 23, 42, 0.06);
+}
+
+.title {
+  margin-bottom: 8rpx;
+  font-size: 38rpx;
+  font-weight: 700;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 650;
+}
+
+.muted {
+  margin-bottom: 28rpx;
+  color: #6b7280;
+  font-size: 22rpx;
+  word-break: break-all;
+}
+
+.field-label {
+  margin: 18rpx 0 8rpx;
+  color: #4b5563;
+  font-size: 24rpx;
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 76rpx;
+  margin-bottom: 16rpx;
+  padding: 0 20rpx;
+  border: 1rpx solid #d1d5db;
+  border-radius: 12rpx;
+  background: #f9fafb;
+  font-size: 28rpx;
+  line-height: 76rpx;
+}
+
+.status-grid > view {
+  display: flex;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 10rpx 0;
+  border-bottom: 1rpx solid #f3f4f6;
+}
+
+.status-grid > view:last-child {
+  border-bottom: 0;
+}
+
+.label {
+  color: #6b7280;
+}
+
+.mono,
+.log-line {
+  font-family: Menlo, Monaco, Consolas, monospace;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.button-row button {
+  margin: 0;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.log-header button {
+  margin: 0;
+}
+
+.log {
+  height: 480rpx;
+  padding: 16rpx;
+  border-radius: 12rpx;
+  background: #111827;
+  color: #e5e7eb;
+  box-sizing: border-box;
+}
+
+.log-line {
+  margin-bottom: 8rpx;
+  font-size: 20rpx;
+  line-height: 1.5;
+  word-break: break-all;
+}

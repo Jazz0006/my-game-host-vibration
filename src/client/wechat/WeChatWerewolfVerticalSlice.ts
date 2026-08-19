@@ -2,6 +2,7 @@ import {
   createClientCommandEnvelope,
   type ClientReconnectCredentials,
 } from "../../protocol/client/ClientProtocol.js";
+import type { ClientConnectionContext } from "../runtime/ClientConnectionFSM.js";
 import type { ClientSessionSnapshot } from "../runtime/ClientSession.js";
 import { createWeChatClientSession } from "./WeChatClientSession.js";
 import {
@@ -63,6 +64,7 @@ export type WeChatWerewolfVerticalSlice = {
   start(): void;
   reconnect(): void;
   resync(): void;
+  getConnectionState(): ClientConnectionContext;
   getViewModel(): WeChatWerewolfSliceViewModel;
   subscribe(listener: (viewModel: WeChatWerewolfSliceViewModel) => void): () => void;
   submitSeerTarget(targetPlayerId: string): Promise<unknown>;
@@ -189,6 +191,10 @@ export function createWeChatWerewolfVerticalSlice(
     resync() {
       if (disposed) return;
       session.resync();
+    },
+
+    getConnectionState() {
+      return session.getConnectionState();
     },
 
     getViewModel() {

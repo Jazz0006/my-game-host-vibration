@@ -1,6 +1,8 @@
 node_modules/
 dist/
 public/client-runtime/
+dev/wechat-e3-device/miniprogram/client-runtime/
+dev/wechat-e3-device/project.private.config.json
 coverage/
 .env
 .env.*
