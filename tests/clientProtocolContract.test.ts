@@ -10,11 +10,9 @@ import {
 } from "../src/protocol/client/ClientProtocol.js";
 import { LEGACY_SOCKET_IO_SURFACE } from "../src/protocol/client/LegacySocketIoSurface.js";
 import {
-  WEREWOLF_CLIENT_COMMAND_TYPES,
   mapWerewolfClientCommand,
   parseWerewolfClientCommandEnvelope,
 } from "../src/protocol/client/werewolf/WerewolfClientProtocol.js";
-import { WEREWOLF_LIFECYCLE_CLIENT_COMMAND_TYPES } from "../src/protocol/client/werewolf/WerewolfLifecycleClientProtocol.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -136,20 +134,28 @@ describe("E1 client protocol contract", () => {
     );
   });
 
-  it("maps every remaining legacy Werewolf game command to a stable protocol type", () => {
-    const stableTypes = new Set<string>([
-      ...WEREWOLF_CLIENT_COMMAND_TYPES,
-      ...WEREWOLF_LIFECYCLE_CLIENT_COMMAND_TYPES,
-    ]);
-    const mappedTargets = LEGACY_SOCKET_IO_SURFACE
-      .filter(entry =>
+  it("keeps production Werewolf game commands off the raw Socket.IO surface", () => {
+    const rawWerewolfCommands = LEGACY_SOCKET_IO_SURFACE.filter(
+      entry =>
         entry.direction === "client-to-server" &&
         entry.category === "werewolf-game" &&
-        entry.protocolTarget
-      )
-      .map(entry => entry.protocolTarget!);
+        entry.scope !== "dev-test",
+    );
 
-    expect(mappedTargets.every(target => stableTypes.has(target))).toBe(true);
-    expect(mappedTargets).not.toContain("werewolf.confirmRole");
+    expect(rawWerewolfCommands).toEqual([]);
+  });
+
+  it("limits remaining raw production client input to explicit non-game boundaries", () => {
+    const remainingRawProduction = LEGACY_SOCKET_IO_SURFACE.filter(
+      entry =>
+        entry.direction === "client-to-server" &&
+        entry.category !== "delivery" &&
+        entry.scope !== "dev-test",
+    );
+
+    expect(new Set(remainingRawProduction.map(entry => entry.category))).toEqual(
+      new Set(["session", "room-management", "recovery", "interaction-timeout"]),
+    );
+    expect(remainingRawProduction.every(entry => entry.category !== "werewolf-game")).toBe(true);
   });
 });

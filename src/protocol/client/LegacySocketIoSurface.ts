@@ -28,6 +28,11 @@ export type LegacySocketSurfaceEntry = {
  * Stable Socket.IO delivery events are `client:command`, `client:sync-state`,
  * `client:state`, and `client:event`. E2.3 removes retired legacy entries from
  * this inventory as their consumers disappear.
+ *
+ * E2.3 completion boundary: production Werewolf game commands must not appear
+ * here as raw Socket.IO commands. Remaining raw client→server entries belong to
+ * session, room-management, recovery, or interaction-timeout responsibilities
+ * and require their own protocol/lifecycle design before any later migration.
  */
 export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "client:command", direction: "client-to-server", family: "command", category: "delivery", protocolTarget: "command.envelope" },
