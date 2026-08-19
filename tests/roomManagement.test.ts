@@ -1,6 +1,16 @@
 import type { AddressInfo } from "node:net";
 import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  CLIENT_ROOM_CLOSED,
+  CLIENT_ROOM_REMOVED,
+  type ClientRoomClosedPayload,
+  type ClientRoomRemovedPayload,
+} from "../src/protocol/client/ClientRoomEvents.js";
+import {
+  CLIENT_PROTOCOL_VERSION,
+  type ClientRealtimeEventEnvelope,
+} from "../src/protocol/client/ClientProtocol.js";
 import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
@@ -133,7 +143,9 @@ describe("room member management", () => {
       roomId: hostSession.roomId,
       name: "玩家三号",
     });
-    const removed = waitFor<{ reason: string }>(player, "room:removed");
+    const removed = waitFor<
+      ClientRealtimeEventEnvelope<typeof CLIENT_ROOM_REMOVED, ClientRoomRemovedPayload>
+    >(player, "client:event", event => event.type === CLIENT_ROOM_REMOVED);
     const updated = waitFor<RoomView>(
       host,
       "room:state",
@@ -143,7 +155,12 @@ describe("room member management", () => {
     expect(
       await emitAck<Ack>(host, "host:remove-player", { targetPlayerId: playerSession.playerId }),
     ).toEqual({ ok: true });
-    expect(await removed).toEqual({ roomId: hostSession.roomId, reason: "removed" });
+    expect(await removed).toEqual({
+      protocolVersion: CLIENT_PROTOCOL_VERSION,
+      kind: "event",
+      type: CLIENT_ROOM_REMOVED,
+      payload: { roomId: hostSession.roomId, reason: "removed" },
+    });
     expect((await updated).players.map(item => ({ id: item.id, seat: item.seat }))).toEqual([
       { id: hostSession.playerId, seat: 1 },
       { id: thirdSession.playerId, seat: 2 },
@@ -216,11 +233,21 @@ describe("room member management", () => {
       message: "只有房主可以关闭房间",
     });
 
-    const hostClosed = waitFor<{ roomId: string; reason: string }>(host, "room:closed");
-    const playerClosed = waitFor<{ roomId: string; reason: string }>(player, "room:closed");
+    const hostClosed = waitFor<
+      ClientRealtimeEventEnvelope<typeof CLIENT_ROOM_CLOSED, ClientRoomClosedPayload>
+    >(host, "client:event", event => event.type === CLIENT_ROOM_CLOSED);
+    const playerClosed = waitFor<
+      ClientRealtimeEventEnvelope<typeof CLIENT_ROOM_CLOSED, ClientRoomClosedPayload>
+    >(player, "client:event", event => event.type === CLIENT_ROOM_CLOSED);
     expect(await emitAck<Ack>(host, "host:close-room", {})).toEqual({ ok: true });
-    expect(await hostClosed).toEqual({ roomId: hostSession.roomId, reason: "host_closed" });
-    expect(await playerClosed).toEqual({ roomId: hostSession.roomId, reason: "host_closed" });
+    const expectedClosed = {
+      protocolVersion: CLIENT_PROTOCOL_VERSION,
+      kind: "event" as const,
+      type: CLIENT_ROOM_CLOSED,
+      payload: { roomId: hostSession.roomId, reason: "host_closed" as const },
+    };
+    expect(await hostClosed).toEqual(expectedClosed);
+    expect(await playerClosed).toEqual(expectedClosed);
     expect(game.rooms.has(hostSession.roomId)).toBe(false);
   });
 
