@@ -917,24 +917,6 @@ socket.on(
       },
     );
 
-    socket.on("host:close-voting", async (data: { commandId?: string }, ack: BasicAck) => {
-      const membership = findMembership(rooms, socket.id);
-      if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以关闭投票" });
-      if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
-      const commandId = requiredCommandId(data, ack);
-      if (!commandId) return;
-      try {
-        const { outcome, replayed } = await runHostCommandIdempotent(membership.room, commandId, { type: "closeDayVote" });
-        if (!replayed) broadcastRoom(io, membership.room);
-        if (!replayed && outcome.kind === "voteClosed") {
-          afterCloseDayVote(io, membership.room, outcome.result);
-        }
-        ack({ ok: true });
-      } catch (error) {
-        ruleError(ack, error);
-      }
-    });
-
     socket.on(
       "host:restart-game",
       async (
