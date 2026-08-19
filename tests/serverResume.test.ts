@@ -1,6 +1,14 @@
 import type { AddressInfo } from "node:net";
 import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  CLIENT_SESSION_REPLACED,
+  type ClientSessionReplacedPayload,
+} from "../src/protocol/client/ClientSessionEvents.js";
+import {
+  CLIENT_PROTOCOL_VERSION,
+  type ClientRealtimeEventEnvelope,
+} from "../src/protocol/client/ClientProtocol.js";
 import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
@@ -198,9 +206,16 @@ describe("server session resume", () => {
     expect(result).toEqual({ ok: false, message: "恢复凭证无效" });
   });
 
-  it("replaces the old connection without letting its disconnect mark the player offline", async () => {
+  it("delivers stable and legacy replacement events before disconnecting the old connection", async () => {
     const { host, player, hostSession, playerSession } = await createRoomWithPlayer();
-    const replaced = waitFor<{ playerId: string }>(player, "session:replaced");
+    const legacyReplaced = waitFor<{ roomId: string; playerId: string }>(player, "session:replaced");
+    const stableReplaced = waitFor<
+      ClientRealtimeEventEnvelope<typeof CLIENT_SESSION_REPLACED, ClientSessionReplacedPayload>
+    >(
+      player,
+      "client:event",
+      event => event.type === CLIENT_SESSION_REPLACED,
+    );
     const replacement = await connect();
     const resumed = await emitAck<AckSuccess>(replacement, "player:resume", {
       roomId: hostSession.roomId,
@@ -209,7 +224,19 @@ describe("server session resume", () => {
     });
 
     expect(resumed.ok).toBe(true);
-    expect(await replaced).toMatchObject({ playerId: playerSession.playerId });
+    expect(await stableReplaced).toEqual({
+      protocolVersion: CLIENT_PROTOCOL_VERSION,
+      kind: "event",
+      type: CLIENT_SESSION_REPLACED,
+      payload: {
+        roomId: hostSession.roomId,
+        playerId: playerSession.playerId,
+      },
+    });
+    expect(await legacyReplaced).toEqual({
+      roomId: hostSession.roomId,
+      playerId: playerSession.playerId,
+    });
     await new Promise(resolve => setTimeout(resolve, 20));
 
     const room = game.rooms.get(hostSession.roomId);
