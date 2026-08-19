@@ -6,11 +6,10 @@ const DEV_TEST_EVENTS = [
   "player:ack-test-prompt",
   "player:submit-test-choice",
   "player:test-prompt",
-  "player:test-prompt-state",
 ] as const;
 
 describe("E2.3 dev/test-only Socket.IO classification", () => {
-  it("marks every test-support entry as an explicit dev/test-only exception", () => {
+  it("marks every remaining test-support entry as an explicit dev/test-only exception", () => {
     const testSupport = LEGACY_SOCKET_IO_SURFACE.filter(
       entry => entry.category === "test-support",
     );
@@ -46,5 +45,11 @@ describe("E2.3 dev/test-only Socket.IO classification", () => {
       scope: "dev-test",
     });
     expect(prompt?.protocolTarget).toBeUndefined();
+  });
+
+  it("does not inventory the retired test prompt state event", () => {
+    expect(
+      LEGACY_SOCKET_IO_SURFACE.some(entry => entry.event === "player:test-prompt-state"),
+    ).toBe(false);
   });
 });
