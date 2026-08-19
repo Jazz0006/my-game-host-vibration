@@ -206,9 +206,8 @@ describe("server session resume", () => {
     expect(result).toEqual({ ok: false, message: "恢复凭证无效" });
   });
 
-  it("delivers stable and legacy replacement events before disconnecting the old connection", async () => {
+  it("delivers the stable replacement event before disconnecting the old connection", async () => {
     const { host, player, hostSession, playerSession } = await createRoomWithPlayer();
-    const legacyReplaced = waitFor<{ roomId: string; playerId: string }>(player, "session:replaced");
     const stableReplaced = waitFor<
       ClientRealtimeEventEnvelope<typeof CLIENT_SESSION_REPLACED, ClientSessionReplacedPayload>
     >(
@@ -232,10 +231,6 @@ describe("server session resume", () => {
         roomId: hostSession.roomId,
         playerId: playerSession.playerId,
       },
-    });
-    expect(await legacyReplaced).toEqual({
-      roomId: hostSession.roomId,
-      playerId: playerSession.playerId,
     });
     await new Promise(resolve => setTimeout(resolve, 20));
 
