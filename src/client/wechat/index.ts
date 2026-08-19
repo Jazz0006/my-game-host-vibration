@@ -1,7 +1,6 @@
 export { createWeChatClientSession } from "./WeChatClientSession.js";
 export {
   attachWeChatClientEffects,
-  DEFAULT_WECHAT_AUDIO_CUE_SOURCES,
   type WeChatClientEffectOptions,
   type WeChatClientEffectsAttachment,
   type WeChatEffectsPlatform,
