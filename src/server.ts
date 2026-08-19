@@ -1121,7 +1121,14 @@ socket.on(
     });
   });
 
-  return { app, httpServer, io, rooms };
+  // D1.2 Node delivery boundary. Wrappers such as timedServer may trigger
+  // lifecycle/domain mutations, but they must reuse this server's canonical
+  // room/player projection instead of maintaining a second roomView.
+  const delivery = {
+    broadcastRoom: (room: Room) => broadcastRoom(io, room),
+  };
+
+  return { app, httpServer, io, rooms, delivery };
 }
 
 const port = Number(process.env.PORT ?? 3000);
