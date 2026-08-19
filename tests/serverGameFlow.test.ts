@@ -10,10 +10,6 @@ import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
 const IDEMPOTENT_SOCKET_EVENTS = new Set([
-  "player:submit-wolf-target",
-  "player:submit-witch-action",
-  "player:confirm-seer-result",
-  "player:submit-guard-target",
   "player:submit-hunter-execution",
   "player:submit-vote",
   "host:start-game",
@@ -55,6 +51,31 @@ function emitAck<T>(socket: ClientSocket, event: string, payload: unknown): Prom
   });
 }
 
+type StableGameCommand =
+  | "werewolf.confirmRole"
+  | "werewolf.submitWolfTarget"
+  | "werewolf.submitWitchAction"
+  | "werewolf.submitSeerTarget"
+  | "werewolf.confirmSeerResult"
+  | "werewolf.startNight";
+
+function sendGameCommand(
+  socket: ClientSocket,
+  type: StableGameCommand,
+  payload: Record<string, unknown>,
+  commandPrefix: string,
+): Promise<{ ok: boolean; message?: string }> {
+  return emitAck(
+    socket,
+    "client:command",
+    createClientCommandEnvelope(
+      type,
+      payload,
+      `${commandPrefix}-${generatedCommandId++}`,
+    ),
+  );
+}
+
 function confirmRole(
   socket: ClientSocket,
   actionId: string,
@@ -72,26 +93,52 @@ function submitSeerTarget(
   actionId: string,
   targetPlayerId: string,
 ): Promise<{ ok: boolean; message?: string }> {
-  return emitAck(
+  return sendGameCommand(
     socket,
-    "client:command",
-    createClientCommandEnvelope(
-      "werewolf.submitSeerTarget",
-      { actionId, targetPlayerId },
-      `protocol-seer-target-${generatedCommandId++}`,
-    ),
+    "werewolf.submitSeerTarget",
+    { actionId, targetPlayerId },
+    "protocol-seer-target",
   );
 }
 
 function startNight(socket: ClientSocket): Promise<{ ok: boolean; message?: string }> {
-  return emitAck(
+  return sendGameCommand(socket, "werewolf.startNight", {}, "protocol-start-night");
+}
+
+function submitWolfTarget(
+  socket: ClientSocket,
+  actionId: string,
+  targetPlayerId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  return sendGameCommand(
     socket,
-    "client:command",
-    createClientCommandEnvelope(
-      "werewolf.startNight",
-      {},
-      `protocol-start-night-${generatedCommandId++}`,
-    ),
+    "werewolf.submitWolfTarget",
+    { actionId, targetPlayerId },
+    "protocol-wolf-target",
+  );
+}
+
+function submitWitchAction(
+  socket: ClientSocket,
+  actionId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  return sendGameCommand(
+    socket,
+    "werewolf.submitWitchAction",
+    { actionId, useAntidote: false, poisonTargetId: null },
+    "protocol-witch-action",
+  );
+}
+
+function confirmSeerResult(
+  socket: ClientSocket,
+  actionId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  return sendGameCommand(
+    socket,
+    "werewolf.confirmSeerResult",
+    { actionId },
+    "protocol-seer-result",
   );
 }
 
@@ -196,23 +243,12 @@ describe("five-player Socket.IO game flow", () => {
     const victimId = victim.id;
     const witch = byRole.get("witch")!;
     const witchAction = waitForGameView(witch.socket, view => view.mode === "witch_action");
-    expect(
-      await emitAck<{ ok: boolean }>(wolf.socket, "player:submit-wolf-target", {
-        actionId: wolfView.actionId,
-        targetPlayerId: victimId,
-      }),
-    ).toEqual({ ok: true });
+    expect(await submitWolfTarget(wolf.socket, wolfView.actionId, victimId)).toEqual({ ok: true });
 
     const witchView = await witchAction;
     const seer = byRole.get("seer")!;
     const seerAction = waitForGameView(seer.socket, view => view.mode === "seer_action");
-    expect(
-      await emitAck<{ ok: boolean }>(witch.socket, "player:submit-witch-action", {
-        actionId: witchView.actionId,
-        useAntidote: false,
-        poisonTargetId: null,
-      }),
-    ).toEqual({ ok: true });
+    expect(await submitWitchAction(witch.socket, witchView.actionId)).toEqual({ ok: true });
 
     const seerView = await seerAction;
     const seerResult = waitForGameView(seer.socket, view => view.mode === "seer_result");
@@ -226,7 +262,7 @@ describe("five-player Socket.IO game flow", () => {
       waitForGameView(socket, view =>
         view.mode === "day_vote" || view.mode === "spectator" || view.mode === "game_over"),
     );
-    await emitAck(seer.socket, "player:confirm-seer-result", { actionId: resultView.actionId });
+    expect(await confirmSeerResult(seer.socket, resultView.actionId)).toEqual({ ok: true });
     const finalViews = await Promise.all(completed);
     for (const view of finalViews) {
       if (view.deaths) expect(view.deaths.map((player: { id: string }) => player.id)).toContain(victimId);
