@@ -728,7 +728,7 @@ function nearestInsertIndex(point, total, rect) {
       (point.x - 0.5) * rect.width,
     );
     const normalized = (angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
-    return Math.max(0, Math.min(total, Math.round(normalized / (Math.PI * 2) * total));
+    return Math.max(0, Math.min(total, Math.round(normalized / (Math.PI * 2) * total)));
   }
   let nearest = 0;
   let nearestDistance = Number.POSITIVE_INFINITY;
