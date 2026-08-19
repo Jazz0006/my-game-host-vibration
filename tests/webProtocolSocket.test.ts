@@ -117,9 +117,7 @@ describe("E2 Web protocol over Socket.IO", () => {
       waitForGameView(socket, view => view.mode === "role_reveal"),
     );
     expect(
-      await emitAck<{ ok: boolean }>(host, "host:start-game", {
-        commandId: "legacy-start-for-e2",
-      }),
+      await protocolCommand(host, "werewolf.startGame", {}, "protocol-start-for-e2"),
     ).toEqual({ ok: true });
     const dealt = await Promise.all(roleViews);
 

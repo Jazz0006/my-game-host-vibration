@@ -12,8 +12,6 @@ const TIMEOUT_MS = 3000;
 const IDEMPOTENT_SOCKET_EVENTS = new Set([
   "player:submit-hunter-execution",
   "player:submit-vote",
-  "host:start-game",
-  "host:restart-game",
   "host:close-voting",
   "host:begin-night-start",
 ]);
@@ -59,6 +57,8 @@ type StableGameCommand =
   | "werewolf.confirmSeerResult"
   | "werewolf.startNight";
 
+type StableLifecycleCommand = "werewolf.startGame" | "werewolf.restartGame";
+
 function sendGameCommand(
   socket: ClientSocket,
   type: StableGameCommand,
@@ -74,6 +74,33 @@ function sendGameCommand(
       `${commandPrefix}-${generatedCommandId++}`,
     ),
   );
+}
+
+function sendLifecycleCommand(
+  socket: ClientSocket,
+  type: StableLifecycleCommand,
+  payload: Record<string, unknown>,
+  commandId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  return emitAck(
+    socket,
+    "client:command",
+    createClientCommandEnvelope(type, payload, commandId),
+  );
+}
+
+function startGame(
+  socket: ClientSocket,
+  commandId = `protocol-start-game-${generatedCommandId++}`,
+): Promise<{ ok: boolean; message?: string }> {
+  return sendLifecycleCommand(socket, "werewolf.startGame", {}, commandId);
+}
+
+function restartGame(
+  socket: ClientSocket,
+  commandId = `protocol-restart-game-${generatedCommandId++}`,
+): Promise<{ ok: boolean; message?: string }> {
+  return sendLifecycleCommand(socket, "werewolf.restartGame", {}, commandId);
 }
 
 function confirmRole(
@@ -216,7 +243,7 @@ describe("five-player Socket.IO game flow", () => {
       "room:state",
       state => JSON.stringify(state).includes("role_reveal"),
     );
-    expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {})).toEqual({ ok: true });
+    expect(await startGame(host)).toEqual({ ok: true });
     const dealt = await Promise.all(roleViews);
     expect(JSON.stringify(await publicState)).not.toMatch(/werewolf|witch|seer|villager/);
 
@@ -283,7 +310,7 @@ describe("five-player Socket.IO game flow", () => {
     const roleViews = sockets.map(socket =>
       waitForGameView(socket, view => view.mode === "role_reveal"),
     );
-    expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {})).toEqual({ ok: true });
+    expect(await startGame(host)).toEqual({ ok: true });
     const dealt = await Promise.all(roleViews);
     const commandId = "shared-retry-id";
 
@@ -328,9 +355,7 @@ describe("five-player Socket.IO game flow", () => {
       });
     }
 
-    expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {
-      commandId: "start-game-retry",
-    })).toEqual({ ok: true });
+    expect(await startGame(host, "start-game-retry")).toEqual({ ok: true });
 
     const room = game.rooms.get(hostSession.roomId)!;
     const firstStartActionId = room.game?.actionId;
@@ -339,9 +364,7 @@ describe("five-player Socket.IO game flow", () => {
     let startReplayBroadcasts = 0;
     const countStartReplayBroadcast = () => { startReplayBroadcasts += 1; };
     host.on("room:state", countStartReplayBroadcast);
-    expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {
-      commandId: "start-game-retry",
-    })).toEqual({ ok: true });
+    expect(await startGame(host, "start-game-retry")).toEqual({ ok: true });
     await new Promise(resolve => setTimeout(resolve, 25));
     host.off("room:state", countStartReplayBroadcast);
 
@@ -349,18 +372,14 @@ describe("five-player Socket.IO game flow", () => {
     expect(room.game?.actionId).toBe(firstStartActionId);
     expect(JSON.stringify(room.game?.roles)).toBe(firstStartRoles);
 
-    expect(await emitAck<{ ok: boolean }>(host, "host:restart-game", {
-      commandId: "restart-game-retry",
-    })).toEqual({ ok: true });
+    expect(await restartGame(host, "restart-game-retry")).toEqual({ ok: true });
     const firstRestartActionId = room.game?.actionId;
     const firstRestartRoles = JSON.stringify(room.game?.roles);
 
     let restartReplayBroadcasts = 0;
     const countRestartReplayBroadcast = () => { restartReplayBroadcasts += 1; };
     host.on("room:state", countRestartReplayBroadcast);
-    expect(await emitAck<{ ok: boolean }>(host, "host:restart-game", {
-      commandId: "restart-game-retry",
-    })).toEqual({ ok: true });
+    expect(await restartGame(host, "restart-game-retry")).toEqual({ ok: true });
     await new Promise(resolve => setTimeout(resolve, 25));
     host.off("room:state", countRestartReplayBroadcast);
 

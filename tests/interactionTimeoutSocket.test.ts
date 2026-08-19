@@ -58,7 +58,7 @@ function emitAck<T>(
 
 function sendGameCommand(
   socket: ClientSocket,
-  type: "werewolf.confirmRole" | "werewolf.startNight",
+  type: "werewolf.startGame" | "werewolf.confirmRole" | "werewolf.startNight",
   payload: Record<string, unknown>,
   commandPrefix: string,
 ): Promise<BasicResult> {
@@ -76,6 +76,10 @@ function sendGameCommand(
       },
     );
   });
+}
+
+function startGame(socket: ClientSocket): Promise<BasicResult> {
+  return sendGameCommand(socket, "werewolf.startGame", {}, "timeout-start-game");
 }
 
 function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResult> {
@@ -183,7 +187,7 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     const roleViews = sockets.map(socket =>
       waitForGameView(socket, view => view.mode === "role_reveal"),
     );
-    expect(await emitAck<BasicResult>(host, "host:start-game")).toEqual({ ok: true });
+    expect(await startGame(host)).toEqual({ ok: true });
     const dealt = await Promise.all(roleViews);
 
     for (let index = 0; index < sockets.length; index += 1) {

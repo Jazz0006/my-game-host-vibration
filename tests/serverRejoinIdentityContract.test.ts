@@ -1,6 +1,8 @@
 import type { AddressInfo } from "node:net";
 import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createClientCommandEnvelope } from "../src/protocol/client/ClientProtocol.js";
+import { attachSocketIoClientProtocolTransport } from "../src/runtime/node/SocketIoClientProtocolTransport.js";
 import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
@@ -57,6 +59,7 @@ describe("C1 server rejoin identity contract", () => {
 
   beforeEach(async () => {
     game = createGameServer();
+    attachSocketIoClientProtocolTransport(game);
     await new Promise<void>(resolve => game.httpServer.listen(0, "127.0.0.1", resolve));
     const address = game.httpServer.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${address.port}`;
@@ -95,9 +98,11 @@ describe("C1 server rejoin identity contract", () => {
       );
     }
 
-    expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {
-      commandId: "rejoin-start-game",
-    })).toEqual({ ok: true });
+    expect(await emitAck<{ ok: boolean }>(
+      host,
+      "client:command",
+      createClientCommandEnvelope("werewolf.startGame", {}, "rejoin-start-game"),
+    )).toEqual({ ok: true });
 
     const targetIndex = 2;
     const targetSocket = sockets[targetIndex]!;

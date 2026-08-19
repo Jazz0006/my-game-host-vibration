@@ -9,8 +9,10 @@ import {
 } from "../src/protocol/client/ClientRoomEvents.js";
 import {
   CLIENT_PROTOCOL_VERSION,
+  createClientCommandEnvelope,
   type ClientRealtimeEventEnvelope,
 } from "../src/protocol/client/ClientProtocol.js";
+import { attachSocketIoClientProtocolTransport } from "../src/runtime/node/SocketIoClientProtocolTransport.js";
 import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
@@ -51,6 +53,14 @@ function emitAck<T>(socket: ClientSocket, event: string, payload: unknown): Prom
   });
 }
 
+function startGame(socket: ClientSocket, commandId: string): Promise<Ack> {
+  return emitAck(
+    socket,
+    "client:command",
+    createClientCommandEnvelope("werewolf.startGame", {}, commandId),
+  );
+}
+
 describe("room member management", () => {
   let game: ReturnType<typeof createGameServer>;
   let baseUrl: string;
@@ -58,6 +68,7 @@ describe("room member management", () => {
 
   beforeEach(async () => {
     game = createGameServer();
+    attachSocketIoClientProtocolTransport(game);
     await new Promise<void>(resolve => game.httpServer.listen(0, "127.0.0.1", resolve));
     baseUrl = `http://127.0.0.1:${(game.httpServer.address() as AddressInfo).port}`;
     clients = [];
@@ -225,9 +236,7 @@ describe("room member management", () => {
         name,
       });
     }
-    expect(await emitAck<Ack>(host, "host:start-game", {
-      commandId: "close-room-start-game",
-    })).toEqual({ ok: true });
+    expect(await startGame(host, "close-room-start-game")).toEqual({ ok: true });
     expect(await emitAck<Ack>(player, "host:close-room", {})).toEqual({
       ok: false,
       message: "只有房主可以关闭房间",
@@ -315,9 +324,7 @@ describe("room member management", () => {
       });
     }
 
-    expect(await emitAck<Ack>(host, "host:start-game", {
-      commandId: "seat-lock-start-game",
-    })).toEqual({ ok: true });
+    expect(await startGame(host, "seat-lock-start-game")).toEqual({ ok: true });
     expect(await emitAck<Ack>(host, "host:move-player-seat", {
       targetPlayerId: playerSession.playerId,
       insertIndex: 0,

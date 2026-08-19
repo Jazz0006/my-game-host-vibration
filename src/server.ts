@@ -17,7 +17,6 @@ import {
 import { emitClientSessionReplaced } from "./runtime/node/SocketIoClientSessionEventDelivery.js";
 import { emitPrivatePlayerState } from "./runtime/node/SocketIoClientStateDelivery.js";
 import {
-  configFromRoleDeck,
   configFromPlayerCount,
   DEFAULT_GAME_CONFIG,
   GameRuleError,
@@ -25,7 +24,6 @@ import {
 } from "./domain/game.js";
 import {
   runHostCommand,
-  runHostLifecycleMutationIdempotent,
   runHostRecoveryCommandIdempotent,
 } from "./runtime/node/werewolfCommandFacade.js";
 import { onlineActingPlayers } from "./runtime/node/hostRecovery.js";
@@ -41,7 +39,6 @@ import {
 } from "./domain/testPrompt.js";
 import { NodeSessionTokenCryptoProvider } from "./runtime/node/NodeSessionTokenCryptoProvider.js";
 import {
-  createWerewolfGame,
   roomCore,
   roomGameView,
   type RuntimePlayer,
@@ -501,65 +498,6 @@ export function createGameServer() {
       },
     );
 
-socket.on(
-  "host:start-game",
-  async (
-    data: { commandId?: string; roleDeck?: Role[] } | undefined,
-    ack: BasicAck,
-  ) => {
-    const membership = findMembership(rooms, socket.id);
-    if (!membership?.player.isHost) {
-      return ack({ ok: false, message: "只有房主可以开始游戏" });
-    }
-
-    const commandId = requiredCommandId(data ?? {}, ack);
-    if (!commandId) return;
-
-    const { room } = membership;
-
-    try {
-      const { replayed } = await runHostLifecycleMutationIdempotent(
-        room,
-        commandId,
-        () => {
-          if (room.game) {
-            throw new GameRuleError("游戏已经开始");
-          }
-
-          if (
-            room.players.length < MIN_PLAYERS ||
-            room.players.length > MAX_PLAYERS
-          ) {
-            throw new GameRuleError(
-              `需要${MIN_PLAYERS}到${MAX_PLAYERS}名玩家才能开始`,
-            );
-          }
-
-          if (room.players.some(player => !player.connected)) {
-            throw new GameRuleError("所有玩家在线后才能开始");
-          }
-
-          const gameConfig = data?.roleDeck
-            ? configFromRoleDeck(room.players.length, data.roleDeck)
-            : configFromPlayerCount(room.players.length);
-
-          createWerewolfGame(room, gameConfig);
-          delete room.activePrompt;
-
-          return { kind: "broadcast" };
-        },
-      );
-
-      if (!replayed) {
-        broadcastRoom(io, room);
-      }
-
-      ack({ ok: true });
-    } catch (error) {
-      ruleError(ack, error);
-    }
-  },
-);
     socket.on(
       "host:move-player-seat",
       (data: { targetPlayerId?: string; insertIndex?: number }, ack: BasicAck) => {
@@ -741,60 +679,6 @@ socket.on(
               actorPlayerIds: actors.map(actor => actor.id),
             };
           });
-          ack({ ok: true });
-        } catch (error) {
-          ruleError(ack, error);
-        }
-      },
-    );
-
-    socket.on(
-      "host:restart-game",
-      async (
-        data: { commandId?: string },
-        ack: BasicAck,
-      ) => {
-        const membership = findMembership(rooms, socket.id);
-
-        if (!membership?.player.isHost) {
-          return ack({
-            ok: false,
-            message: "只有房主可以重新开始游戏",
-          });
-        }
-        if (!membership.room.game) {
-          return ack({
-            ok: false,
-            message: "游戏尚未开始",
-          });
-        }
-
-        const commandId = requiredCommandId(data, ack);
-        if (!commandId) return;
-
-        const { room } = membership;
-
-        try {
-          const { replayed } = await runHostLifecycleMutationIdempotent(
-            room,
-            commandId,
-            () => {
-              const gameConfig =
-                room.gameConfig.playerCount === room.players.length
-                  ? room.gameConfig
-                  : configFromPlayerCount(room.players.length);
-
-              createWerewolfGame(room, gameConfig);
-              delete room.activePrompt;
-
-              return { kind: "broadcast" };
-            },
-          );
-
-          if (!replayed) {
-            broadcastRoom(io, room);
-          }
-
           ack({ ok: true });
         } catch (error) {
           ruleError(ack, error);

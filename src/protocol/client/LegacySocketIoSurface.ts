@@ -37,7 +37,6 @@ export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "player:resume", direction: "client-to-server", family: "reconnect", category: "session", protocolTarget: "reconnect.resume" },
   { event: "host:create-identity-recovery", direction: "client-to-server", family: "command", category: "recovery" },
   { event: "player:claim-identity-recovery", direction: "client-to-server", family: "reconnect", category: "recovery", protocolTarget: "reconnect.claimRecovery" },
-  { event: "host:start-game", direction: "client-to-server", family: "command", category: "werewolf-game", protocolTarget: "werewolf.startGame" },
   { event: "host:move-player-seat", direction: "client-to-server", family: "command", category: "room-management" },
   { event: "player:update-name", direction: "client-to-server", family: "command", category: "room-management" },
   { event: "host:remove-player", direction: "client-to-server", family: "command", category: "room-management" },
@@ -46,7 +45,6 @@ export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "host:close-room", direction: "client-to-server", family: "command", category: "room-management" },
   { event: "player:leave-room", direction: "client-to-server", family: "command", category: "room-management" },
 
-  { event: "host:restart-game", direction: "client-to-server", family: "command", category: "werewolf-game", protocolTarget: "werewolf.restartGame" },
   { event: "host:resend-current-action", direction: "client-to-server", family: "command", category: "recovery" },
 
   { event: "host:get-interaction-timeout", direction: "client-to-server", family: "command", category: "interaction-timeout" },
