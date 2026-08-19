@@ -30,7 +30,8 @@
   <view class="card button-row">
     <button size="mini" bindtap="manualResync">Resync</button>
     <button size="mini" bindtap="manualReconnect">Reconnect</button>
-    <button size="mini" bindtap="testVibration">Test vibration</button>
+    <button size="mini" bindtap="testShortVibration">Short vibration</button>
+    <button size="mini" bindtap="testLongVibration">Long vibration</button>
   </view>
 
   <view class="card" wx:if="{{screen === 'seer-action'}}">
