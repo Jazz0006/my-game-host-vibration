@@ -1,5 +1,9 @@
 import { dispatchClientRealtimeEffect } from "../effects/ClientEffectDispatcher.js";
 import type { ClientSessionRealtimeEventListener } from "../runtime/ClientSession.js";
+import {
+  playBrowserAudioCue,
+  type BrowserAudioCuePlayer,
+} from "./BrowserAudioCues.js";
 
 export type BrowserRealtimeEventSource = {
   subscribeRealtimeEvents(listener: ClientSessionRealtimeEventListener): () => void;
@@ -16,11 +20,15 @@ export type BrowserVibrationApi = {
 export function attachBrowserClientEffects(
   source: BrowserRealtimeEventSource,
   vibrationApi: BrowserVibrationApi | undefined = globalThis.navigator,
+  audioCuePlayer: BrowserAudioCuePlayer = playBrowserAudioCue,
 ): () => void {
   return source.subscribeRealtimeEvents(event => {
     dispatchClientRealtimeEffect(event, {
       vibrate: pattern => {
         vibrationApi?.vibrate?.([...pattern]);
+      },
+      playAudioCue: cue => {
+        audioCuePlayer(cue);
       },
     });
   });
