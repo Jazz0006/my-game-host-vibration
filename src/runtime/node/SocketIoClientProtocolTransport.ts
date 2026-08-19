@@ -9,10 +9,12 @@ import {
   advanceNodeClientStateRevision,
   currentNodeClientStateRevision,
 } from "./NodeClientStateRevision.js";
+import type { RuntimeRoom } from "./roomBridge.js";
 import {
-  actingPlayerIds,
-  type RuntimeRoom,
-} from "./roomBridge.js";
+  emitActionAlertEffects,
+  emitGameOverEffects,
+  emitNightCompleteEffects,
+} from "./SocketIoClientEffectDelivery.js";
 import { runHostCommand } from "./werewolfCommandFacade.js";
 
 type BasicResult = { ok: true } | { ok: false; message: string };
@@ -63,18 +65,6 @@ function emitProtocolPlayerState(
   } satisfies ClientStateDelivery);
 }
 
-function alertCurrentActors(io: Server, room: RuntimeRoom): void {
-  if (!room.game) return;
-  for (const playerId of actingPlayerIds(room)) {
-    const player = room.players.find(item => item.id === playerId);
-    if (!player?.socketId) continue;
-    io.to(player.socketId).emit("player:action-alert", {
-      actionId: room.game.actionId,
-      phase: room.game.phase,
-    });
-  }
-}
-
 function afterNightAction(
   io: Server,
   room: RuntimeRoom,
@@ -85,35 +75,35 @@ function afterNightAction(
 
   if (game.phase === "game_over") {
     broadcastRoom(room);
-    io.to(room.id).emit("game:over", { winner: game.winner });
+    emitGameOverEffects(io, room);
     return;
   }
 
   if (game.phase === "night_complete") {
-    io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
+    emitNightCompleteEffects(io, room);
     runHostCommand(room, { type: "startDayVote" });
     broadcastRoom(room);
-    alertCurrentActors(io, room);
+    emitActionAlertEffects(io, room);
     return;
   }
 
   if (game.phase === "day_hunter" && game.hunterTrigger === "night") {
-    io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
+    emitNightCompleteEffects(io, room);
     broadcastRoom(room);
-    alertCurrentActors(io, room);
+    emitActionAlertEffects(io, room);
     return;
   }
 
   broadcastRoom(room);
-  alertCurrentActors(io, room);
+  emitActionAlertEffects(io, room);
 }
 
 function afterCloseDayVote(io: Server, room: RuntimeRoom): void {
   if (!room.game) return;
   if (room.game.phase === "game_over") {
-    io.to(room.id).emit("game:over", { winner: room.game.winner });
+    emitGameOverEffects(io, room);
   } else if (room.game.phase === "day_hunter" || room.game.phase === "day_pk") {
-    alertCurrentActors(io, room);
+    emitActionAlertEffects(io, room);
   }
 }
 
@@ -142,11 +132,11 @@ function deliverCommandOutcome(
       if (!room.game) return;
       if (room.game.phase === "game_over") {
         broadcastRoom(room);
-        io.to(room.id).emit("game:over", { winner: room.game.winner });
+        emitGameOverEffects(io, room);
       } else if (room.game.phase === "night_complete") {
         runHostCommand(room, { type: "startDayVote" });
         broadcastRoom(room);
-        alertCurrentActors(io, room);
+        emitActionAlertEffects(io, room);
       } else {
         broadcastRoom(room);
       }

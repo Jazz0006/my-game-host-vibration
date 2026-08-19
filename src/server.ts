@@ -6,10 +6,10 @@ import { fileURLToPath } from "node:url";
 import { Server, type Socket } from "socket.io";
 import { SessionTokenService } from "./core/session/SessionTokenService.js";
 import {
-  CLIENT_AUDIO_CUE_NIGHT_COMPLETE,
-  createClientAudioCueEffectEvent,
-  createClientVibrateEffectEvent,
-} from "./protocol/client/ClientEffects.js";
+  emitActionAlertEffects,
+  emitGameOverEffects,
+  emitNightCompleteEffects,
+} from "./runtime/node/SocketIoClientEffectDelivery.js";
 import {
   configFromRoleDeck,
   configFromPlayerCount,
@@ -37,7 +37,6 @@ import {
 } from "./domain/testPrompt.js";
 import { NodeSessionTokenCryptoProvider } from "./runtime/node/NodeSessionTokenCryptoProvider.js";
 import {
-  actingPlayerIds as moduleActingPlayerIds,
   createWerewolfGame,
   playerGameView as modulePlayerGameView,
   roomCore,
@@ -202,71 +201,6 @@ function broadcastRoom(io: Server, room: Room): void {
   }
 }
 
-function alertCurrentActors(io: Server, room: Room, resumed = false): void {
-  if (!room.game) return;
-  for (const playerId of moduleActingPlayerIds(room)) {
-    const player = room.players.find(item => item.id === playerId);
-    if (player?.socketId) {
-      const context = {
-        actionId: room.game.actionId,
-        phase: room.game.phase,
-        resumed,
-      };
-      io.to(player.socketId).emit(
-        "client:event",
-        createClientVibrateEffectEvent([300, 150, 300], {
-          reason: "action-alert",
-          context,
-        }),
-      );
-      // E2.2c compatibility: older clients still consume the legacy event.
-      io.to(player.socketId).emit("player:action-alert", context);
-    }
-  }
-}
-
-function emitNightCompleteEffects(io: Server, room: Room): void {
-  if (!room.game) return;
-  const context = { actionId: room.game.actionId };
-  io.to(room.id).emit(
-    "client:event",
-    createClientVibrateEffectEvent([160, 100, 160, 100, 500], {
-      reason: "night-complete",
-      context,
-    }),
-  );
-
-  const host = room.players.find(player => player.isHost);
-  if (host?.socketId) {
-    io.to(host.socketId).emit(
-      "client:event",
-      createClientAudioCueEffectEvent(CLIENT_AUDIO_CUE_NIGHT_COMPLETE, {
-        reason: "night-complete",
-        context,
-      }),
-    );
-  }
-
-  // E2.2c compatibility: older clients still consume the legacy event.
-  io.to(room.id).emit("game:night-complete", context);
-}
-
-function emitGameOverEffects(io: Server, room: Room): void {
-  const winner = room.game?.winner;
-  if (!winner) return;
-  const context = { winner };
-  io.to(room.id).emit(
-    "client:event",
-    createClientVibrateEffectEvent([500, 200, 500, 200, 500], {
-      reason: "game-over",
-      context,
-    }),
-  );
-
-  // E2.2c compatibility: older clients still consume the legacy event.
-  io.to(room.id).emit("game:over", context);
-}
-
 function afterNightAction(io: Server, room: Room): void {
   const game = room.game;
   if (!game) return;
@@ -280,18 +214,18 @@ function afterNightAction(io: Server, room: Room): void {
     emitNightCompleteEffects(io, room);
     runHostCommand(room, { type: "startDayVote" });
     broadcastRoom(io, room);
-    alertCurrentActors(io, room);
+    emitActionAlertEffects(io, room, { resumed: false });
     return;
   }
   if (game.phase === "day_hunter" && game.hunterTrigger === "night") {
     emitNightCompleteEffects(io, room);
     broadcastRoom(io, room);
-    alertCurrentActors(io, room);
+    emitActionAlertEffects(io, room, { resumed: false });
     return;
   }
 
   broadcastRoom(io, room);
-  alertCurrentActors(io, room);
+  emitActionAlertEffects(io, room, { resumed: false });
 }
 
 function afterCloseDayVote(io: Server, room: Room, result: string): void {
@@ -300,9 +234,9 @@ function afterCloseDayVote(io: Server, room: Room, result: string): void {
   if (phase === "game_over") {
     emitGameOverEffects(io, room);
   } else if (phase === "day_hunter") {
-    alertCurrentActors(io, room);
+    emitActionAlertEffects(io, room, { resumed: false });
   } else if (phase === "day_pk") {
-    alertCurrentActors(io, room);
+    emitActionAlertEffects(io, room, { resumed: false });
   }
   void result;
 }
@@ -471,8 +405,8 @@ export function createGameServer() {
         });
         broadcastRoom(io, room);
         sendCurrentTestPrompt(socket, room, player);
-        if (room.game && moduleActingPlayerIds(room).includes(player.id)) {
-          alertCurrentActors(io, room, true);
+        if (room.game && onlineActingPlayers(room).some(actor => actor.id === player.id)) {
+          emitActionAlertEffects(io, room, { resumed: true });
         }
       },
     );
@@ -560,8 +494,8 @@ export function createGameServer() {
         });
         broadcastRoom(io, room);
         sendCurrentTestPrompt(socket, room, player);
-        if (room.game && moduleActingPlayerIds(room).includes(player.id)) {
-          alertCurrentActors(io, room, true);
+        if (room.game && onlineActingPlayers(room).some(actor => actor.id === player.id)) {
+          emitActionAlertEffects(io, room, { resumed: true });
         }
       },
     );
@@ -918,7 +852,7 @@ socket.on(
             } else if (game.phase === "night_complete") {
               runHostCommand(membership.room, { type: "startDayVote" });
               broadcastRoom(io, membership.room);
-              alertCurrentActors(io, membership.room);
+              emitActionAlertEffects(io, membership.room, { resumed: false });
             } else {
               broadcastRoom(io, membership.room);
             }
@@ -967,7 +901,7 @@ socket.on(
               throw new GameRuleError("当前没有在线的行动玩家需要提醒");
             }
 
-            alertCurrentActors(io, room, true);
+            emitActionAlertEffects(io, room, { resumed: true });
 
             return {
               kind: "hostRecoveryReminder",
