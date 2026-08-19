@@ -71,13 +71,6 @@ type ClientStateDelivery = {
   revision: number;
   envelope: ClientStateEnvelope<GameView>;
 };
-type TimeoutState = {
-  active: boolean;
-  actionId: string;
-  deadlineAt: number;
-  warning?: boolean;
-  canExtend: boolean;
-};
 type StableTimeoutStateEvent = ClientRealtimeEventEnvelope<
   typeof CLIENT_INTERACTION_TIMEOUT_STATE,
   ClientInteractionTimeoutStatePayload
@@ -174,11 +167,6 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     expect(wolfIndex).toBeGreaterThanOrEqual(0);
     const wolf = sockets[wolfIndex]!;
     const wolfSession = sessions[wolfIndex]!;
-    const timeoutStatePromise = waitFor<TimeoutState>(
-      wolf,
-      "player:interaction-timeout-state",
-      state => state.active,
-    );
     const stableTimeoutStatePromise = waitFor<StableTimeoutStateEvent>(
       wolf,
       "client:event",
@@ -186,40 +174,37 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     );
 
     expect(await emitAck<BasicResult>(host, "host:start-night")).toEqual({ ok: true });
-    const timeoutState = await timeoutStatePromise;
     const stableTimeoutState = await stableTimeoutStatePromise;
     const room = game.rooms.get(hostSession.roomId)!;
     expect(room.game?.phase).toBe("night_werewolf");
-    expect(timeoutState.actionId).toBe(room.game?.actionId);
-    expect(timeoutState.canExtend).toBe(true);
+    expect(stableTimeoutState.payload.active).toBe(true);
+    if (!stableTimeoutState.payload.active) throw new Error("expected active timeout state");
+    expect(stableTimeoutState.payload.actionId).toBe(room.game?.actionId);
+    expect(stableTimeoutState.payload.canExtend).toBe(true);
     expect(stableTimeoutState.payload).toEqual({
       roomId: hostSession.roomId,
       active: true,
-      actionId: timeoutState.actionId,
-      deadlineAt: timeoutState.deadlineAt,
+      actionId: room.game?.actionId,
+      deadlineAt: expect.any(Number),
       warningAt: expect.any(Number),
       warning: false,
       canExtend: true,
       extensionCount: 0,
     });
 
-    const originalDeadline = timeoutState.deadlineAt;
+    const timeoutActionId = stableTimeoutState.payload.actionId;
+    const originalDeadline = stableTimeoutState.payload.deadlineAt;
     wolf.disconnect();
     await new Promise(resolve => setTimeout(resolve, 50));
 
     const resumedWolf = await connect();
-    const resumedTimeoutPromise = waitFor<TimeoutState>(
-      resumedWolf,
-      "player:interaction-timeout-state",
-      state => state.active && state.actionId === timeoutState.actionId,
-    );
     const stableResumedTimeoutPromise = waitFor<StableTimeoutStateEvent>(
       resumedWolf,
       "client:event",
       event =>
         event.type === CLIENT_INTERACTION_TIMEOUT_STATE &&
         event.payload.active &&
-        event.payload.actionId === timeoutState.actionId,
+        event.payload.actionId === timeoutActionId,
     );
     const resumeResult = await new Promise<BasicResult>(resolve => {
       resumedWolf.emit(
@@ -233,10 +218,7 @@ describe("C4.4 Socket.IO interaction timeout", () => {
       );
     });
     expect(resumeResult.ok).toBe(true);
-    const resumedTimeout = await resumedTimeoutPromise;
     const stableResumedTimeout = await stableResumedTimeoutPromise;
-    expect(resumedTimeout.deadlineAt).toBe(originalDeadline);
-    expect(resumedTimeout.canExtend).toBe(true);
     expect(stableResumedTimeout.payload.roomId).toBe(hostSession.roomId);
     expect(stableResumedTimeout.payload.active).toBe(true);
     if (stableResumedTimeout.payload.active) {
@@ -252,7 +234,7 @@ describe("C4.4 Socket.IO interaction timeout", () => {
       event =>
         event.type === CLIENT_INTERACTION_TIMEOUT_STATE &&
         event.payload.active &&
-        event.payload.actionId === timeoutState.actionId &&
+        event.payload.actionId === timeoutActionId &&
         event.payload.warning === true,
     );
     const warning = await waitFor<ActionAlertEffect>(
@@ -265,7 +247,7 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     );
     const stableWarning = await stableWarningPromise;
     expect(warning.payload.pattern).toEqual([300, 150, 300]);
-    expect(warning.payload.context?.["actionId"]).toBe(timeoutState.actionId);
+    expect(warning.payload.context?.["actionId"]).toBe(timeoutActionId);
     expect(stableWarning.payload.active).toBe(true);
     if (stableWarning.payload.active) expect(stableWarning.payload.warning).toBe(true);
 
@@ -274,7 +256,7 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     const firstExtension = await new Promise<ExtensionResult>(resolve => {
       resumedWolf.emit(
         "player:extend-interaction-timeout",
-        { commandId, actionId: timeoutState.actionId },
+        { commandId, actionId: timeoutActionId },
         resolve,
       );
     });
@@ -285,7 +267,7 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     const replayedExtension = await new Promise<ExtensionResult>(resolve => {
       resumedWolf.emit(
         "player:extend-interaction-timeout",
-        { commandId, actionId: timeoutState.actionId },
+        { commandId, actionId: timeoutActionId },
         resolve,
       );
     });
@@ -297,7 +279,7 @@ describe("C4.4 Socket.IO interaction timeout", () => {
       event =>
         event.type === CLIENT_INTERACTION_TIMEOUT_STATE &&
         !event.payload.active &&
-        event.payload.actionId === timeoutState.actionId,
+        event.payload.actionId === timeoutActionId,
     );
     const extendedTimer = game.interactionTimeouts.get(hostSession.roomId)!;
     extendedTimer.deadlineAt = Date.now() - 1;
@@ -314,11 +296,11 @@ describe("C4.4 Socket.IO interaction timeout", () => {
     expect((await stableClearedPromise).payload).toEqual({
       roomId: hostSession.roomId,
       active: false,
-      actionId: timeoutState.actionId,
+      actionId: timeoutActionId,
     });
 
     expect(room.game?.wolfTargetId).toBeUndefined();
     expect(room.game?.phase).toBe("night_witch");
-    expect(room.game?.actionId).not.toBe(timeoutState.actionId);
+    expect(room.game?.actionId).not.toBe(timeoutActionId);
   });
 });
