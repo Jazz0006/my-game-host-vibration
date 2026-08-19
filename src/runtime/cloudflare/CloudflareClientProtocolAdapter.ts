@@ -1,9 +1,9 @@
 import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
 import { restoreRoomSnapshot } from "../../core/room/RoomSnapshot.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
-import type { WerewolfClientCommandEnvelope } from "../../games/werewolf/WerewolfClientProtocol.js";
-import { mapWerewolfClientCommand } from "../../games/werewolf/WerewolfClientProtocol.js";
 import { createPlayerStateEnvelope } from "../../protocol/client/ClientProtocol.js";
+import type { WerewolfClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
+import { mapWerewolfClientCommand } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
 import { werewolfPlayerGameView } from "../shared/werewolfRoomView.js";
 import type { CloudflareWerewolfCommandRuntime } from "./CloudflareWerewolfCommandRuntime.js";
 
