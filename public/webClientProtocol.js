@@ -3,6 +3,19 @@
 
   const CLIENT_PROTOCOL_VERSION = 1;
   const SOCKET_COMMAND_EVENT = "client:command";
+  const LEGACY_GAME_COMMAND_TYPES = Object.freeze({
+    "player:confirm-role": "werewolf.confirmRole",
+    "player:submit-wolf-target": "werewolf.submitWolfTarget",
+    "player:submit-witch-action": "werewolf.submitWitchAction",
+    "player:submit-seer-target": "werewolf.submitSeerTarget",
+    "player:confirm-seer-result": "werewolf.confirmSeerResult",
+    "player:submit-guard-target": "werewolf.submitGuardTarget",
+    "player:submit-hunter-execution": "werewolf.submitHunterExecution",
+    "player:submit-vote": "werewolf.submitVote",
+    "host:start-night": "werewolf.startNight",
+    "host:close-voting": "werewolf.closeVoting",
+    "host:begin-night-start": "werewolf.beginNightStart",
+  });
 
   function requireNonEmptyString(value, fieldName) {
     if (typeof value !== "string" || !value.trim()) {
@@ -52,10 +65,77 @@
     };
   }
 
+  function legacyCommandEnvelope(event, data) {
+    const protocolType = LEGACY_GAME_COMMAND_TYPES[event];
+    if (!protocolType) return null;
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("legacy game command payload must be an object");
+    }
+
+    const { commandId, ...payload } = data;
+    return createCommandEnvelope(protocolType, payload, commandId);
+  }
+
+  function wrapTimedEmitter(timedEmitter) {
+    return new Proxy(timedEmitter, {
+      get(target, property, receiver) {
+        if (property === "emit") {
+          return function emit(event, data, callback) {
+            const envelope = legacyCommandEnvelope(event, data);
+            return envelope
+              ? target.emit(SOCKET_COMMAND_EVENT, envelope, callback)
+              : target.emit(event, data, callback);
+          };
+        }
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  }
+
+  function wrapSocket(socket) {
+    if (!socket?.timeout || socket.__webClientProtocolWrapped) return socket;
+    const originalTimeout = socket.timeout.bind(socket);
+    Object.defineProperty(socket, "__webClientProtocolWrapped", {
+      value: true,
+      configurable: false,
+      enumerable: false,
+    });
+    socket.timeout = function timeout(ms) {
+      return wrapTimedEmitter(originalTimeout(ms));
+    };
+    return socket;
+  }
+
+  function installSocketIoLegacyCommandBridge() {
+    if (typeof global.io !== "function") return false;
+    if (global.io.__webClientProtocolBridge) return true;
+
+    const originalIo = global.io;
+    function bridgedIo(...args) {
+      return wrapSocket(originalIo(...args));
+    }
+    Object.assign(bridgedIo, originalIo);
+    Object.defineProperty(bridgedIo, "__webClientProtocolBridge", {
+      value: true,
+      configurable: false,
+      enumerable: false,
+    });
+    global.io = bridgedIo;
+    return true;
+  }
+
   global.WebClientProtocol = Object.freeze({
     CLIENT_PROTOCOL_VERSION,
     SOCKET_COMMAND_EVENT,
+    LEGACY_GAME_COMMAND_TYPES,
     createCommandEnvelope,
     createSocketIoAdapter,
+    installSocketIoLegacyCommandBridge,
   });
+
+  // index.html loads this file after Socket.IO and before app.js. Installing the
+  // bridge here lets E2 migrate transport semantics without editing the large
+  // UI file; non-migrated room/session/recovery events pass through unchanged.
+  installSocketIoLegacyCommandBridge();
 })(globalThis);
