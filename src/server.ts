@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server, type Socket } from "socket.io";
 import { SessionTokenService } from "./core/session/SessionTokenService.js";
+import { createClientVibrateEffectEvent } from "./protocol/client/ClientEffects.js";
 import {
   configFromRoleDeck,
   configFromPlayerCount,
@@ -202,11 +203,20 @@ function alertCurrentActors(io: Server, room: Room, resumed = false): void {
   for (const playerId of moduleActingPlayerIds(room)) {
     const player = room.players.find(item => item.id === playerId);
     if (player?.socketId) {
-      io.to(player.socketId).emit("player:action-alert", {
+      const context = {
         actionId: room.game.actionId,
         phase: room.game.phase,
         resumed,
-      });
+      };
+      io.to(player.socketId).emit(
+        "client:event",
+        createClientVibrateEffectEvent([300, 150, 300], {
+          reason: "action-alert",
+          context,
+        }),
+      );
+      // E2.2c compatibility: older clients still consume the legacy event.
+      io.to(player.socketId).emit("player:action-alert", context);
     }
   }
 }
