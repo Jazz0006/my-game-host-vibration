@@ -46,6 +46,13 @@ replaceExact(
   `import {\n  createWerewolfGame,`,
 );
 
+replaceExact(
+  serverPath,
+  "moduleActingPlayerIds(room).includes(player.id)",
+  "onlineActingPlayers(room).some(actor => actor.id === player.id)",
+  2,
+);
+
 replaceRegex(
   serverPath,
   /function alertCurrentActors[\s\S]*?\nfunction afterNightAction/g,
