@@ -85,7 +85,9 @@ describe("E3.2 WeChat ClientSession integration", () => {
     expect(session.getConnectionState().status).toBe("Connected");
     expect(session.getAuthoritativeState()).toMatchObject({
       revision: 3,
-      payload: { phase: "night" },
+      envelope: {
+        payload: { phase: "night" },
+      },
     });
   });
 });
