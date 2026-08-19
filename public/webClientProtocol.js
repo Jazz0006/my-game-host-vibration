@@ -113,7 +113,14 @@
 
     const originalIo = global.io;
     function bridgedIo(...args) {
-      return wrapSocket(originalIo(...args));
+      // The production app calls io() without arguments. E2.2 ClientSession now
+      // owns the moment that transport connection begins, so only that default
+      // call is changed to autoConnect:false. Explicit Socket.IO options from
+      // other callers remain untouched.
+      const socket = args.length === 0
+        ? originalIo({ autoConnect: false })
+        : originalIo(...args);
+      return wrapSocket(socket);
     }
     Object.assign(bridgedIo, originalIo);
     Object.defineProperty(bridgedIo, "__webClientProtocolBridge", {
