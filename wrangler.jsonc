@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "my-game-host-vibration",
+  "main": "src/runtime/cloudflare/worker.ts",
+  "compatibility_date": "2026-08-19",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GAME_ROOMS",
+        "class_name": "GameRoomDurableObject"
+      }
+    ]
+  },
+  "exports": {
+    "GameRoomDurableObject": {
+      "type": "durable-object",
+      "state": "created",
+      "storage": "sqlite"
+    }
+  }
+}
