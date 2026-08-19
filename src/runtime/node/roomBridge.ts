@@ -1,7 +1,5 @@
 import crypto from "node:crypto";
 import type { CommandReceipt } from "../../core/command/IdempotentCommandLedger.js";
-import type { GameViewContext } from "../../core/game/GameModule.js";
-import { interactionForPlayer } from "../../core/interaction/PendingInteraction.js";
 import { RoomCore } from "../../core/room/RoomCore.js";
 import type { RoomPlayer, RoomState } from "../../core/room/types.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
@@ -10,15 +8,18 @@ import {
   werewolfGameModule,
   type WerewolfCommand,
 } from "../../games/werewolf/WerewolfGameModule.js";
-import {
-  getActiveWerewolfInteraction,
-  type WerewolfInteraction,
-} from "../../games/werewolf/WerewolfNightPlanner.js";
+import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlanner.js";
 import {
   executeWerewolfRoomCommand,
   type WerewolfCommandEnvironment,
   type WerewolfCommandOutcome,
 } from "../shared/werewolfRoomCommand.js";
+import {
+  activeWerewolfInteraction,
+  werewolfActingPlayerIds,
+  werewolfGameViewContext,
+  werewolfPlayerGameView,
+} from "../shared/werewolfRoomView.js";
 
 export type { WerewolfCommandOutcome } from "../shared/werewolfRoomCommand.js";
 
@@ -67,30 +68,20 @@ export function roomCore(room: RuntimeRoom): RoomCore<GameState, GameConfig, Run
   return new RoomCore(room);
 }
 
-export function gameViewContext(room: RuntimeRoom): GameViewContext {
-  return {
-    players: room.players.map(({ id, name, seat }) => ({ id, name, seat })),
-  };
+export function gameViewContext(room: RuntimeRoom) {
+  return werewolfGameViewContext(room);
 }
 
 export function activeInteraction(room: RuntimeRoom): WerewolfInteraction | undefined {
-  return room.game ? getActiveWerewolfInteraction(room.game) : undefined;
+  return activeWerewolfInteraction(room);
 }
 
 export function playerGameView(room: RuntimeRoom, playerId: string): unknown {
-  if (!room.game) return { phase: "lobby", mode: "lobby" };
-
-  const view = werewolfGameModule.getPlayerView(room.game, playerId, gameViewContext(room));
-  const playerInteraction = interactionForPlayer(activeInteraction(room), playerId);
-  return playerInteraction
-    ? { ...view, activeInteraction: playerInteraction }
-    : view;
+  return werewolfPlayerGameView(room, playerId);
 }
 
 export function actingPlayerIds(room: RuntimeRoom): string[] {
-  if (!room.game) return [];
-  const interaction = activeInteraction(room);
-  return interaction?.actorPlayerIds ?? werewolfGameModule.getActingPlayerIds(room.game);
+  return werewolfActingPlayerIds(room);
 }
 
 export function hostRecoveryStatus(room: RuntimeRoom): HostRecoveryStatus {
