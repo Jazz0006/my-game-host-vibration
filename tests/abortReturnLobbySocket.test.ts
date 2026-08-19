@@ -1,7 +1,14 @@
 import type { AddressInfo } from "node:net";
 import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { ClientStateEnvelope } from "../src/protocol/client/ClientProtocol.js";
+import {
+  CLIENT_INTERACTION_TIMEOUT_STATE,
+  type ClientInteractionTimeoutStatePayload,
+} from "../src/protocol/client/ClientInteractionTimeoutEvents.js";
+import type {
+  ClientRealtimeEventEnvelope,
+  ClientStateEnvelope,
+} from "../src/protocol/client/ClientProtocol.js";
 import { createTimedGameServer } from "../src/timedServer.js";
 
 const TIMEOUT_MS = 4000;
@@ -63,10 +70,10 @@ type RoomState = {
   defaultRoleDeck?: string[];
   game: { phase: string; canStart: boolean };
 };
-type TimeoutState = {
-  active: boolean;
-  actionId?: string;
-};
+type StableTimeoutStateEvent = ClientRealtimeEventEnvelope<
+  typeof CLIENT_INTERACTION_TIMEOUT_STATE,
+  ClientInteractionTimeoutStatePayload
+>;
 
 async function waitForGameView(
   socket: ClientSocket,
@@ -143,13 +150,14 @@ describe("C4.5 abort current game and return to lobby", () => {
     const wolfIndex = dealt.findIndex(view => view.role === "werewolf");
     expect(wolfIndex).toBeGreaterThanOrEqual(0);
     const wolf = sockets[wolfIndex]!;
-    const timerStarted = waitFor<TimeoutState>(
+    const timerStarted = waitFor<StableTimeoutStateEvent>(
       wolf,
-      "player:interaction-timeout-state",
-      state => state.active,
+      "client:event",
+      event => event.type === CLIENT_INTERACTION_TIMEOUT_STATE && event.payload.active,
     );
     expect(await emitAck<BasicResult>(host, "host:start-night")).toEqual({ ok: true });
-    await timerStarted;
+    const activeTimeout = await timerStarted;
+    expect(activeTimeout.payload.active).toBe(true);
     expect(server.interactionTimeouts.get(room.id)).toBeDefined();
 
     expect(await emitAck<BasicResult>(sockets[1]!, "host:abort-to-lobby")).toEqual({
@@ -164,10 +172,13 @@ describe("C4.5 abort current game and return to lobby", () => {
         state => state.roomId === room.id && state.game.phase === "lobby",
       ),
     );
-    const timeoutCleared = waitFor<TimeoutState>(
+    const timeoutCleared = waitFor<StableTimeoutStateEvent>(
       wolf,
-      "player:interaction-timeout-state",
-      state => state.active === false,
+      "client:event",
+      event =>
+        event.type === CLIENT_INTERACTION_TIMEOUT_STATE &&
+        !event.payload.active &&
+        event.payload.actionId === activeTimeout.payload.actionId,
     );
 
     const abortCommandId = "same-abort-command";
@@ -177,7 +188,11 @@ describe("C4.5 abort current game and return to lobby", () => {
     expect(firstAbort).toEqual({ ok: true });
 
     const lobbyViews = await Promise.all(lobbyStates);
-    await timeoutCleared;
+    expect((await timeoutCleared).payload).toEqual({
+      roomId: room.id,
+      active: false,
+      actionId: activeTimeout.payload.actionId,
+    });
 
     expect(room.game).toBeUndefined();
     expect(server.interactionTimeouts.get(room.id)).toBeUndefined();
