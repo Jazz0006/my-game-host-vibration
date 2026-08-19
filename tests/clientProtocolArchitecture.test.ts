@@ -59,6 +59,10 @@ describe("E1 client protocol architecture", () => {
     expectTransportNeutral("src/protocol/client/ClientSessionEvents.ts");
   });
 
+  it("keeps room lifecycle event contracts transport-neutral", () => {
+    expectTransportNeutral("src/protocol/client/ClientRoomEvents.ts");
+  });
+
   it("keeps Node and Cloudflare client protocol adapters separated", () => {
     for (const imported of importsOf("src/runtime/node/NodeClientProtocolAdapter.ts")) {
       expect(imported).not.toMatch(/(?:^|\/)cloudflare(?:\/|$)/u);
