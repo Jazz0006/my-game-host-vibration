@@ -40,17 +40,18 @@ export function executeWerewolfRoomCommand<TPlayer extends RoomPlayer>(
 ): WerewolfCommandOutcome {
   if (!room.game) throw new Error("game has not started");
 
+  const now = environment.now();
   const result = werewolfGameModule.handleCommand(
     room.game,
     {
       ...(actor.playerId === undefined ? {} : { playerId: actor.playerId }),
       isHost: actor.isHost ?? false,
-      now: environment.now(),
+      now,
     },
     command,
     { random: environment.random },
   );
-  room.updatedAt = environment.now();
+  room.updatedAt = now;
 
   switch (result.outcome.kind) {
     case "roleConfirmed":
