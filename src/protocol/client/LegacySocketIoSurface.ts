@@ -46,8 +46,6 @@ export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "host:close-room", direction: "client-to-server", family: "command", category: "room-management" },
   { event: "player:leave-room", direction: "client-to-server", family: "command", category: "room-management" },
 
-  { event: "player:submit-hunter-execution", direction: "client-to-server", family: "command", category: "werewolf-game", protocolTarget: "werewolf.submitHunterExecution" },
-  { event: "player:submit-vote", direction: "client-to-server", family: "command", category: "werewolf-game", protocolTarget: "werewolf.submitVote" },
   { event: "host:restart-game", direction: "client-to-server", family: "command", category: "werewolf-game" },
   { event: "host:resend-current-action", direction: "client-to-server", family: "command", category: "recovery" },
 

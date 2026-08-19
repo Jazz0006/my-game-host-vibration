@@ -27,7 +27,6 @@ import {
   runHostCommand,
   runHostLifecycleMutationIdempotent,
   runHostRecoveryCommandIdempotent,
-  runPlayerCommandIdempotent,
 } from "./runtime/node/werewolfCommandFacade.js";
 import { onlineActingPlayers } from "./runtime/node/hostRecovery.js";
 import {
@@ -714,39 +713,6 @@ socket.on(
     });
 
     socket.on(
-      "player:submit-hunter-execution",
-      async (data: { commandId?: string; actionId?: string; targetPlayerId?: string | null }, ack: BasicAck) => {
-        const membership = findMembership(rooms, socket.id);
-        if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
-        const commandId = requiredCommandId(data, ack);
-        if (!commandId) return;
-        try {
-          const { outcome, replayed } = await runPlayerCommandIdempotent(membership.room, membership.player.id, commandId, {
-            type: "submitHunterExecution",
-            ...(data.targetPlayerId === undefined ? {} : { targetPlayerId: data.targetPlayerId }),
-            ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
-          });
-          if (!replayed && outcome.kind === "hunterResolved") {
-            const { game } = membership.room;
-            if (game.phase === "game_over") {
-              broadcastRoom(io, membership.room);
-              emitGameOverEffects(io, membership.room);
-            } else if (game.phase === "night_complete") {
-              runHostCommand(membership.room, { type: "startDayVote" });
-              broadcastRoom(io, membership.room);
-              emitActionAlertEffects(io, membership.room, { resumed: false });
-            } else {
-              broadcastRoom(io, membership.room);
-            }
-          }
-          ack({ ok: true });
-        } catch (error) {
-          ruleError(ack, error);
-        }
-      },
-    );
-
-    socket.on(
       "host:resend-current-action",
       async (data: { commandId?: string } | undefined, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
@@ -775,41 +741,6 @@ socket.on(
               actorPlayerIds: actors.map(actor => actor.id),
             };
           });
-          ack({ ok: true });
-        } catch (error) {
-          ruleError(ack, error);
-        }
-      },
-    );
-
-    socket.on(
-      "player:submit-vote",
-      async (data: { commandId?: string; actionId?: string; targetId?: string }, ack: BasicAck) => {
-        const membership = findMembership(rooms, socket.id);
-        if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
-        const commandId = requiredCommandId(data, ack);
-        if (!commandId) return;
-        try {
-          const { outcome, replayed } = await runPlayerCommandIdempotent(
-            membership.room,
-            membership.player.id,
-            commandId,
-            {
-              type: "submitVote",
-              targetId: data.targetId ?? "",
-              actionId: data.actionId ?? "",
-            },
-          );
-          if (!replayed && outcome.kind === "vote" && outcome.changed) {
-            broadcastRoom(io, membership.room);
-            if (outcome.allEligibleVoted) {
-              const closeOutcome = runHostCommand(membership.room, { type: "closeDayVote" });
-              broadcastRoom(io, membership.room);
-              if (closeOutcome.kind === "voteClosed") {
-                afterCloseDayVote(io, membership.room, closeOutcome.result);
-              }
-            }
-          }
           ack({ ok: true });
         } catch (error) {
           ruleError(ack, error);
