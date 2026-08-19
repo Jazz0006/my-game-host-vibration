@@ -16,6 +16,8 @@ const retiredLegacyCommands = [
   ["player:submit-witch-action", "werewolf.submitWitchAction"],
   ["player:confirm-seer-result", "werewolf.confirmSeerResult"],
   ["player:submit-guard-target", "werewolf.submitGuardTarget"],
+  ["player:submit-hunter-execution", "werewolf.submitHunterExecution"],
+  ["player:submit-vote", "werewolf.submitVote"],
 ] as const;
 
 describe("E2.3 legacy game handler contraction", () => {
