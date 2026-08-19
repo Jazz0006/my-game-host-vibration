@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Server, Socket } from "socket.io";
-import { configFromPlayerCount, GameRuleError } from "./domain/game.js";
+import { GameRuleError } from "./domain/game.js";
 import {
   InteractionTimeoutCoordinator,
   type InteractionTimeoutClientState,
@@ -9,9 +9,6 @@ import {
 import {
   actingPlayerIds,
   activeInteraction,
-  playerGameView,
-  roomGameView,
-  type RuntimePlayer,
   type RuntimeRoom,
 } from "./runtime/node/roomBridge.js";
 import { recoverTimedOutWerewolfInteraction } from "./runtime/node/werewolfInteractionTimeout.js";
@@ -21,19 +18,8 @@ import {
 } from "./runtime/node/werewolfCommandFacade.js";
 import { createGameServer } from "./server.js";
 
-const MIN_PLAYERS = 5;
-const MAX_PLAYERS = 12;
 const TIMER_TICK_MS = 200;
 const EXTENSION_RECEIPT_LIMIT = 128;
-
-const ROLE_CATALOG = [
-  { id: "werewolf", name: "狼人" },
-  { id: "seer", name: "预言家" },
-  { id: "witch", name: "女巫" },
-  { id: "guard", name: "守卫" },
-  { id: "hunter", name: "猎人" },
-  { id: "villager", name: "平民" },
-] as const;
 
 type BasicResult = { ok: true } | { ok: false; message: string };
 type TimeoutConfigResult =
@@ -54,68 +40,6 @@ function findMembership(rooms: Map<string, RuntimeRoom>, socketId: string) {
     if (player) return { room, player };
   }
   return null;
-}
-
-function publicPlayer(player: RuntimePlayer) {
-  return {
-    id: player.id,
-    name: player.name,
-    seat: player.seat,
-    connected: player.connected,
-    isHost: player.isHost,
-  };
-}
-
-function lobbyView(room: RuntimeRoom) {
-  return {
-    phase: "lobby",
-    canStart:
-      room.players.length >= MIN_PLAYERS &&
-      room.players.every(player => player.connected),
-    minPlayers: MIN_PLAYERS,
-    maxPlayers: MAX_PLAYERS,
-    confirmedRoles: 0,
-    completedNightSteps: 0,
-    dayNumber: 0,
-    nightNumber: 0,
-    aliveCount: 0,
-    votesRequired: 0,
-    votesCast: 0,
-    pkCandidateIds: [],
-    noKillToday: false,
-    deadPlayerIds: [],
-  };
-}
-
-function roomView(room: RuntimeRoom, viewer: RuntimePlayer) {
-  const gameView = roomGameView(room, viewer.isHost);
-  return {
-    roomId: room.id,
-    viewer: { playerId: viewer.id, isHost: viewer.isHost },
-    players: room.players.map(publicPlayer),
-    defaultRoleDeck: !room.game
-      ? (room.players.length >= MIN_PLAYERS
-          ? configFromPlayerCount(room.players.length).roleDeck
-          : room.gameConfig.roleDeck)
-      : undefined,
-    roleCatalog: !room.game ? ROLE_CATALOG : undefined,
-    game: gameView
-      ? {
-          ...gameView,
-          canStart: false,
-          minPlayers: MIN_PLAYERS,
-          maxPlayers: MAX_PLAYERS,
-        }
-      : lobbyView(room),
-  };
-}
-
-function broadcastCurrentState(io: Server, room: RuntimeRoom): void {
-  for (const player of room.players) {
-    if (!player.socketId) continue;
-    io.to(player.socketId).emit("room:state", roomView(room, player));
-    io.to(player.socketId).emit("player:game-state", playerGameView(room, player.id));
-  }
 }
 
 function alertCurrentActors(io: Server, room: RuntimeRoom, timeoutWarning = false): void {
@@ -156,12 +80,16 @@ function isTimedSecretInteraction(room: RuntimeRoom): boolean {
   return phase === "day_hunter" && room.game?.hunterTrigger === "night";
 }
 
-function afterTimedRecovery(io: Server, room: RuntimeRoom): void {
+function afterTimedRecovery(
+  io: Server,
+  room: RuntimeRoom,
+  broadcastRoom: (room: RuntimeRoom) => void,
+): void {
   const game = room.game;
   if (!game) return;
 
   if (game.phase === "game_over") {
-    broadcastCurrentState(io, room);
+    broadcastRoom(room);
     io.to(room.id).emit("game:over", { winner: game.winner });
     return;
   }
@@ -169,19 +97,19 @@ function afterTimedRecovery(io: Server, room: RuntimeRoom): void {
   if (game.phase === "night_complete") {
     io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
     runHostCommand(room, { type: "startDayVote" });
-    broadcastCurrentState(io, room);
+    broadcastRoom(room);
     alertCurrentActors(io, room);
     return;
   }
 
   if (game.phase === "day_hunter" && game.hunterTrigger === "night") {
     io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
-    broadcastCurrentState(io, room);
+    broadcastRoom(room);
     alertCurrentActors(io, room);
     return;
   }
 
-  broadcastCurrentState(io, room);
+  broadcastRoom(room);
   alertCurrentActors(io, room);
 }
 
@@ -191,7 +119,7 @@ function ruleMessage(error: unknown): string {
 
 export function createTimedGameServer(): TimedServer {
   const base = createGameServer();
-  const { io, rooms } = base;
+  const { io, rooms, delivery } = base;
   const interactionTimeouts = new InteractionTimeoutCoordinator();
   const extensionReceipts = new Map<string, ExtensionResult>();
   const timeoutStateDeliveries = new Map<string, string>();
@@ -310,7 +238,7 @@ export function createTimedGameServer(): TimedServer {
 
           if (!replayed) {
             clearRoomInteractionTimeout(room);
-            broadcastCurrentState(io, room);
+            delivery.broadcastRoom(room);
             io.to(room.id).emit("game:aborted-to-lobby", { roomId: room.id });
           }
           ack({ ok: true });
@@ -435,7 +363,9 @@ export function createTimedGameServer(): TimedServer {
 
       try {
         const result = recoverTimedOutWerewolfInteraction(room, state.actionId);
-        if (result.recovered) afterTimedRecovery(io, room);
+        if (result.recovered) {
+          afterTimedRecovery(io, room, delivery.broadcastRoom);
+        }
       } catch (error) {
         for (const playerId of state.actorPlayerIds) {
           const player = room.players.find(item => item.id === playerId);
