@@ -5,7 +5,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server, type Socket } from "socket.io";
 import { SessionTokenService } from "./core/session/SessionTokenService.js";
-import { createClientVibrateEffectEvent } from "./protocol/client/ClientEffects.js";
+import {
+  CLIENT_AUDIO_CUE_NIGHT_COMPLETE,
+  createClientAudioCueEffectEvent,
+  createClientVibrateEffectEvent,
+} from "./protocol/client/ClientEffects.js";
 import {
   configFromRoleDeck,
   configFromPlayerCount,
@@ -221,24 +225,66 @@ function alertCurrentActors(io: Server, room: Room, resumed = false): void {
   }
 }
 
+function emitNightCompleteEffects(io: Server, room: Room): void {
+  if (!room.game) return;
+  const context = { actionId: room.game.actionId };
+  io.to(room.id).emit(
+    "client:event",
+    createClientVibrateEffectEvent([160, 100, 160, 100, 500], {
+      reason: "night-complete",
+      context,
+    }),
+  );
+
+  const host = room.players.find(player => player.isHost);
+  if (host?.socketId) {
+    io.to(host.socketId).emit(
+      "client:event",
+      createClientAudioCueEffectEvent(CLIENT_AUDIO_CUE_NIGHT_COMPLETE, {
+        reason: "night-complete",
+        context,
+      }),
+    );
+  }
+
+  // E2.2c compatibility: older clients still consume the legacy event.
+  io.to(room.id).emit("game:night-complete", context);
+}
+
+function emitGameOverEffects(io: Server, room: Room): void {
+  const winner = room.game?.winner;
+  if (!winner) return;
+  const context = { winner };
+  io.to(room.id).emit(
+    "client:event",
+    createClientVibrateEffectEvent([500, 200, 500, 200, 500], {
+      reason: "game-over",
+      context,
+    }),
+  );
+
+  // E2.2c compatibility: older clients still consume the legacy event.
+  io.to(room.id).emit("game:over", context);
+}
+
 function afterNightAction(io: Server, room: Room): void {
   const game = room.game;
   if (!game) return;
 
   if (game.phase === "game_over") {
     broadcastRoom(io, room);
-    io.to(room.id).emit("game:over", { winner: game.winner });
+    emitGameOverEffects(io, room);
     return;
   }
   if (game.phase === "night_complete") {
-    io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
+    emitNightCompleteEffects(io, room);
     runHostCommand(room, { type: "startDayVote" });
     broadcastRoom(io, room);
     alertCurrentActors(io, room);
     return;
   }
   if (game.phase === "day_hunter" && game.hunterTrigger === "night") {
-    io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
+    emitNightCompleteEffects(io, room);
     broadcastRoom(io, room);
     alertCurrentActors(io, room);
     return;
@@ -252,7 +298,7 @@ function afterCloseDayVote(io: Server, room: Room, result: string): void {
   if (!room.game) return;
   const { phase } = room.game;
   if (phase === "game_over") {
-    io.to(room.id).emit("game:over", { winner: room.game.winner });
+    emitGameOverEffects(io, room);
   } else if (phase === "day_hunter") {
     alertCurrentActors(io, room);
   } else if (phase === "day_pk") {
@@ -868,7 +914,7 @@ socket.on(
             const { game } = membership.room;
             if (game.phase === "game_over") {
               broadcastRoom(io, membership.room);
-              io.to(membership.room.id).emit("game:over", { winner: game.winner });
+              emitGameOverEffects(io, membership.room);
             } else if (game.phase === "night_complete") {
               runHostCommand(membership.room, { type: "startDayVote" });
               broadcastRoom(io, membership.room);
