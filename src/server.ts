@@ -760,27 +760,6 @@ socket.on(
       },
     );
 
-    socket.on(
-      "player:submit-seer-target",
-      async (data: { commandId?: string; actionId?: string; targetPlayerId?: string }, ack: BasicAck) => {
-        const membership = findMembership(rooms, socket.id);
-        if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
-        const commandId = requiredCommandId(data, ack);
-        if (!commandId) return;
-        try {
-          const { replayed } = await runPlayerCommandIdempotent(membership.room, membership.player.id, commandId, {
-            type: "submitSeerTarget",
-            ...(data.targetPlayerId === undefined ? {} : { targetPlayerId: data.targetPlayerId }),
-            ...(data.actionId === undefined ? {} : { actionId: data.actionId }),
-          });
-          if (!replayed) broadcastRoom(io, membership.room);
-          ack({ ok: true });
-        } catch (error) {
-          ruleError(ack, error);
-        }
-      },
-    );
-
     socket.on("player:confirm-seer-result", async (data: { commandId?: string; actionId?: string }, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership?.room.game) return ack({ ok: false, message: "游戏尚未开始" });
