@@ -1,7 +1,11 @@
 import type { AddressInfo } from "node:net";
 import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createClientCommandEnvelope } from "../src/protocol/client/ClientProtocol.js";
+import { CLIENT_EFFECT_VIBRATE } from "../src/protocol/client/ClientEffects.js";
+import {
+  createClientCommandEnvelope,
+  type ClientRealtimeEventEnvelope,
+} from "../src/protocol/client/ClientProtocol.js";
 import { createTimedGameServer } from "../src/timedServer.js";
 
 const TIMEOUT_MS = 3000;
@@ -80,7 +84,7 @@ describe("E2 Web protocol over Socket.IO", () => {
     return socket;
   }
 
-  it("runs migrated post-start commands through client:command and dedupes retries", async () => {
+  it("runs migrated post-start commands through client:command, delivers stable effects, and dedupes retries", async () => {
     const sockets = await Promise.all(Array.from({ length: 5 }, () => connect()));
     const host = sockets[0]!;
     const hostSession = await emitAck<JoinResult>(host, "host:create-room", { name: "房主" });
@@ -132,12 +136,28 @@ describe("E2 Web protocol over Socket.IO", () => {
 
     const wolfIndex = dealt.findIndex(view => view.role === "werewolf");
     expect(wolfIndex).toBeGreaterThanOrEqual(0);
+    const wolfSocket = sockets[wolfIndex]!;
     const wolfAction = waitFor<GameView>(
-      sockets[wolfIndex]!,
+      wolfSocket,
       "player:game-state",
       view => view.mode === "wolf_action",
     );
+    const actionEffect = waitFor<ClientRealtimeEventEnvelope>(
+      wolfSocket,
+      "client:event",
+      event => event.type === CLIENT_EFFECT_VIBRATE,
+    );
+
     expect(await protocolCommand(host, "werewolf.startNight", {}, "protocol-start-night")).toEqual({ ok: true });
     expect((await wolfAction).mode).toBe("wolf_action");
+    expect(await actionEffect).toMatchObject({
+      kind: "event",
+      type: CLIENT_EFFECT_VIBRATE,
+      payload: {
+        pattern: [300, 150, 300],
+        reason: "action-alert",
+        context: { phase: "night_werewolf" },
+      },
+    });
   });
 });

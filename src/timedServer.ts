@@ -7,11 +7,12 @@ import {
   type InteractionTimeoutClientState,
 } from "./runtime/node/InteractionTimeoutCoordinator.js";
 import { attachSocketIoClientProtocolTransport } from "./runtime/node/SocketIoClientProtocolTransport.js";
+import { activeInteraction, type RuntimeRoom } from "./runtime/node/roomBridge.js";
 import {
-  actingPlayerIds,
-  activeInteraction,
-  type RuntimeRoom,
-} from "./runtime/node/roomBridge.js";
+  emitActionAlertEffects,
+  emitGameOverEffects,
+  emitNightCompleteEffects,
+} from "./runtime/node/SocketIoClientEffectDelivery.js";
 import { recoverTimedOutWerewolfInteraction } from "./runtime/node/werewolfInteractionTimeout.js";
 import {
   runHostCommand,
@@ -41,19 +42,6 @@ function findMembership(rooms: Map<string, RuntimeRoom>, socketId: string) {
     if (player) return { room, player };
   }
   return null;
-}
-
-function alertCurrentActors(io: Server, room: RuntimeRoom, timeoutWarning = false): void {
-  if (!room.game) return;
-  for (const playerId of actingPlayerIds(room)) {
-    const player = room.players.find(item => item.id === playerId);
-    if (!player?.socketId) continue;
-    io.to(player.socketId).emit("player:action-alert", {
-      actionId: room.game.actionId,
-      phase: room.game.phase,
-      timeoutWarning,
-    });
-  }
 }
 
 function emitTimeoutState(
@@ -91,27 +79,27 @@ function afterTimedRecovery(
 
   if (game.phase === "game_over") {
     broadcastRoom(room);
-    io.to(room.id).emit("game:over", { winner: game.winner });
+    emitGameOverEffects(io, room);
     return;
   }
 
   if (game.phase === "night_complete") {
-    io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
+    emitNightCompleteEffects(io, room);
     runHostCommand(room, { type: "startDayVote" });
     broadcastRoom(room);
-    alertCurrentActors(io, room);
+    emitActionAlertEffects(io, room, { timeoutWarning: false });
     return;
   }
 
   if (game.phase === "day_hunter" && game.hunterTrigger === "night") {
-    io.to(room.id).emit("game:night-complete", { actionId: game.actionId });
+    emitNightCompleteEffects(io, room);
     broadcastRoom(room);
-    alertCurrentActors(io, room);
+    emitActionAlertEffects(io, room, { timeoutWarning: false });
     return;
   }
 
   broadcastRoom(room);
-  alertCurrentActors(io, room);
+  emitActionAlertEffects(io, room, { timeoutWarning: false });
 }
 
 function ruleMessage(error: unknown): string {
@@ -344,7 +332,7 @@ export function createTimedGameServer(): TimedServer {
       if (now >= state.warningAt && !state.warningSent) {
         const warned = interactionTimeouts.markWarningSent(room.id, state.actionId);
         if (warned) {
-          alertCurrentActors(io, room, true);
+          emitActionAlertEffects(io, room, { timeoutWarning: true });
           emitTimeoutState(
             io,
             room,

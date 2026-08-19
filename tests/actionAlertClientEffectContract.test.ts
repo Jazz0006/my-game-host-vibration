@@ -6,24 +6,18 @@ const repoRoot = process.cwd();
 const source = (relativePath: string) => fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 
 describe("E2.2c2 action-alert client effect migration", () => {
-  it("dual-publishes the action alert as a client effect while retaining the legacy server event", () => {
-    const server = source("src/server.ts");
+  it("dual-publishes the action alert from the canonical Node effect delivery boundary", () => {
+    const delivery = source("src/runtime/node/SocketIoClientEffectDelivery.ts");
 
-    expect(server).toContain('createClientVibrateEffectEvent([300, 150, 300]');
-    expect(server).toContain('"client:event"');
-    expect(server).toContain('reason: "action-alert"');
-    expect(server).toContain('emit("player:action-alert", context)');
+    expect(delivery).toContain('createClientVibrateEffectEvent([300, 150, 300]');
+    expect(delivery).toContain('"client:event"');
+    expect(delivery).toContain('reason: "action-alert"');
+    expect(delivery).toContain('emit("player:action-alert", context)');
   });
 
-  it("routes host resend reminders through the same dual-publish action alert helper", () => {
+  it("routes host resend reminders through the same canonical effect boundary", () => {
     const server = source("src/server.ts");
-    const handlerStart = server.indexOf('socket.on(\n      "host:resend-current-action"');
-    const handlerEnd = server.indexOf('socket.on(', handlerStart + 1);
-    const handler = server.slice(handlerStart, handlerEnd === -1 ? undefined : handlerEnd);
-
-    expect(handlerStart).toBeGreaterThanOrEqual(0);
-    expect(handler).toContain("alertCurrentActors(io, room, true)");
-    expect(handler).not.toContain('emit("player:action-alert"');
+    expect(server).toContain("emitActionAlertEffects(io, room, { resumed: true })");
   });
 
   it("makes the new Web runtime consume action vibration only through ClientSession effects", () => {
