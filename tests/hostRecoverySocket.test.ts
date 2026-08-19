@@ -5,7 +5,10 @@ import {
   CLIENT_EFFECT_VIBRATE,
   type ClientVibrateEffectPayload,
 } from "../src/protocol/client/ClientEffects.js";
-import type { ClientRealtimeEventEnvelope } from "../src/protocol/client/ClientProtocol.js";
+import type {
+  ClientRealtimeEventEnvelope,
+  ClientStateEnvelope,
+} from "../src/protocol/client/ClientProtocol.js";
 import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
@@ -51,10 +54,26 @@ type GameView = {
   role: "werewolf" | "witch" | "seer" | "villager";
   actionId: string;
 };
+type ClientStateDelivery = {
+  revision: number;
+  envelope: ClientStateEnvelope<GameView>;
+};
 type ActionAlertEffect = ClientRealtimeEventEnvelope<
   typeof CLIENT_EFFECT_VIBRATE,
   ClientVibrateEffectPayload
 >;
+
+async function waitForGameView(
+  socket: ClientSocket,
+  predicate: (view: GameView) => boolean,
+): Promise<GameView> {
+  const delivery = await waitFor<ClientStateDelivery>(
+    socket,
+    "client:state",
+    value => predicate(value.envelope.payload),
+  );
+  return delivery.envelope.payload;
+}
 
 describe("C4.1 Socket.IO host recovery reminder", () => {
   let game: ReturnType<typeof createGameServer>;
@@ -99,7 +118,7 @@ describe("C4.1 Socket.IO host recovery reminder", () => {
     }
 
     const roleViews = sockets.map(socket =>
-      waitFor<GameView>(socket, "player:game-state", view => view.mode === "role_reveal"),
+      waitForGameView(socket, view => view.mode === "role_reveal"),
     );
     expect(await emitAck<BasicResult>(host, "host:start-game")).toEqual({ ok: true });
     const dealt = await Promise.all(roleViews);
@@ -115,7 +134,7 @@ describe("C4.1 Socket.IO host recovery reminder", () => {
     const wolfIndex = dealt.findIndex(view => view.role === "werewolf");
     expect(wolfIndex).toBeGreaterThanOrEqual(0);
     const wolf = sockets[wolfIndex]!;
-    const wolfAction = waitFor<GameView>(wolf, "player:game-state", view => view.mode === "wolf_action");
+    const wolfAction = waitForGameView(wolf, view => view.mode === "wolf_action");
     expect(await emitAck<BasicResult>(host, "host:start-night")).toEqual({ ok: true });
     await wolfAction;
     await new Promise(resolve => setTimeout(resolve, 25));

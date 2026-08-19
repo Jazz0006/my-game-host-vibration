@@ -5,6 +5,7 @@ import { CLIENT_EFFECT_VIBRATE } from "../src/protocol/client/ClientEffects.js";
 import {
   createClientCommandEnvelope,
   type ClientRealtimeEventEnvelope,
+  type ClientStateEnvelope,
 } from "../src/protocol/client/ClientProtocol.js";
 import { createTimedGameServer } from "../src/timedServer.js";
 
@@ -15,6 +16,10 @@ type GameView = {
   mode: string;
   role: "werewolf" | "witch" | "seer" | "guard" | "hunter" | "villager";
   actionId: string;
+};
+type ClientStateDelivery = {
+  revision: number;
+  envelope: ClientStateEnvelope<GameView>;
 };
 
 function waitFor<T>(
@@ -35,6 +40,18 @@ function waitFor<T>(
     };
     socket.on(event, handler);
   });
+}
+
+async function waitForGameView(
+  socket: ClientSocket,
+  predicate: (view: GameView) => boolean,
+): Promise<GameView> {
+  const delivery = await waitFor<ClientStateDelivery>(
+    socket,
+    "client:state",
+    value => predicate(value.envelope.payload),
+  );
+  return delivery.envelope.payload;
 }
 
 function emitAck<T>(socket: ClientSocket, event: string, payload: unknown): Promise<T> {
@@ -97,7 +114,7 @@ describe("E2 Web protocol over Socket.IO", () => {
     }
 
     const roleViews = sockets.map(socket =>
-      waitFor<GameView>(socket, "player:game-state", view => view.mode === "role_reveal"),
+      waitForGameView(socket, view => view.mode === "role_reveal"),
     );
     expect(
       await emitAck<{ ok: boolean }>(host, "host:start-game", {
@@ -137,11 +154,7 @@ describe("E2 Web protocol over Socket.IO", () => {
     const wolfIndex = dealt.findIndex(view => view.role === "werewolf");
     expect(wolfIndex).toBeGreaterThanOrEqual(0);
     const wolfSocket = sockets[wolfIndex]!;
-    const wolfAction = waitFor<GameView>(
-      wolfSocket,
-      "player:game-state",
-      view => view.mode === "wolf_action",
-    );
+    const wolfAction = waitForGameView(wolfSocket, view => view.mode === "wolf_action");
     const actionEffect = waitFor<ClientRealtimeEventEnvelope>(
       wolfSocket,
       "client:event",

@@ -1,6 +1,7 @@
 import type { AddressInfo } from "node:net";
 import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ClientStateEnvelope } from "../src/protocol/client/ClientProtocol.js";
 import { createTimedGameServer } from "../src/timedServer.js";
 
 const TIMEOUT_MS = 4000;
@@ -50,6 +51,10 @@ type GameView = {
   role: "werewolf" | "guard" | "witch" | "seer" | "hunter" | "villager";
   actionId: string;
 };
+type ClientStateDelivery = {
+  revision: number;
+  envelope: ClientStateEnvelope<GameView>;
+};
 type RoomState = {
   roomId: string;
   viewer: { playerId: string; isHost: boolean };
@@ -62,6 +67,18 @@ type TimeoutState = {
   active: boolean;
   actionId?: string;
 };
+
+async function waitForGameView(
+  socket: ClientSocket,
+  predicate: (view: GameView) => boolean,
+): Promise<GameView> {
+  const delivery = await waitFor<ClientStateDelivery>(
+    socket,
+    "client:state",
+    value => predicate(value.envelope.payload),
+  );
+  return delivery.envelope.payload;
+}
 
 describe("C4.5 abort current game and return to lobby", () => {
   let server: ReturnType<typeof createTimedGameServer>;
@@ -112,7 +129,7 @@ describe("C4.5 abort current game and return to lobby", () => {
     const originalSeats = room.players.map(player => player.seat);
 
     const roleViews = sockets.map(socket =>
-      waitFor<GameView>(socket, "player:game-state", view => view.mode === "role_reveal"),
+      waitForGameView(socket, view => view.mode === "role_reveal"),
     );
     expect(await emitAck<BasicResult>(host, "host:start-game")).toEqual({ ok: true });
     const dealt = await Promise.all(roleViews);
@@ -183,7 +200,7 @@ describe("C4.5 abort current game and return to lobby", () => {
     expect(room.game).toBeUndefined();
 
     const secondDeal = sockets.map(socket =>
-      waitFor<GameView>(socket, "player:game-state", view => view.mode === "role_reveal"),
+      waitForGameView(socket, view => view.mode === "role_reveal"),
     );
     expect(await emitAck<BasicResult>(host, "host:start-game")).toEqual({ ok: true });
     await Promise.all(secondDeal);
