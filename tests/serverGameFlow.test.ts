@@ -1,6 +1,7 @@
 import type { AddressInfo } from "node:net";
 import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ClientStateEnvelope } from "../src/protocol/client/ClientProtocol.js";
 import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
@@ -63,6 +64,22 @@ type GameView = {
   checkedAlignment?: string;
   deaths?: Array<{ id: string; name?: string; seat?: number }>;
 };
+type ClientStateDelivery = {
+  revision: number;
+  envelope: ClientStateEnvelope<GameView>;
+};
+
+async function waitForGameView(
+  socket: ClientSocket,
+  predicate: (view: GameView) => boolean,
+): Promise<GameView> {
+  const delivery = await waitFor<ClientStateDelivery>(
+    socket,
+    "client:state",
+    value => predicate(value.envelope.payload),
+  );
+  return delivery.envelope.payload;
+}
 
 describe("five-player Socket.IO game flow", () => {
   let game: ReturnType<typeof createGameServer>;
@@ -103,7 +120,7 @@ describe("five-player Socket.IO game flow", () => {
     }
 
     const roleViews = sockets.map(socket =>
-      waitFor<GameView>(socket, "player:game-state", view => view.mode === "role_reveal"),
+      waitForGameView(socket, view => view.mode === "role_reveal"),
     );
     const publicState = waitFor<Record<string, unknown>>(
       host,
@@ -127,7 +144,7 @@ describe("five-player Socket.IO game flow", () => {
       expect(result.ok).toBe(true);
     }
 
-    const wolfAction = waitFor<GameView>(wolf.socket, "player:game-state", view => view.mode === "wolf_action");
+    const wolfAction = waitForGameView(wolf.socket, view => view.mode === "wolf_action");
     expect(await emitAck<{ ok: boolean }>(host, "host:start-night", {})).toEqual({ ok: true });
 
     const wolfView = await wolfAction;
@@ -139,7 +156,7 @@ describe("five-player Socket.IO game flow", () => {
     expect(victim).not.toHaveProperty("isHost");
     const victimId = victim.id;
     const witch = byRole.get("witch")!;
-    const witchAction = waitFor<GameView>(witch.socket, "player:game-state", view => view.mode === "witch_action");
+    const witchAction = waitForGameView(witch.socket, view => view.mode === "witch_action");
     expect(
       await emitAck<{ ok: boolean }>(wolf.socket, "player:submit-wolf-target", {
         actionId: wolfView.actionId,
@@ -149,7 +166,7 @@ describe("five-player Socket.IO game flow", () => {
 
     const witchView = await witchAction;
     const seer = byRole.get("seer")!;
-    const seerAction = waitFor<GameView>(seer.socket, "player:game-state", view => view.mode === "seer_action");
+    const seerAction = waitForGameView(seer.socket, view => view.mode === "seer_action");
     expect(
       await emitAck<{ ok: boolean }>(witch.socket, "player:submit-witch-action", {
         actionId: witchView.actionId,
@@ -159,7 +176,7 @@ describe("five-player Socket.IO game flow", () => {
     ).toEqual({ ok: true });
 
     const seerView = await seerAction;
-    const seerResult = waitFor<GameView>(seer.socket, "player:game-state", view => view.mode === "seer_result");
+    const seerResult = waitForGameView(seer.socket, view => view.mode === "seer_result");
     await emitAck(seer.socket, "player:submit-seer-target", {
       actionId: seerView.actionId,
       targetPlayerId: wolf.session.playerId,
@@ -168,7 +185,7 @@ describe("five-player Socket.IO game flow", () => {
     expect(resultView.checkedAlignment).toBe("werewolf");
 
     const completed = sockets.map(socket =>
-      waitFor<GameView>(socket, "player:game-state", view =>
+      waitForGameView(socket, view =>
         view.mode === "day_vote" || view.mode === "spectator" || view.mode === "game_over"),
     );
     await emitAck(seer.socket, "player:confirm-seer-result", { actionId: resultView.actionId });
@@ -190,7 +207,7 @@ describe("five-player Socket.IO game flow", () => {
     }
 
     const roleViews = sockets.map(socket =>
-      waitFor<GameView>(socket, "player:game-state", view => view.mode === "role_reveal"),
+      waitForGameView(socket, view => view.mode === "role_reveal"),
     );
     expect(await emitAck<{ ok: boolean }>(host, "host:start-game", {})).toEqual({ ok: true });
     const dealt = await Promise.all(roleViews);
