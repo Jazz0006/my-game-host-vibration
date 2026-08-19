@@ -200,9 +200,9 @@ describe("E1 Node / Cloudflare client protocol parity", () => {
     );
 
     const nodeRoom = nodeRoomFromSnapshot(snapshot);
-    await expect(
+    expect(() =>
       executeNodeClientProtocolCommand(nodeRoom, "p2", envelope, deterministicEnvironment(1)),
-    ).rejects.toThrow("host command requires host authority");
+    ).toThrow("host command requires host authority");
 
     const storage = new MemoryStorage();
     const repository = new CloudflareRoomSnapshotRepository(storage);
