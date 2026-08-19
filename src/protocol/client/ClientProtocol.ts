@@ -104,6 +104,21 @@ export function createRoomStateEnvelope<TPayload>(
   };
 }
 
+export function createClientRealtimeEventEnvelope<
+  TType extends string,
+  TPayload,
+>(
+  type: TType,
+  payload: TPayload,
+): ClientRealtimeEventEnvelope<TType, TPayload> {
+  return {
+    protocolVersion: CLIENT_PROTOCOL_VERSION,
+    kind: "event",
+    type: requireNonEmptyString(type, "event type") as TType,
+    payload,
+  };
+}
+
 export function createReconnectEnvelope(
   credentials: ClientReconnectCredentials,
 ): ClientReconnectEnvelope {
