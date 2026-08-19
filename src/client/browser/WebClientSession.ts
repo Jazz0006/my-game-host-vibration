@@ -22,6 +22,7 @@ export function createWebClientSession<TStatePayload = unknown>(
 }
 
 export { attachBrowserClientEffects } from "./BrowserClientEffects.js";
+export { attachBrowserInteractionTimeoutEvents } from "./BrowserInteractionTimeoutEvents.js";
 export { attachBrowserSessionLifecycle } from "./BrowserSessionLifecycle.js";
 export { attachBrowserRoomLifecycle } from "./BrowserSessionEvents.js";
 export { attachBrowserSessionReplaced } from "./BrowserSessionEvents.js";
