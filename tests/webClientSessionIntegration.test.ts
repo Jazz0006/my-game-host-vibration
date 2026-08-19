@@ -12,7 +12,7 @@ function source(relativePath: string): string {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
 
-describe("E2.2b2d Web ClientSession integration", () => {
+describe("E2.2 Web ClientSession integration", () => {
   it("defers the production no-argument io() connection until ClientSession wiring loads", () => {
     const ioCalls: unknown[][] = [];
     const rawSocket = {
@@ -98,6 +98,8 @@ describe("E2.2b2d Web ClientSession integration", () => {
     expect(integration).toContain('socket.off("player:game-state", renderGameState)');
     expect(integration).toContain("session.reconnect()");
     expect(integration).toContain("createWebClientSession(socket)");
+    expect(integration).toContain("attachBrowserSessionLifecycle(session)");
+    expect(integration).toContain("detachClientLifecycle?.()");
     expect(integration).toContain("/client-runtime/client/browser/WebClientSession.js");
 
     // The legacy UI remains present as the compatibility surface; E2.2 wiring
