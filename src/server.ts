@@ -967,13 +967,7 @@ socket.on(
               throw new GameRuleError("当前没有在线的行动玩家需要提醒");
             }
 
-            for (const actor of actors) {
-              io.to(actor.socketId!).emit("player:action-alert", {
-                actionId: room.game!.actionId,
-                phase: room.game!.phase,
-                resumed: true,
-              });
-            }
+            alertCurrentActors(io, room, true);
 
             return {
               kind: "hostRecoveryReminder",
