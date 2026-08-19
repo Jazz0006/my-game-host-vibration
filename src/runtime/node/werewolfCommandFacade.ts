@@ -1,5 +1,6 @@
 import { RoomCommandRuntime } from "../../core/room/RoomCommandRuntime.js";
 import type { WerewolfCommand } from "../../games/werewolf/WerewolfGameModule.js";
+import type { WerewolfCommandEnvironment } from "../shared/werewolfRoomCommand.js";
 import {
   executeWerewolfCommand,
   type HostRecoveryCommandOutcome,
@@ -38,18 +39,23 @@ export function runHostCommand(
  * commandId; duplicate delivery is absorbed by the transport-neutral room
  * command runtime before domain mutation. Player command ids are scoped by the
  * stable playerId so two clients cannot collide.
+ *
+ * The optional environment is the D5 parity seam. Production Node callers omit
+ * it and use Node crypto/clock defaults; parity tests can inject the same
+ * deterministic dependencies used by the Cloudflare adapter.
  */
 export function runPlayerCommandIdempotent(
   room: RuntimeRoom,
   playerId: string,
   commandId: string,
   command: WerewolfCommand,
+  environment?: WerewolfCommandEnvironment,
 ): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
   return roomCommands.execute(
     room,
     playerCommandScope(playerId),
     commandId,
-    () => executeWerewolfCommand(room, command, { playerId }),
+    () => executeWerewolfCommand(room, command, { playerId }, environment),
   );
 }
 
@@ -57,12 +63,13 @@ export function runHostCommandIdempotent(
   room: RuntimeRoom,
   commandId: string,
   command: WerewolfCommand,
+  environment?: WerewolfCommandEnvironment,
 ): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
   return roomCommands.execute(
     room,
     HOST_COMMAND_SCOPE,
     commandId,
-    () => executeWerewolfCommand(room, command, { isHost: true }),
+    () => executeWerewolfCommand(room, command, { isHost: true }, environment),
   );
 }
 
