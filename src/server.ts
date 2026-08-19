@@ -10,6 +10,7 @@ import {
   emitGameOverEffects,
   emitNightCompleteEffects,
 } from "./runtime/node/SocketIoClientEffectDelivery.js";
+import { emitClientSessionReplaced } from "./runtime/node/SocketIoClientSessionEventDelivery.js";
 import { emitPrivatePlayerState } from "./runtime/node/SocketIoClientStateDelivery.js";
 import {
   configFromRoleDeck,
@@ -391,8 +392,12 @@ export function createGameServer() {
 
         if (previousSocketId && previousSocketId !== socket.id) {
           const previousSocket = io.sockets.sockets.get(previousSocketId);
-          previousSocket?.emit("session:replaced", { roomId: room.id, playerId: player.id });
-          previousSocket?.disconnect(true);
+          if (previousSocket) {
+            const replacement = { roomId: room.id, playerId: player.id };
+            emitClientSessionReplaced(previousSocket, replacement);
+            previousSocket.emit("session:replaced", replacement);
+            previousSocket.disconnect(true);
+          }
         }
 
         ack({
@@ -997,7 +1002,6 @@ socket.on(
             message: "只有房主可以重新开始游戏",
           });
         }
-
         if (!membership.room.game) {
           return ack({
             ok: false,
