@@ -12,7 +12,6 @@ const TIMEOUT_MS = 3000;
 const IDEMPOTENT_SOCKET_EVENTS = new Set([
   "player:submit-wolf-target",
   "player:submit-witch-action",
-  "player:submit-seer-target",
   "player:confirm-seer-result",
   "player:submit-guard-target",
   "player:submit-hunter-execution",
@@ -66,6 +65,22 @@ function confirmRole(
     socket,
     "client:command",
     createClientCommandEnvelope("werewolf.confirmRole", { actionId }, commandId),
+  );
+}
+
+function submitSeerTarget(
+  socket: ClientSocket,
+  actionId: string,
+  targetPlayerId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  return emitAck(
+    socket,
+    "client:command",
+    createClientCommandEnvelope(
+      "werewolf.submitSeerTarget",
+      { actionId, targetPlayerId },
+      `protocol-seer-target-${generatedCommandId++}`,
+    ),
   );
 }
 
@@ -190,10 +205,9 @@ describe("five-player Socket.IO game flow", () => {
 
     const seerView = await seerAction;
     const seerResult = waitForGameView(seer.socket, view => view.mode === "seer_result");
-    await emitAck(seer.socket, "player:submit-seer-target", {
-      actionId: seerView.actionId,
-      targetPlayerId: wolf.session.playerId,
-    });
+    expect(
+      await submitSeerTarget(seer.socket, seerView.actionId, wolf.session.playerId),
+    ).toEqual({ ok: true });
     const resultView = await seerResult;
     expect(resultView.checkedAlignment).toBe("werewolf");
 

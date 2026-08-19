@@ -6,21 +6,30 @@ function source(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-describe("E2.3 legacy confirm-role handler contraction", () => {
-  it("removes the raw Node handler and inventory entry", () => {
+const retiredLegacyCommands = [
+  ["player:confirm-role", "werewolf.confirmRole"],
+  ["player:submit-seer-target", "werewolf.submitSeerTarget"],
+] as const;
+
+describe("E2.3 legacy game handler contraction", () => {
+  it("keeps retired raw Node handlers out of the runtime inventory", () => {
     const server = source("src/server.ts");
 
-    expect(server).not.toContain('socket.on("player:confirm-role"');
-    expect(
-      LEGACY_SOCKET_IO_SURFACE.some(entry => entry.event === "player:confirm-role"),
-    ).toBe(false);
+    for (const [legacyEvent] of retiredLegacyCommands) {
+      expect(server).not.toContain(`socket.on("${legacyEvent}"`);
+      expect(
+        LEGACY_SOCKET_IO_SURFACE.some(entry => entry.event === legacyEvent),
+      ).toBe(false);
+    }
   });
 
-  it("keeps the Web compatibility bridge pointed at the stable command", () => {
+  it("keeps the Web compatibility bridge pointed at stable client commands", () => {
     const bridge = source("public/webClientProtocol.js");
     const transport = source("src/runtime/node/SocketIoClientProtocolTransport.ts");
 
-    expect(bridge).toContain('"player:confirm-role": "werewolf.confirmRole"');
+    for (const [legacyEvent, stableType] of retiredLegacyCommands) {
+      expect(bridge).toContain(`"${legacyEvent}": "${stableType}"`);
+    }
     expect(transport).toContain('socket.on("client:command"');
   });
 });
