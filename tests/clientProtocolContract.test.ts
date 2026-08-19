@@ -14,6 +14,7 @@ import {
   mapWerewolfClientCommand,
   parseWerewolfClientCommandEnvelope,
 } from "../src/protocol/client/werewolf/WerewolfClientProtocol.js";
+import { WEREWOLF_LIFECYCLE_CLIENT_COMMAND_TYPES } from "../src/protocol/client/werewolf/WerewolfLifecycleClientProtocol.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -136,7 +137,10 @@ describe("E1 client protocol contract", () => {
   });
 
   it("maps every remaining legacy Werewolf game command to a stable protocol type", () => {
-    const stableTypes = new Set<string>(WEREWOLF_CLIENT_COMMAND_TYPES);
+    const stableTypes = new Set<string>([
+      ...WEREWOLF_CLIENT_COMMAND_TYPES,
+      ...WEREWOLF_LIFECYCLE_CLIENT_COMMAND_TYPES,
+    ]);
     const mappedTargets = LEGACY_SOCKET_IO_SURFACE
       .filter(entry =>
         entry.direction === "client-to-server" &&
