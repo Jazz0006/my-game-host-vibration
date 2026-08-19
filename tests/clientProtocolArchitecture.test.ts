@@ -29,6 +29,17 @@ function importsOf(relativePath: string): string[] {
   return imports;
 }
 
+function expectTransportNeutral(relativePath: string): void {
+  for (const imported of importsOf(relativePath)) {
+    expect(imported, `${relativePath} must stay transport-neutral`).not.toMatch(/^node:/u);
+    expect(imported, `${relativePath} must stay transport-neutral`).not.toMatch(/^socket\.io/u);
+    expect(imported, `${relativePath} must stay transport-neutral`).not.toMatch(
+      /(?:^|\/)runtime(?:\/|$)/u,
+    );
+    expect(imported, `${relativePath} must stay transport-neutral`).not.toMatch(/cloudflare/iu);
+  }
+}
+
 describe("E1 client protocol architecture", () => {
   it("keeps concrete game modules independent from client protocol", () => {
     for (const file of typescriptFiles("src/games")) {
@@ -41,12 +52,11 @@ describe("E1 client protocol architecture", () => {
   });
 
   it("keeps the generic client protocol free of runtime and transport dependencies", () => {
-    for (const imported of importsOf("src/protocol/client/ClientProtocol.ts")) {
-      expect(imported).not.toMatch(/^node:/u);
-      expect(imported).not.toMatch(/^socket\.io/u);
-      expect(imported).not.toMatch(/(?:^|\/)runtime(?:\/|$)/u);
-      expect(imported).not.toMatch(/cloudflare/iu);
-    }
+    expectTransportNeutral("src/protocol/client/ClientProtocol.ts");
+  });
+
+  it("keeps session lifecycle event contracts transport-neutral", () => {
+    expectTransportNeutral("src/protocol/client/ClientSessionEvents.ts");
   });
 
   it("keeps Node and Cloudflare client protocol adapters separated", () => {
