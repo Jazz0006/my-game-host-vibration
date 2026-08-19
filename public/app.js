@@ -25,6 +25,7 @@ let currentPlayerName = "";
 let webClientSession = null;
 let unsubscribeClientSession = null;
 let detachClientLifecycle = null;
+let detachSessionReplaced = null;
 let pendingEntryResult = null;
 let clientSessionActivationId = 0;
 let clientRuntimePromise = null;
@@ -193,6 +194,8 @@ function roomIsVisible() {
 function teardownClientSession() {
   const session = webClientSession;
   webClientSession = null;
+  detachSessionReplaced?.();
+  detachSessionReplaced = null;
   detachClientLifecycle?.();
   detachClientLifecycle = null;
   unsubscribeClientSession?.();
@@ -301,12 +304,23 @@ async function activateClientSession(result) {
     const {
       createWebClientSession,
       attachBrowserSessionLifecycle,
+      attachBrowserSessionReplaced,
     } = await loadClientRuntime();
     if (myActivationId !== clientSessionActivationId) return;
 
     const session = createWebClientSession(socket);
     webClientSession = session;
     detachClientLifecycle = attachBrowserSessionLifecycle(session);
+    detachSessionReplaced = attachBrowserSessionReplaced(session, payload => {
+      if (payload.roomId !== currentRoomId || payload.playerId !== currentPlayerId) return;
+      sessionReplaced = true;
+      membershipActive = false;
+      clearSession();
+      teardownClientSession();
+      setConnectionStatus("身份已在另一台设备恢复", "replaced");
+      setError("你的身份已在另一台设备恢复，本设备连接已断开");
+      $("prompt-overlay").classList.add("hidden");
+    });
     unsubscribeClientSession = session.subscribe(snapshot => {
       renderClientSessionSnapshot(session, snapshot);
     });
@@ -624,17 +638,6 @@ $("join-room").addEventListener("click", () => {
     saveSession(result);
     activateClientSession(result);
   });
-});
-
-// ── Socket session events ──────────────────────────────────────────────────
-socket.on("session:replaced", () => {
-  sessionReplaced = true;
-  membershipActive = false;
-  clearSession();
-  teardownClientSession();
-  setConnectionStatus("身份已在另一台设备恢复", "replaced");
-  setError("你的身份已在另一台设备恢复，本设备连接已断开");
-  $("prompt-overlay").classList.add("hidden");
 });
 
 // ── Room state ─────────────────────────────────────────────────────────────
