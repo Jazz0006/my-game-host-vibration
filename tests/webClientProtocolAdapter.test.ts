@@ -164,7 +164,7 @@ describe("E2 Web client protocol adapter", () => {
     const deliveries: Array<{ event: string; payload: unknown }> = [];
     const rawSocket = {
       emit() {},
-      timeout() {
+      timeout(_ms: number) {
         return {
           emit(event: string, payload: unknown, callback?: (error: Error | null, result?: unknown) => void) {
             deliveries.push({ event, payload });
