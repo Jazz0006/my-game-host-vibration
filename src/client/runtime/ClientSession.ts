@@ -21,6 +21,15 @@ import type {
   ClientRealtimeTransport,
 } from "./ClientRealtimeTransport.js";
 
+export type ClientSessionSnapshot<TStatePayload = unknown> = {
+  connection: ClientConnectionContext;
+  authoritativeState: AuthoritativeClientStateSnapshot<TStatePayload>;
+};
+
+export type ClientSessionListener<TStatePayload = unknown> = (
+  snapshot: ClientSessionSnapshot<TStatePayload>,
+) => void;
+
 function clonedConnection(context: ClientConnectionContext): ClientConnectionContext {
   return context.failure
     ? { ...context, failure: { ...context.failure } }
@@ -42,17 +51,26 @@ function synchronizationFailure(
   };
 }
 
+function sessionMismatchFailure(): ClientConnectionFailure {
+  return {
+    code: "authoritative-session-mismatch",
+    message: "authoritative state push belongs to another session",
+  };
+}
+
 /**
  * E2.2b transport-neutral client session manager.
  *
  * The session is intentionally imperative while ClientConnectionFSM remains a
  * pure reducer. ClientSession interprets FSM effects, keeps the state store and
- * FSM on the same active generation, and only reports Connected after a current
- * authoritative PlayerView has been accepted (or confirmed duplicate).
+ * FSM on the same active generation, reconciles both explicit sync responses
+ * and realtime authoritative state pushes, and only reports Connected after a
+ * current PlayerView has been accepted (or confirmed duplicate).
  */
 export class ClientSession<TStatePayload = unknown> {
   private connection: ClientConnectionContext = createInitialClientConnectionContext();
   private readonly stateStore = new AuthoritativeClientStateStore<TStatePayload>();
+  private readonly listeners = new Set<ClientSessionListener<TStatePayload>>();
   private credentials: ClientReconnectCredentials | null = null;
 
   constructor(private readonly transport: ClientRealtimeTransport<TStatePayload>) {
@@ -66,6 +84,9 @@ export class ClientSession<TStatePayload = unknown> {
       onError: (generation, failure) => {
         this.dispatch({ type: "protocolFailed", generation, failure });
       },
+      onState: delivery => {
+        this.receiveAuthoritativeState(delivery);
+      },
     });
   }
 
@@ -75,6 +96,21 @@ export class ClientSession<TStatePayload = unknown> {
 
   getAuthoritativeState(): AuthoritativeClientStateSnapshot<TStatePayload> {
     return this.stateStore.getSnapshot();
+  }
+
+  getSnapshot(): ClientSessionSnapshot<TStatePayload> {
+    return {
+      connection: this.getConnectionState(),
+      authoritativeState: this.getAuthoritativeState(),
+    };
+  }
+
+  subscribe(listener: ClientSessionListener<TStatePayload>): () => void {
+    this.listeners.add(listener);
+    listener(this.getSnapshot());
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   start(credentials: ClientReconnectCredentials): void {
@@ -90,6 +126,7 @@ export class ClientSession<TStatePayload = unknown> {
       { roomId: normalized.roomId, playerId: normalized.playerId },
       this.connection.generation,
     );
+    this.notify();
     this.runEffects(transition.effects);
   }
 
@@ -100,6 +137,7 @@ export class ClientSession<TStatePayload = unknown> {
 
     if (this.connection.generation !== previousGeneration) {
       this.stateStore.advanceGeneration(this.connection.generation);
+      this.notify();
     }
     this.runEffects(transition.effects);
   }
@@ -116,7 +154,6 @@ export class ClientSession<TStatePayload = unknown> {
 
     const transition = transitionClientConnection(this.connection, { type: "dispose" });
     this.connection = transition.context;
-    this.runEffects(transition.effects);
     this.credentials = null;
 
     const state = this.stateStore.getSnapshot();
@@ -126,11 +163,17 @@ export class ClientSession<TStatePayload = unknown> {
       }
       this.stateStore.clearSession(state.generation + 1);
     }
+
+    this.notify();
+    this.runEffects(transition.effects);
+    this.listeners.clear();
   }
 
   private dispatch(event: ClientConnectionEvent): void {
+    const previous = this.connection;
     const transition = transitionClientConnection(this.connection, event);
     this.connection = transition.context;
+    if (this.connection !== previous) this.notify();
     this.runEffects(transition.effects);
   }
 
@@ -180,6 +223,8 @@ export class ClientSession<TStatePayload = unknown> {
     generation: number,
     delivery: ClientAuthoritativeStateDelivery<TStatePayload>,
   ): void {
+    // A realtime state push may have completed Syncing before the explicit
+    // sync request resolves. In that case the late response is redundant.
     if (!this.isCurrentSync(generation)) return;
 
     const result = this.stateStore.apply(delivery);
@@ -203,7 +248,58 @@ export class ClientSession<TStatePayload = unknown> {
     }
   }
 
+  private receiveAuthoritativeState(
+    delivery: ClientAuthoritativeStateDelivery<TStatePayload>,
+  ): void {
+    if (this.connection.status !== "Syncing" && this.connection.status !== "Connected") {
+      return;
+    }
+
+    const result = this.stateStore.apply(delivery);
+    switch (result.status) {
+      case "applied":
+        if (this.connection.status === "Syncing") {
+          this.dispatch({
+            type: "authoritativeStateSynchronized",
+            generation: this.connection.generation,
+          });
+        } else {
+          this.notify();
+        }
+        return;
+
+      case "duplicate":
+        if (this.connection.status === "Syncing") {
+          this.dispatch({
+            type: "authoritativeStateSynchronized",
+            generation: this.connection.generation,
+          });
+        }
+        return;
+
+      case "stale-generation":
+      case "stale-revision":
+        // Realtime delivery may be reordered. Older pushes are harmless because
+        // the state store has already retained the newer authoritative view.
+        return;
+
+      case "session-mismatch":
+        this.dispatch({
+          type: "protocolFailed",
+          generation: this.connection.generation,
+          failure: sessionMismatchFailure(),
+        });
+        return;
+    }
+  }
+
   private isCurrentSync(generation: number): boolean {
     return this.connection.status === "Syncing" && this.connection.generation === generation;
+  }
+
+  private notify(): void {
+    if (this.listeners.size === 0) return;
+    const snapshot = this.getSnapshot();
+    for (const listener of this.listeners) listener(snapshot);
   }
 }
