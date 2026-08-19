@@ -24,6 +24,7 @@ let savedPlayerName = "";
 let currentPlayerName = "";
 let webClientSession = null;
 let unsubscribeClientSession = null;
+let unsubscribeClientRealtimeEvents = null;
 let detachClientLifecycle = null;
 let pendingEntryResult = null;
 let clientSessionActivationId = 0;
@@ -195,10 +196,28 @@ function teardownClientSession() {
   webClientSession = null;
   detachClientLifecycle?.();
   detachClientLifecycle = null;
+  unsubscribeClientRealtimeEvents?.();
+  unsubscribeClientRealtimeEvents = null;
   unsubscribeClientSession?.();
   unsubscribeClientSession = null;
   pendingEntryResult = null;
   if (session?.getConnectionState().status !== "Disposed") session?.dispose();
+}
+
+function handleSessionReplaced(session, event, eventType) {
+  if (session !== webClientSession || event?.type !== eventType) return;
+  if (
+    event.payload?.roomId !== currentRoomId ||
+    event.payload?.playerId !== currentPlayerId
+  ) return;
+
+  sessionReplaced = true;
+  membershipActive = false;
+  clearSession();
+  teardownClientSession();
+  setConnectionStatus("身份已在另一台设备恢复", "replaced");
+  setError("你的身份已在另一台设备恢复，本设备连接已断开");
+  $("prompt-overlay").classList.add("hidden");
 }
 
 function renderClientSessionSnapshot(session, snapshot) {
@@ -299,6 +318,7 @@ async function activateClientSession(result) {
 
   try {
     const {
+      CLIENT_SESSION_REPLACED,
       createWebClientSession,
       attachBrowserSessionLifecycle,
     } = await loadClientRuntime();
@@ -309,6 +329,9 @@ async function activateClientSession(result) {
     detachClientLifecycle = attachBrowserSessionLifecycle(session);
     unsubscribeClientSession = session.subscribe(snapshot => {
       renderClientSessionSnapshot(session, snapshot);
+    });
+    unsubscribeClientRealtimeEvents = session.subscribeRealtimeEvents(event => {
+      handleSessionReplaced(session, event, CLIENT_SESSION_REPLACED);
     });
     session.start(credentials);
   } catch (error) {
@@ -626,17 +649,6 @@ $("join-room").addEventListener("click", () => {
   });
 });
 
-// ── Socket session events ──────────────────────────────────────────────────
-socket.on("session:replaced", () => {
-  sessionReplaced = true;
-  membershipActive = false;
-  clearSession();
-  teardownClientSession();
-  setConnectionStatus("身份已在另一台设备恢复", "replaced");
-  setError("你的身份已在另一台设备恢复，本设备连接已断开");
-  $("prompt-overlay").classList.add("hidden");
-});
-
 // ── Room state ─────────────────────────────────────────────────────────────
 const roleIcons = { werewolf: "🐺", seer: "◉", witch: "⚗", guard: "♢", hunter: "⌖", villager: "●" };
 
@@ -697,7 +709,7 @@ function nearestInsertIndex(point, total, rect) {
       (point.x - 0.5) * rect.width,
     );
     const normalized = (angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
-    return Math.max(0, Math.min(total, Math.round(normalized / (Math.PI * 2) * total)));
+    return Math.max(0, Math.min(total, Math.round(normalized / (Math.PI * 2) * total));
   }
   let nearest = 0;
   let nearestDistance = Number.POSITIVE_INFINITY;
