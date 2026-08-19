@@ -1,7 +1,14 @@
 import type { Server, Socket } from "socket.io";
 import { GameRuleError } from "../../domain/game.js";
 import { parseWerewolfClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
-import { executeNodeClientProtocolCommand } from "./NodeClientProtocolAdapter.js";
+import {
+  createNodePlayerStateEnvelope,
+  executeNodeClientProtocolCommand,
+} from "./NodeClientProtocolAdapter.js";
+import {
+  advanceNodeClientStateRevision,
+  currentNodeClientStateRevision,
+} from "./NodeClientStateRevision.js";
 import {
   actingPlayerIds,
   type RuntimeRoom,
@@ -10,6 +17,13 @@ import { runHostCommand } from "./werewolfCommandFacade.js";
 
 type BasicResult = { ok: true } | { ok: false; message: string };
 type BasicAck = (result: BasicResult) => void;
+type ClientStateDelivery = {
+  revision: number;
+  envelope: ReturnType<typeof createNodePlayerStateEnvelope>;
+};
+type ClientStateSyncResult =
+  | ({ ok: true } & ClientStateDelivery)
+  | { ok: false; message: string };
 
 type ProtocolTransportServer = {
   io: Server;
@@ -25,6 +39,28 @@ function findMembership(rooms: Map<string, RuntimeRoom>, socketId: string) {
     if (player) return { room, player };
   }
   return null;
+}
+
+function currentPlayerStateDelivery(
+  room: RuntimeRoom,
+  playerId: string,
+): ClientStateDelivery {
+  return {
+    revision: currentNodeClientStateRevision(room, playerId),
+    envelope: createNodePlayerStateEnvelope(room, playerId),
+  };
+}
+
+function emitProtocolPlayerState(
+  socket: Socket,
+  room: RuntimeRoom,
+  playerId: string,
+): void {
+  const revision = advanceNodeClientStateRevision(room, playerId);
+  socket.emit("client:state", {
+    revision,
+    envelope: createNodePlayerStateEnvelope(room, playerId),
+  } satisfies ClientStateDelivery);
 }
 
 function alertCurrentActors(io: Server, room: RuntimeRoom): void {
@@ -138,11 +174,13 @@ function ruleMessage(error: unknown): string {
 }
 
 /**
- * E2 Socket.IO transport for the E1 versioned client command envelope.
+ * E2 Socket.IO transport for versioned client protocol traffic.
  *
- * Existing one-event-per-command handlers stay registered during migration.
- * The Web client can move command-by-command to this single transport event,
- * while authoritative mutation still flows through NodeClientProtocolAdapter.
+ * Existing one-event-per-command handlers and legacy state deliveries remain
+ * registered during migration. `client:command` carries E1 command envelopes;
+ * `client:state` shadows each canonical legacy private PlayerView delivery with
+ * a monotonically revised E1 state envelope; `client:sync-state` returns the
+ * current revised PlayerView for ClientSession reconciliation.
  */
 export function attachSocketIoClientProtocolTransport(
   server: ProtocolTransportServer,
@@ -150,6 +188,30 @@ export function attachSocketIoClientProtocolTransport(
   const { io, rooms, delivery } = server;
 
   io.on("connection", (socket: Socket) => {
+    // E2.2b compatibility seam: canonical Node broadcasts still emit
+    // `player:game-state`. Mirror that delivery into the stable protocol state
+    // channel without changing the existing Web UI yet.
+    socket.onAnyOutgoing((event: string) => {
+      if (event !== "player:game-state") return;
+      const membership = findMembership(rooms, socket.id);
+      if (!membership) return;
+      emitProtocolPlayerState(socket, membership.room, membership.player.id);
+    });
+
+    socket.on(
+      "client:sync-state",
+      (_value: unknown, ack: (result: ClientStateSyncResult) => void) => {
+        const membership = findMembership(rooms, socket.id);
+        if (!membership) {
+          return ack({ ok: false, message: "你当前不在房间中" });
+        }
+        ack({
+          ok: true,
+          ...currentPlayerStateDelivery(membership.room, membership.player.id),
+        });
+      },
+    );
+
     socket.on("client:command", async (value: unknown, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership) {
