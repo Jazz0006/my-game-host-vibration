@@ -188,7 +188,7 @@ export function createTimedGameServer(): TimedServer {
       ) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership?.player.isHost) {
-          return ack({ ok: false, message: "只有房主可以修改行动超时" });
+          return ack({ ok: false, message: "只有房主可以修改超时设置" });
         }
         if (membership.room.game) {
           return ack({ ok: false, message: "游戏开始后不能修改行动超时" });
