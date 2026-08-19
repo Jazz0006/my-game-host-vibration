@@ -8,7 +8,10 @@ import {
   CLIENT_EFFECT_VIBRATE,
   createClientVibrateEffectEvent,
 } from "../src/protocol/client/ClientEffects.js";
-import { createClientRealtimeEventEnvelope } from "../src/protocol/client/ClientProtocol.js";
+import {
+  createClientRealtimeEventEnvelope,
+  type ClientRealtimeEventEnvelope,
+} from "../src/protocol/client/ClientProtocol.js";
 
 function statusFor(payload: unknown): ClientEffectDispatchStatus {
   return dispatchClientRealtimeEffect(
@@ -65,11 +68,11 @@ describe("E2.2c2 ClientEffectDispatcher", () => {
   });
 
   it("adapts realtime events to browser vibration and safely no-ops when unsupported", () => {
-    let listener: ((event: ReturnType<typeof createClientVibrateEffectEvent>) => void) | null = null;
+    const realtimeListeners: Array<(event: ClientRealtimeEventEnvelope) => void> = [];
     let unsubscribed = false;
     const source = {
-      subscribeRealtimeEvents(value: (event: any) => void) {
-        listener = value;
+      subscribeRealtimeEvents(value: (event: ClientRealtimeEventEnvelope) => void) {
+        realtimeListeners.push(value);
         return () => { unsubscribed = true; };
       },
     };
@@ -81,7 +84,8 @@ describe("E2.2c2 ClientEffectDispatcher", () => {
       },
     });
 
-    listener?.(createClientVibrateEffectEvent([300, 150, 300]));
+    expect(realtimeListeners).toHaveLength(1);
+    realtimeListeners[0]!(createClientVibrateEffectEvent([300, 150, 300]));
     expect(patterns).toEqual([[300, 150, 300]]);
 
     expect(() => attachBrowserClientEffects(source, undefined)).not.toThrow();
