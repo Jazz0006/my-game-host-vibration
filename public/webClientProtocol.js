@@ -4,6 +4,8 @@
   const CLIENT_PROTOCOL_VERSION = 1;
   const SOCKET_COMMAND_EVENT = "client:command";
   const LEGACY_GAME_COMMAND_TYPES = Object.freeze({
+    "host:start-game": "werewolf.startGame",
+    "host:restart-game": "werewolf.restartGame",
     "player:confirm-role": "werewolf.confirmRole",
     "player:submit-wolf-target": "werewolf.submitWolfTarget",
     "player:submit-witch-action": "werewolf.submitWitchAction",

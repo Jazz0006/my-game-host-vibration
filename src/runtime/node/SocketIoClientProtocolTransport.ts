@@ -1,8 +1,13 @@
 import type { Server, Socket } from "socket.io";
 import { GameRuleError } from "../../domain/game.js";
 import { parseWerewolfClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
+import {
+  isWerewolfLifecycleClientCommand,
+  parseWerewolfLifecycleClientCommandEnvelope,
+} from "../../protocol/client/werewolf/WerewolfLifecycleClientProtocol.js";
 import { executeNodeClientProtocolCommand } from "./NodeClientProtocolAdapter.js";
-import type { RuntimeRoom } from "./roomBridge.js";
+import { executeNodeWerewolfLifecycleCommand } from "./NodeWerewolfLifecycleProtocolAdapter.js";
+import type { RuntimeRoom, WerewolfCommandOutcome } from "./roomBridge.js";
 import {
   emitActionAlertEffects,
   emitGameOverEffects,
@@ -82,7 +87,7 @@ function deliverCommandOutcome(
   io: Server,
   room: RuntimeRoom,
   broadcastRoom: (room: RuntimeRoom) => void,
-  execution: Awaited<ReturnType<typeof executeNodeClientProtocolCommand>>,
+  execution: { outcome: WerewolfCommandOutcome; replayed: boolean },
 ): void {
   if (execution.replayed) return;
 
@@ -166,17 +171,25 @@ export function attachSocketIoClientProtocolTransport(
       if (!membership) {
         return ack({ ok: false, message: "你当前不在房间中" });
       }
-      if (!membership.room.game) {
-        return ack({ ok: false, message: "游戏尚未开始" });
-      }
 
       try {
-        const envelope = parseWerewolfClientCommandEnvelope(value);
-        const execution = await executeNodeClientProtocolCommand(
-          membership.room,
-          membership.player.id,
-          envelope,
-        );
+        const execution = isWerewolfLifecycleClientCommand(value)
+          ? await executeNodeWerewolfLifecycleCommand(
+              membership.room,
+              membership.player.id,
+              parseWerewolfLifecycleClientCommandEnvelope(value),
+            )
+          : await (async () => {
+              if (!membership.room.game) {
+                throw new GameRuleError("游戏尚未开始");
+              }
+              return executeNodeClientProtocolCommand(
+                membership.room,
+                membership.player.id,
+                parseWerewolfClientCommandEnvelope(value),
+              );
+            })();
+
         deliverCommandOutcome(
           io,
           membership.room,
