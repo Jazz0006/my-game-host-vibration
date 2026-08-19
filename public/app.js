@@ -1,6 +1,7 @@
 const SESSION_KEY = "werewolfSession";
 const PLAYER_NAME_KEY = "werewolfPlayerName";
 const socket = io();
+const gameProtocol = WebClientProtocol.createSocketIoAdapter(socket);
 const gameViewIds = [
   "lobby-view", "role-view", "waiting-view", "night-start-view",
   "wolf-view", "witch-view", "seer-view", "seer-result-view",
@@ -186,9 +187,8 @@ function emitWithAck(event, data, onSuccess, onFailure) {
   });
 }
 
-// A command id represents one user intention, not one Socket.IO delivery.
-// Retrying after a lost acknowledgement deliberately keeps the same id so the
-// server can return the original result without repeating the game mutation.
+// Legacy idempotent command path retained for lifecycle commands that are not
+// part of the first E2 migration slice (currently start/restart game).
 function emitCommandWithAck(event, payload, onSuccess, onFailure) {
   const commandId = crypto.randomUUID();
   let attempts = 0;
@@ -218,6 +218,25 @@ function emitCommandWithAck(event, payload, onSuccess, onFailure) {
   }
 
   send();
+}
+
+function emitGameCommandWithAck(type, payload, onSuccess, onFailure) {
+  gameProtocol.sendCommand(type, payload, (error, result) => {
+    if (error) {
+      const message = "服务器响应超时，请重试";
+      setError(message);
+      onFailure?.(message);
+      return;
+    }
+    if (!result?.ok) {
+      const message = result?.message || "操作失败，请重试";
+      setError(message);
+      onFailure?.(message);
+      return;
+    }
+    setError("");
+    onSuccess?.(result);
+  });
 }
 
 // ── Entry screen tabs ──────────────────────────────────────────────────────
@@ -278,7 +297,7 @@ function renderGameState(state) {
     showGameView("wolf-view");
     renderTargets("wolf-targets", state.targets, target => {
       if (!confirm(`确定击杀 ${target.seat}号 ${target.name}？提交后不能修改。`)) return;
-      emitCommandWithAck("player:submit-wolf-target", {
+      emitGameCommandWithAck("werewolf.submitWolfTarget", {
         actionId: state.actionId,
         targetPlayerId: target.id,
       });
@@ -298,7 +317,7 @@ function renderGameState(state) {
       : "今晚没有玩家被狼人袭击";
     renderTargets("poison-targets", state.poisonTargets, target => {
       if (!confirm(`确定使用毒药毒杀 ${target.seat}号 ${target.name}？`)) return;
-      emitCommandWithAck("player:submit-witch-action", {
+      emitGameCommandWithAck("werewolf.submitWitchAction", {
         actionId: state.actionId,
         useAntidote: false,
         poisonTargetId: target.id,
@@ -311,7 +330,7 @@ function renderGameState(state) {
     showGameView("seer-view");
     renderTargets("seer-targets", state.targets, target => {
       if (!confirm(`确定查验 ${target.seat}号 ${target.name}？`)) return;
-      emitCommandWithAck("player:submit-seer-target", {
+      emitGameCommandWithAck("werewolf.submitSeerTarget", {
         actionId: state.actionId,
         targetPlayerId: target.id,
       });
@@ -331,7 +350,7 @@ function renderGameState(state) {
     showGameView("guard-view");
     renderTargets("guard-targets", state.targets, target => {
       if (!confirm(`确定保护 ${target.seat}号 ${target.name}？`)) return;
-      emitCommandWithAck("player:submit-guard-target", {
+      emitGameCommandWithAck("werewolf.submitGuardTarget", {
         actionId: state.actionId,
         targetPlayerId: target.id,
       });
@@ -343,7 +362,7 @@ function renderGameState(state) {
     showGameView("hunter-view");
     renderTargets("hunter-targets", state.targets, target => {
       if (!confirm(`确定带走 ${target.seat}号 ${target.name}？`)) return;
-      emitCommandWithAck("player:submit-hunter-execution", {
+      emitGameCommandWithAck("werewolf.submitHunterExecution", {
         actionId: state.actionId,
         targetPlayerId: target.id,
       });
@@ -391,7 +410,7 @@ function renderGameState(state) {
       $("vote-submitted").classList.add("hidden");
       renderTargets("vote-targets", state.targets, target => {
         if (!confirm(`确定投票放逐 ${target.seat}号 ${target.name}？`)) return;
-        emitCommandWithAck("player:submit-vote", { actionId: state.actionId, targetId: target.id });
+        emitGameCommandWithAck("werewolf.submitVote", { actionId: state.actionId, targetId: target.id });
       }, "danger");
     }
     return;
@@ -407,7 +426,7 @@ function renderGameState(state) {
       $("pk-submitted").classList.add("hidden");
       renderTargets("pk-targets", state.targets, target => {
         if (!confirm(`确定投票放逐 ${target.seat}号 ${target.name}？`)) return;
-        emitCommandWithAck("player:submit-vote", { actionId: state.actionId, targetId: target.id });
+        emitGameCommandWithAck("werewolf.submitVote", { actionId: state.actionId, targetId: target.id });
       }, "danger");
     }
     return;
@@ -553,7 +572,7 @@ function nearestInsertIndex(point, total, rect) {
       (point.x - 0.5) * rect.width,
     );
     const normalized = (angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
-    return Math.max(0, Math.min(total, Math.round(normalized / (Math.PI * 2) * total)));
+    return Math.max(0, Math.min(total, Math.round(normalized / (Math.PI * 2) * total));
   }
   let nearest = 0;
   let nearestDistance = Number.POSITIVE_INFINITY;
@@ -942,13 +961,13 @@ $("deal-roles").addEventListener("click", () => {
 });
 $("start-night").addEventListener("click", () => {
   if (!confirm("确定开始夜晚？所有玩家请闭眼。")) return;
-  emitCommandWithAck("host:start-night", {});
+  emitGameCommandWithAck("werewolf.startNight", {});
 });
 $("close-voting").addEventListener("click", () => {
   if (!confirm("确定关闭投票？")) return;
-  emitCommandWithAck("host:close-voting", {});
+  emitGameCommandWithAck("werewolf.closeVoting", {});
 });
-$("begin-night-start").addEventListener("click", () => emitCommandWithAck("host:begin-night-start", {}));
+$("begin-night-start").addEventListener("click", () => emitGameCommandWithAck("werewolf.beginNightStart", {}));
 $("restart-game").addEventListener("click", () => {
   if (!confirm("确定重新开始游戏？所有进度将重置，重新随机发牌。")) return;
   emitCommandWithAck("host:restart-game", {});
@@ -960,11 +979,11 @@ $("peek-role").addEventListener("click", () => {
 
 // ── Player actions ─────────────────────────────────────────────────────────
 $("confirm-role").addEventListener("click", () => {
-  emitCommandWithAck("player:confirm-role", { actionId: currentGameState?.actionId });
+  emitGameCommandWithAck("werewolf.confirmRole", { actionId: currentGameState?.actionId });
 });
 $("use-antidote").addEventListener("click", () => {
   if (!confirm("确定使用解药？本晚将不能再使用毒药。")) return;
-  emitCommandWithAck("player:submit-witch-action", {
+  emitGameCommandWithAck("werewolf.submitWitchAction", {
     actionId: currentGameState?.actionId,
     useAntidote: true,
     poisonTargetId: null,
@@ -979,32 +998,32 @@ $("show-poison").addEventListener("click", () => {
 $("cancel-poison").addEventListener("click", () => renderGameState(currentGameState));
 $("use-no-potion").addEventListener("click", () => {
   if (!confirm("确定本晚不使用任何药物？")) return;
-  emitCommandWithAck("player:submit-witch-action", {
+  emitGameCommandWithAck("werewolf.submitWitchAction", {
     actionId: currentGameState?.actionId,
     useAntidote: false,
     poisonTargetId: null,
   });
 });
 $("confirm-seer-result").addEventListener("click", () => {
-  emitCommandWithAck("player:confirm-seer-result", { actionId: currentGameState?.actionId });
+  emitGameCommandWithAck("werewolf.confirmSeerResult", { actionId: currentGameState?.actionId });
 });
 $("wolf-no-kill").addEventListener("click", () => {
   if (!confirm("确定今晚不击杀任何玩家？")) return;
-  emitCommandWithAck("player:submit-wolf-target", {
+  emitGameCommandWithAck("werewolf.submitWolfTarget", {
     actionId: currentGameState?.actionId,
     targetPlayerId: null,
   });
 });
 $("guard-no-protection").addEventListener("click", () => {
   if (!confirm("确定今晚不守护任何玩家？")) return;
-  emitCommandWithAck("player:submit-guard-target", {
+  emitGameCommandWithAck("werewolf.submitGuardTarget", {
     actionId: currentGameState?.actionId,
     targetPlayerId: null,
   });
 });
 $("hunter-no-shot").addEventListener("click", () => {
   if (!confirm("确定放弃开枪？")) return;
-  emitCommandWithAck("player:submit-hunter-execution", {
+  emitGameCommandWithAck("werewolf.submitHunterExecution", {
     actionId: currentGameState?.actionId,
     targetPlayerId: null,
   });
