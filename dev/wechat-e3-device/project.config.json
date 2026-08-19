@@ -1,0 +1,15 @@
+{
+  "description": "E3.7 WeChat real-device validation harness",
+  "miniprogramRoot": "miniprogram/",
+  "compileType": "miniprogram",
+  "appid": "touristappid",
+  "projectname": "e3-wechat-device-validation",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "minified": false,
+    "uploadWithSourceMap": true
+  },
+  "simulatorType": "wechat"
+}

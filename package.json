@@ -4,6 +4,7 @@
   "description": "Android-first in-person Werewolf game host using private vibration prompts",
   "scripts": {
     "build:client": "tsc -p tsconfig.client.json",
+    "prepare:wechat-device": "npm run build:client && node scripts/prepare-wechat-device.mjs",
     "predev": "npm run build:client",
     "dev": "tsx watch src/timedServer.ts",
     "prestart": "npm run build:client",
