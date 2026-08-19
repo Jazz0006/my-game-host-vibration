@@ -54,7 +54,7 @@
       <button size="mini" bindtap="clearLog">Clear</button>
     </view>
     <scroll-view class="log" scroll-y="true" scroll-into-view="log-end">
-      <view wx:for="{{logLines}}" wx:key="index" class="log-line">{{item}}</view>
+      <view wx:for="{{logLines}}" wx:key="*this" class="log-line">{{item}}</view>
       <view id="log-end"></view>
     </scroll-view>
   </view>
