@@ -130,7 +130,11 @@ describe("E1 client protocol contract", () => {
 
   it("maps every post-start Werewolf Socket.IO game command to a stable protocol type", () => {
     const mappedTargets = LEGACY_SOCKET_IO_SURFACE
-      .filter(entry => entry.category === "werewolf-game" && entry.protocolTarget)
+      .filter(entry =>
+        entry.direction === "client-to-server" &&
+        entry.category === "werewolf-game" &&
+        entry.protocolTarget
+      )
       .map(entry => entry.protocolTarget)
       .sort();
 
