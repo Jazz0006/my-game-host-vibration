@@ -11,10 +11,11 @@ export type ClientAuthoritativeStateDelivery<TPayload = unknown> = {
   envelope: ClientStateEnvelope<TPayload>;
 };
 
-export type ClientRealtimeTransportListener = {
+export type ClientRealtimeTransportListener<TStatePayload = unknown> = {
   onOpen(generation: number): void;
   onClose(generation: number, reason?: string): void;
   onError(generation: number, failure: ClientConnectionFailure): void;
+  onState(delivery: ClientAuthoritativeStateDelivery<TStatePayload>): void;
 };
 
 /**
@@ -22,12 +23,12 @@ export type ClientRealtimeTransportListener = {
  *
  * A transport owns wire connectivity/framing only. It reports open/close/error
  * callbacks tagged with the connection generation, can request one current
- * authoritative state for synchronization, and can send protocol messages.
- * Reconnect policy, revision reconciliation, and game/UI behavior stay outside
- * the transport implementation.
+ * authoritative state for synchronization, forwards revised authoritative
+ * state pushes, and can send protocol messages. Reconnect policy, revision
+ * reconciliation, and game/UI behavior stay outside the transport.
  */
 export interface ClientRealtimeTransport<TStatePayload = unknown> {
-  setListener(listener: ClientRealtimeTransportListener): void;
+  setListener(listener: ClientRealtimeTransportListener<TStatePayload>): void;
 
   connect(generation: number): void;
 
