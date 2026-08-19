@@ -12,7 +12,7 @@ import type { ClientSessionRealtimeEventListener } from "../src/client/runtime/C
 
 describe("E2.3d3 browser session lifecycle events", () => {
   it("maps the stable session.replaced envelope to a semantic callback", () => {
-    let listener: ClientSessionRealtimeEventListener | null = null;
+    let listener: ClientSessionRealtimeEventListener = () => undefined;
     const detach = vi.fn();
     const source: BrowserSessionEventSource = {
       subscribeRealtimeEvents(next) {
@@ -24,7 +24,7 @@ describe("E2.3d3 browser session lifecycle events", () => {
 
     const unsubscribe = attachBrowserSessionReplaced(source, onReplaced);
     const payload = { roomId: "room-1", playerId: "player-1" };
-    listener?.(createClientSessionReplacedEvent(payload));
+    listener(createClientSessionReplacedEvent(payload));
 
     expect(onReplaced).toHaveBeenCalledOnce();
     expect(onReplaced).toHaveBeenCalledWith(payload);
@@ -33,7 +33,7 @@ describe("E2.3d3 browser session lifecycle events", () => {
   });
 
   it("ignores unrelated realtime events", () => {
-    let listener: ClientSessionRealtimeEventListener | null = null;
+    let listener: ClientSessionRealtimeEventListener = () => undefined;
     const source: BrowserSessionEventSource = {
       subscribeRealtimeEvents(next) {
         listener = next;
@@ -43,7 +43,7 @@ describe("E2.3d3 browser session lifecycle events", () => {
     const onReplaced = vi.fn<(payload: ClientSessionReplacedPayload) => void>();
 
     attachBrowserSessionReplaced(source, onReplaced);
-    listener?.(createClientRealtimeEventEnvelope("test.other", { value: true }));
+    listener(createClientRealtimeEventEnvelope("test.other", { value: true }));
 
     expect(onReplaced).not.toHaveBeenCalled();
   });
