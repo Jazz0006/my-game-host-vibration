@@ -11,7 +11,7 @@ function source(relativePath: string): string {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
 
-describe("E2.3e2 room lifecycle delivery boundary", () => {
+describe("E2.3e3 room lifecycle delivery boundary", () => {
   it("routes stable room lifecycle events through the Node adapter", () => {
     const delivery = source("src/runtime/node/SocketIoClientRoomEventDelivery.ts");
     const server = source("src/server.ts");
@@ -22,13 +22,27 @@ describe("E2.3e2 room lifecycle delivery boundary", () => {
     expect(server).toContain("emitClientRoomClosed(io, roomId)");
   });
 
-  it("keeps raw room lifecycle events only for the E2.3e2 Web migration window", () => {
+  it("retires raw room lifecycle Socket.IO events from server, Web, and inventory", () => {
     const server = source("src/server.ts");
     const web = source("public/app.js");
+    const inventory = source("src/protocol/client/LegacySocketIoSurface.ts");
 
-    expect(server).toContain('targetSocket.emit("room:removed"');
-    expect(server).toContain('io.to(roomId).emit("room:closed"');
-    expect(web).toContain('socket.on("room:removed"');
-    expect(web).toContain('socket.on("room:closed"');
+    expect(server).not.toContain('targetSocket.emit("room:removed"');
+    expect(server).not.toContain('io.to(roomId).emit("room:closed"');
+    expect(web).not.toContain('socket.on("room:removed"');
+    expect(web).not.toContain('socket.on("room:closed"');
+    expect(inventory).not.toContain('event: "room:removed"');
+    expect(inventory).not.toContain('event: "room:closed"');
+  });
+
+  it("wires production Web room lifecycle handling through ClientSession", () => {
+    const web = source("public/app.js");
+    const adapter = source("src/client/browser/BrowserSessionEvents.ts");
+
+    expect(web).toContain("attachBrowserRoomLifecycle");
+    expect(web).toContain('returnToEntry("你已被房主移出房间")');
+    expect(web).toContain('returnToEntry("房主已关闭房间")');
+    expect(adapter).toContain("CLIENT_ROOM_REMOVED");
+    expect(adapter).toContain("CLIENT_ROOM_CLOSED");
   });
 });
