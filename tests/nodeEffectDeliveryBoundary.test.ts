@@ -5,26 +5,29 @@ import { describe, expect, it } from "vitest";
 const root = process.cwd();
 const source = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-describe("E2.3a canonical Node realtime effect delivery boundary", () => {
-  it("keeps compatibility event names isolated in SocketIoClientEffectDelivery", () => {
-    const delivery = source("src/runtime/node/SocketIoClientEffectDelivery.ts");
-    const server = source("src/server.ts");
-    const protocolTransport = source("src/runtime/node/SocketIoClientProtocolTransport.ts");
-    const timedServer = source("src/timedServer.ts");
+describe("E2.3b canonical Node realtime effect delivery boundary", () => {
+  it("keeps retired legacy effect event names out of runtime and inventory", () => {
+    const sources = [
+      source("src/runtime/node/SocketIoClientEffectDelivery.ts"),
+      source("src/runtime/node/SocketIoClientProtocolTransport.ts"),
+      source("src/protocol/client/LegacySocketIoSurface.ts"),
+      source("src/server.ts"),
+      source("src/timedServer.ts"),
+      source("public/app.js"),
+    ];
 
     for (const eventName of [
       '"player:action-alert"',
       '"game:night-complete"',
       '"game:over"',
     ]) {
-      expect(delivery).toContain(eventName);
-      expect(server).not.toContain(eventName);
-      expect(protocolTransport).not.toContain(eventName);
-      expect(timedServer).not.toContain(eventName);
+      for (const runtimeSource of sources) {
+        expect(runtimeSource).not.toContain(eventName);
+      }
     }
   });
 
-  it("makes legacy handlers, protocol commands, and timeout recovery reuse the shared boundary", () => {
+  it("keeps legacy handlers, protocol commands, and timeout recovery on the shared stable boundary", () => {
     const server = source("src/server.ts");
     const protocolTransport = source("src/runtime/node/SocketIoClientProtocolTransport.ts");
     const timedServer = source("src/timedServer.ts");

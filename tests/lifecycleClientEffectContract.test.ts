@@ -12,16 +12,16 @@ function count(source: string, value: string): number {
   return source.split(value).length - 1;
 }
 
-describe("E2.2c3 lifecycle client effects", () => {
-  it("dual-publishes lifecycle effects only from the canonical Node effect delivery boundary", () => {
+describe("E2.3b lifecycle legacy event contraction", () => {
+  it("publishes lifecycle effects only through the canonical client:event boundary", () => {
     expect(delivery).toContain("createClientAudioCueEffectEvent");
     expect(delivery).toContain("CLIENT_AUDIO_CUE_NIGHT_COMPLETE");
     expect(delivery).toContain("function emitNightCompleteEffects");
     expect(delivery).toContain("function emitGameOverEffects");
     expect(delivery).toContain('reason: "night-complete"');
     expect(delivery).toContain('reason: "game-over"');
-    expect(delivery).toContain('emit("game:night-complete", context)');
-    expect(delivery).toContain('emit("game:over", context)');
+    expect(delivery).not.toContain('"game:night-complete"');
+    expect(delivery).not.toContain('"game:over"');
 
     expect(server).not.toContain('emit("game:night-complete"');
     expect(server).not.toContain('emit("game:over"');
@@ -30,7 +30,7 @@ describe("E2.2c3 lifecycle client effects", () => {
     expect(count(server, "emitGameOverEffects(io, membership.room);")).toBe(1);
   });
 
-  it("removes lifecycle effect ownership from the legacy Web app", () => {
+  it("keeps lifecycle effect ownership out of the legacy Web app", () => {
     expect(app).not.toContain('socket.on("game:night-complete"');
     expect(app).not.toContain('socket.on("game:over"');
     expect(app).not.toContain("function playNightEndAudio");

@@ -17,16 +17,13 @@ export type LegacySocketSurfaceEntry = {
 };
 
 /**
- * E1 audit of the production Socket.IO surface before E2 starts migrating the
- * Web client. Entries are inventory, not a promise that E1 rewrites every
- * handler. The important boundary is that every legacy event belongs to one of
- * the four stable protocol families instead of becoming a fifth transport API.
+ * Inventory of the remaining production Socket.IO surface during E2 migration.
+ * Every event belongs to one of the four stable protocol families instead of
+ * becoming a fifth transport API.
  *
- * E2 records the stable Socket.IO transport events used during incremental Web
- * migration: `client:command` carries versioned command envelopes,
- * `client:sync-state`/`client:state` expose revised authoritative PlayerView
- * state, and `client:event` carries transient realtime event envelopes without
- * removing the legacy delivery surface yet.
+ * Stable Socket.IO delivery events are `client:command`, `client:sync-state`,
+ * `client:state`, and `client:event`. E2.3 removes retired legacy entries from
+ * this inventory as their production consumers disappear.
  */
 export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "client:command", direction: "client-to-server", family: "command", category: "delivery", protocolTarget: "command.envelope" },
@@ -75,9 +72,6 @@ export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "session:replaced", direction: "server-to-client", family: "event", category: "session", protocolTarget: "session.replaced" },
   { event: "room:removed", direction: "server-to-client", family: "event", category: "room-management", protocolTarget: "room.removed" },
   { event: "room:closed", direction: "server-to-client", family: "event", category: "room-management", protocolTarget: "room.closed" },
-  { event: "player:action-alert", direction: "server-to-client", family: "event", category: "delivery", protocolTarget: "player.actionAlert" },
-  { event: "game:night-complete", direction: "server-to-client", family: "event", category: "werewolf-game", protocolTarget: "game.nightComplete" },
-  { event: "game:over", direction: "server-to-client", family: "event", category: "werewolf-game", protocolTarget: "game.over" },
   { event: "game:aborted-to-lobby", direction: "server-to-client", family: "event", category: "recovery", protocolTarget: "game.abortedToLobby" },
   { event: "player:interaction-timeout-state", direction: "server-to-client", family: "event", category: "interaction-timeout", protocolTarget: "player.interactionTimeoutState" },
   { event: "player:interaction-timeout-error", direction: "server-to-client", family: "event", category: "interaction-timeout", protocolTarget: "player.interactionTimeoutError" },

@@ -1,6 +1,11 @@
 import type { AddressInfo } from "node:net";
 import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  CLIENT_EFFECT_VIBRATE,
+  type ClientVibrateEffectPayload,
+} from "../src/protocol/client/ClientEffects.js";
+import type { ClientRealtimeEventEnvelope } from "../src/protocol/client/ClientProtocol.js";
 import { createTimedGameServer } from "../src/timedServer.js";
 
 const TIMEOUT_MS = 4000;
@@ -62,11 +67,10 @@ type TimeoutState = {
   warning?: boolean;
   canExtend: boolean;
 };
-type ActionAlert = {
-  actionId: string;
-  phase: string;
-  timeoutWarning?: boolean;
-};
+type ActionAlertEffect = ClientRealtimeEventEnvelope<
+  typeof CLIENT_EFFECT_VIBRATE,
+  ClientVibrateEffectPayload
+>;
 type ExtensionResult = {
   ok: boolean;
   message?: string;
@@ -184,12 +188,16 @@ describe("C4.4 Socket.IO interaction timeout", () => {
 
     const timer = game.interactionTimeouts.get(hostSession.roomId)!;
     timer.warningAt = Date.now() - 1;
-    const warning = await waitFor<ActionAlert>(
+    const warning = await waitFor<ActionAlertEffect>(
       resumedWolf,
-      "player:action-alert",
-      alert => alert.timeoutWarning === true,
+      "client:event",
+      event =>
+        event.type === CLIENT_EFFECT_VIBRATE &&
+        event.payload.reason === "action-alert" &&
+        event.payload.context?.["timeoutWarning"] === true,
     );
-    expect(warning.actionId).toBe(timeoutState.actionId);
+    expect(warning.payload.pattern).toEqual([300, 150, 300]);
+    expect(warning.payload.context?.["actionId"]).toBe(timeoutState.actionId);
 
     const deadlineBeforeExtension = timer.deadlineAt;
     const commandId = "same-extension-command";

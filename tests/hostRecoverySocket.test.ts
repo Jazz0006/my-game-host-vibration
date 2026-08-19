@@ -1,6 +1,11 @@
 import type { AddressInfo } from "node:net";
 import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  CLIENT_EFFECT_VIBRATE,
+  type ClientVibrateEffectPayload,
+} from "../src/protocol/client/ClientEffects.js";
+import type { ClientRealtimeEventEnvelope } from "../src/protocol/client/ClientProtocol.js";
 import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
@@ -46,11 +51,10 @@ type GameView = {
   role: "werewolf" | "witch" | "seer" | "villager";
   actionId: string;
 };
-type ActionAlert = {
-  actionId: string;
-  phase: string;
-  resumed?: boolean;
-};
+type ActionAlertEffect = ClientRealtimeEventEnvelope<
+  typeof CLIENT_EFFECT_VIBRATE,
+  ClientVibrateEffectPayload
+>;
 
 describe("C4.1 Socket.IO host recovery reminder", () => {
   let game: ReturnType<typeof createGameServer>;
@@ -133,11 +137,17 @@ describe("C4.1 Socket.IO host recovery reminder", () => {
 
     const room = game.rooms.get(hostSession.roomId)!;
     const gameBefore = JSON.stringify(room.game);
-    const alerts: ActionAlert[] = [];
-    const collectAlert = (alert: ActionAlert) => {
-      if (alert.resumed) alerts.push(alert);
+    const alerts: ActionAlertEffect[] = [];
+    const collectAlert = (event: ActionAlertEffect) => {
+      if (
+        event.type === CLIENT_EFFECT_VIBRATE &&
+        event.payload.reason === "action-alert" &&
+        event.payload.context?.["resumed"] === true
+      ) {
+        alerts.push(event);
+      }
     };
-    wolf.on("player:action-alert", collectAlert);
+    wolf.on("client:event", collectAlert);
 
     expect(
       await emitAck<BasicResult>(host, "host:resend-current-action", {
@@ -155,9 +165,17 @@ describe("C4.1 Socket.IO host recovery reminder", () => {
 
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toMatchObject({
-      actionId: room.game?.actionId,
-      phase: room.game?.phase,
-      resumed: true,
+      kind: "event",
+      type: CLIENT_EFFECT_VIBRATE,
+      payload: {
+        pattern: [300, 150, 300],
+        reason: "action-alert",
+        context: {
+          actionId: room.game?.actionId,
+          phase: room.game?.phase,
+          resumed: true,
+        },
+      },
     });
     expect(JSON.stringify(room.game)).toBe(gameBefore);
 
@@ -170,6 +188,6 @@ describe("C4.1 Socket.IO host recovery reminder", () => {
 
     expect(alerts).toHaveLength(2);
     expect(JSON.stringify(room.game)).toBe(gameBefore);
-    wolf.off("player:action-alert", collectAlert);
+    wolf.off("client:event", collectAlert);
   });
 });
