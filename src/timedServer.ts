@@ -6,6 +6,10 @@ import {
   InteractionTimeoutCoordinator,
   type InteractionTimeoutClientState,
 } from "./runtime/node/InteractionTimeoutCoordinator.js";
+import {
+  emitClientInteractionTimeoutError,
+  emitClientInteractionTimeoutState,
+} from "./runtime/node/SocketIoClientInteractionTimeoutDelivery.js";
 import { attachSocketIoClientProtocolTransport } from "./runtime/node/SocketIoClientProtocolTransport.js";
 import { activeInteraction, type RuntimeRoom } from "./runtime/node/roomBridge.js";
 import {
@@ -53,6 +57,7 @@ function emitTimeoutState(
   for (const playerId of actorPlayerIds) {
     const player = room.players.find(item => item.id === playerId);
     if (player?.socketId) {
+      emitClientInteractionTimeoutState(io, player.socketId, room.id, state);
       io.to(player.socketId).emit("player:interaction-timeout-state", state);
     }
   }
@@ -147,6 +152,7 @@ export function createTimedGameServer(): TimedServer {
       if (!player?.socketId) continue;
       const key = timeoutDeliveryKey(room.id, actionId, playerId);
       if (timeoutStateDeliveries.get(key) === player.socketId) continue;
+      emitClientInteractionTimeoutState(io, player.socketId, room.id, state);
       io.to(player.socketId).emit("player:interaction-timeout-state", state);
       timeoutStateDeliveries.set(key, player.socketId);
     }
@@ -359,9 +365,15 @@ export function createTimedGameServer(): TimedServer {
         for (const playerId of state.actorPlayerIds) {
           const player = room.players.find(item => item.id === playerId);
           if (player?.socketId) {
-            io.to(player.socketId).emit("player:interaction-timeout-error", {
+            const payload = {
+              roomId: room.id,
               actionId: state.actionId,
               message: ruleMessage(error),
+            };
+            emitClientInteractionTimeoutError(io, player.socketId, payload);
+            io.to(player.socketId).emit("player:interaction-timeout-error", {
+              actionId: payload.actionId,
+              message: payload.message,
             });
           }
         }
