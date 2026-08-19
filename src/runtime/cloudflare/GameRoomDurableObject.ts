@@ -1,16 +1,27 @@
-import { SessionTokenService } from "../../core/session/SessionTokenService.js";
 import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
+import { SessionTokenService } from "../../core/session/SessionTokenService.js";
 import {
-  CloudflareRoomSnapshotRepository,
-  type DurableObjectStorageLike,
-} from "./CloudflareRoomSnapshotRepository.js";
+  createClientRawWebSocketErrorResponse,
+  createClientRawWebSocketStatePush,
+  createClientRawWebSocketSuccessResponse,
+  parseClientRawWebSocketRequest,
+} from "../../protocol/client/ClientRawWebSocketProtocol.js";
+import {
+  createCloudflarePlayerStateEnvelope,
+  executeCloudflareClientProtocolCommand,
+} from "./CloudflareClientProtocolAdapter.js";
 import {
   CloudflareRoomRealtime,
   type DurableObjectHibernationStateLike,
   type HibernationWebSocketLike,
 } from "./CloudflareRoomRealtime.js";
+import {
+  CloudflareRoomSnapshotRepository,
+  type DurableObjectStorageLike,
+} from "./CloudflareRoomSnapshotRepository.js";
 import { CloudflareSessionTokenCryptoProvider } from "./CloudflareSessionTokenCryptoProvider.js";
 import { CloudflareWebSocketTicketRepository } from "./CloudflareWebSocketTicketRepository.js";
+import { CloudflareWerewolfCommandRuntime } from "./CloudflareWerewolfCommandRuntime.js";
 
 type DurableObjectIdLike = {
   toString(): string;
@@ -58,23 +69,32 @@ function jsonMessage(type: string, payload: Record<string, unknown> = {}): strin
   return JSON.stringify({ type, ...payload });
 }
 
+function rawRequestId(value: unknown): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const requestId = (value as { requestId?: unknown }).requestId;
+  return typeof requestId === "string" && requestId.trim() ? requestId.trim() : undefined;
+}
+
 /**
- * D4 Durable Object room shell with Hibernation WebSocket transport.
+ * Cloudflare Durable Object room shell.
  *
- * Authoritative game recovery remains in RoomSnapshot/Durable Object storage.
- * Live connection identity is stored only in Hibernation WebSocket tags and
- * serialized attachments, so an object eviction does not disconnect players or
- * require an in-memory session registry to be rebuilt.
+ * D4 owns authenticated Hibernation WebSocket identity. E3.2 adds a stable
+ * request/response/push framing layer for transport-neutral ClientSession
+ * adapters. Long-lived resume credentials still exchange for a short-lived
+ * WebSocket ticket before upgrade; once bound, the serialized socket identity
+ * is the authority for every client request.
  */
 export class GameRoomDurableObject {
   private readonly snapshots: CloudflareRoomSnapshotRepository;
   private readonly crypto = new CloudflareSessionTokenCryptoProvider();
   private readonly sessionTokens = new SessionTokenService(this.crypto);
   private readonly webSocketTickets: CloudflareWebSocketTicketRepository;
+  private readonly werewolfCommands: CloudflareWerewolfCommandRuntime;
 
   constructor(private readonly state: DurableObjectStateLike) {
     this.snapshots = new CloudflareRoomSnapshotRepository(state.storage);
     this.webSocketTickets = new CloudflareWebSocketTicketRepository(state.storage, this.crypto);
+    this.werewolfCommands = new CloudflareWerewolfCommandRuntime(state.storage);
 
     const realtimeState = hibernationState(state);
     const Pair = autoResponsePairConstructor();
@@ -151,6 +171,7 @@ export class GameRoomDurableObject {
       return;
     }
 
+    // D4 diagnostic compatibility. Stable E3 clients use the versioned frames below.
     if (
       parsed &&
       typeof parsed === "object" &&
@@ -160,7 +181,53 @@ export class GameRoomDurableObject {
       return;
     }
 
-    webSocket.send(jsonMessage("realtime:error", { code: "unsupported_message" }));
+    let request;
+    try {
+      request = parseClientRawWebSocketRequest(parsed);
+    } catch (error) {
+      const requestId = rawRequestId(parsed);
+      if (requestId) {
+        webSocket.send(JSON.stringify(createClientRawWebSocketErrorResponse(
+          requestId,
+          "invalid_request",
+          error instanceof Error ? error.message : undefined,
+        )));
+      } else {
+        webSocket.send(jsonMessage("realtime:error", { code: "unsupported_message" }));
+      }
+      return;
+    }
+
+    try {
+      if (request.type === "client:sync-state") {
+        const snapshot = await this.snapshots.load();
+        if (!snapshot) throw new Error("room snapshot not found");
+        const envelope = createCloudflarePlayerStateEnvelope(snapshot as never, playerId);
+        webSocket.send(JSON.stringify(createClientRawWebSocketSuccessResponse(request.requestId, {
+          revision: snapshot.revision,
+          envelope,
+        })));
+        return;
+      }
+
+      const execution = await executeCloudflareClientProtocolCommand(
+        this.werewolfCommands,
+        playerId,
+        request.payload,
+      );
+      webSocket.send(JSON.stringify(createClientRawWebSocketSuccessResponse(request.requestId, {
+        outcome: execution.outcome,
+        replayed: execution.replayed,
+        revision: execution.revision,
+      })));
+      this.pushAuthoritativeState(realtime, execution.snapshot);
+    } catch (error) {
+      webSocket.send(JSON.stringify(createClientRawWebSocketErrorResponse(
+        request.requestId,
+        request.type === "client:sync-state" ? "sync_failed" : "command_failed",
+        error instanceof Error ? error.message : undefined,
+      )));
+    }
   }
 
   webSocketClose(
@@ -174,6 +241,20 @@ export class GameRoomDurableObject {
 
   webSocketError(webSocket: HibernationWebSocketLike, _error: unknown): void {
     webSocket.close(1011, "websocket error");
+  }
+
+  private pushAuthoritativeState(realtime: CloudflareRoomRealtime, snapshot: RoomSnapshot): void {
+    for (const member of snapshot.membership) {
+      try {
+        const envelope = createCloudflarePlayerStateEnvelope(snapshot as never, member.id);
+        realtime.sendToPlayer(member.id, JSON.stringify(
+          createClientRawWebSocketStatePush(snapshot.revision, envelope),
+        ));
+      } catch {
+        // A stale connection must not make an already-committed authoritative
+        // command fail. The next explicit synchronization remains the source of truth.
+      }
+    }
   }
 
   private async issueWebSocketTicket(request: Request): Promise<Response> {
@@ -221,7 +302,6 @@ export class GameRoomDurableObject {
       return Response.json({ ok: false, message: "invalid WebSocket ticket" }, { status: 401 });
     }
 
-    // The player might have left the room between ticket issuance and upgrade.
     const snapshot = await this.snapshots.load();
     if (!snapshot?.membership.some(member => member.id === ticketRecord.playerId)) {
       return Response.json({ ok: false, message: "invalid WebSocket ticket" }, { status: 401 });
