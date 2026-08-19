@@ -1,6 +1,7 @@
 import {
   createReconnectEnvelope,
   type ClientProtocolMessage,
+  type ClientRealtimeEventEnvelope,
   type ClientReconnectCredentials,
 } from "../../protocol/client/ClientProtocol.js";
 import {
@@ -18,6 +19,7 @@ import {
 } from "./ClientConnectionFSM.js";
 import type {
   ClientAuthoritativeStateDelivery,
+  ClientRealtimeEventDelivery,
   ClientRealtimeTransport,
 } from "./ClientRealtimeTransport.js";
 
@@ -28,6 +30,10 @@ export type ClientSessionSnapshot<TStatePayload = unknown> = {
 
 export type ClientSessionListener<TStatePayload = unknown> = (
   snapshot: ClientSessionSnapshot<TStatePayload>,
+) => void;
+
+export type ClientSessionRealtimeEventListener = (
+  event: ClientRealtimeEventEnvelope,
 ) => void;
 
 function clonedConnection(context: ClientConnectionContext): ClientConnectionContext {
@@ -66,11 +72,17 @@ function sessionMismatchFailure(): ClientConnectionFailure {
  * FSM on the same active generation, reconciles both explicit sync responses
  * and realtime authoritative state pushes, and only reports Connected after a
  * current PlayerView has been accepted (or confirmed duplicate).
+ *
+ * Realtime events are deliberately separate from authoritative state. They are
+ * delivered only while the current generation is Connected, are never replayed
+ * by ClientSession after reconnect, and are not deduplicated here because
+ * effects must remain safe if a transport duplicates or reorders them.
  */
 export class ClientSession<TStatePayload = unknown> {
   private connection: ClientConnectionContext = createInitialClientConnectionContext();
   private readonly stateStore = new AuthoritativeClientStateStore<TStatePayload>();
   private readonly listeners = new Set<ClientSessionListener<TStatePayload>>();
+  private readonly realtimeEventListeners = new Set<ClientSessionRealtimeEventListener>();
   private credentials: ClientReconnectCredentials | null = null;
 
   constructor(private readonly transport: ClientRealtimeTransport<TStatePayload>) {
@@ -86,6 +98,9 @@ export class ClientSession<TStatePayload = unknown> {
       },
       onState: delivery => {
         this.receiveAuthoritativeState(delivery);
+      },
+      onEvent: delivery => {
+        this.receiveRealtimeEvent(delivery);
       },
     });
   }
@@ -110,6 +125,13 @@ export class ClientSession<TStatePayload = unknown> {
     listener(this.getSnapshot());
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  subscribeRealtimeEvents(listener: ClientSessionRealtimeEventListener): () => void {
+    this.realtimeEventListeners.add(listener);
+    return () => {
+      this.realtimeEventListeners.delete(listener);
     };
   }
 
@@ -181,6 +203,7 @@ export class ClientSession<TStatePayload = unknown> {
     this.notify();
     this.runEffects(transition.effects);
     this.listeners.clear();
+    this.realtimeEventListeners.clear();
   }
 
   private dispatch(event: ClientConnectionEvent): void {
@@ -304,6 +327,15 @@ export class ClientSession<TStatePayload = unknown> {
           failure: sessionMismatchFailure(),
         });
         return;
+    }
+  }
+
+  private receiveRealtimeEvent(delivery: ClientRealtimeEventDelivery): void {
+    if (this.connection.status !== "Connected") return;
+    if (delivery.generation !== this.connection.generation) return;
+
+    for (const listener of this.realtimeEventListeners) {
+      listener(delivery.envelope);
     }
   }
 

@@ -60,14 +60,16 @@ function listener() {
   const opened: number[] = [];
   const closed: Array<{ generation: number; reason?: string }> = [];
   const states: unknown[] = [];
+  const realtimeEvents: unknown[] = [];
   const errors: unknown[] = [];
   const value: ClientRealtimeTransportListener<View> = {
     onOpen: generation => opened.push(generation),
     onClose: (generation, reason) => closed.push({ generation, ...(reason ? { reason } : {}) }),
     onError: (generation, failure) => errors.push({ generation, failure }),
     onState: state => states.push(state),
+    onEvent: event => realtimeEvents.push(event),
   };
-  return { value, opened, closed, states, errors };
+  return { value, opened, closed, states, realtimeEvents, errors };
 }
 
 function statePayload(revision: number, phase: string) {
