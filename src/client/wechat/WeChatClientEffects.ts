@@ -3,10 +3,7 @@ import {
   type ClientEffectDispatchStatus,
 } from "../effects/ClientEffectDispatcher.js";
 import type { ClientSessionRealtimeEventListener } from "../runtime/ClientSession.js";
-import {
-  CLIENT_AUDIO_CUE_NIGHT_COMPLETE,
-  type ClientAudioCue,
-} from "../../protocol/client/ClientEffects.js";
+import type { ClientAudioCue } from "../../protocol/client/ClientEffects.js";
 
 export type WeChatRealtimeEventSource = {
   subscribeRealtimeEvents(listener: ClientSessionRealtimeEventListener): () => void;
@@ -78,7 +75,7 @@ export function attachWeChatClientEffects(
   options: WeChatClientEffectOptions = {},
 ): WeChatClientEffectsAttachment {
   const timers = new Set<unknown>();
-  const audioContexts = new Set<WeChatInnerAudioContextLike>();
+  const audioContexts = new Map<ClientAudioCue, WeChatInnerAudioContextLike>();
   const clock = scheduler(platform);
   const threshold = normalizedThreshold(options.longVibrationThresholdMs);
   let detached = false;
@@ -98,11 +95,18 @@ export function attachWeChatClientEffects(
       const duration = pattern[index]!;
       if (index % 2 === 0 && duration > 0) {
         if (offset === 0) {
+          // Keep the first call synchronous so ClientEffectDispatcher can report
+          // a target failure to diagnostics without throwing into ClientSession.
           invokeVibration(duration);
         } else {
           const handle = clock.set(() => {
             timers.delete(handle);
-            invokeVibration(duration);
+            try {
+              invokeVibration(duration);
+            } catch {
+              // Delayed capability failures occur outside the dispatcher stack
+              // and must remain nonfatal transient-effect failures.
+            }
           }, offset);
           timers.add(handle);
         }
@@ -114,9 +118,13 @@ export function attachWeChatClientEffects(
   const playAudioCue = (cue: ClientAudioCue): void => {
     const src = options.audioSources?.[cue];
     if (!src || !platform.createInnerAudioContext) return;
-    const context = platform.createInnerAudioContext();
-    context.src = src;
-    audioContexts.add(context);
+
+    let context = audioContexts.get(cue);
+    if (!context) {
+      context = platform.createInnerAudioContext();
+      context.src = src;
+      audioContexts.set(cue, context);
+    }
     context.play();
   };
 
@@ -135,7 +143,7 @@ export function attachWeChatClientEffects(
       unsubscribe();
       for (const handle of timers) clock.clear(handle);
       timers.clear();
-      for (const context of audioContexts) {
+      for (const context of audioContexts.values()) {
         try {
           context.stop?.();
           context.destroy?.();
@@ -147,7 +155,3 @@ export function attachWeChatClientEffects(
     },
   };
 }
-
-export const DEFAULT_WECHAT_AUDIO_CUE_SOURCES: Readonly<Partial<Record<ClientAudioCue, string>>> = {
-  [CLIENT_AUDIO_CUE_NIGHT_COMPLETE]: "",
-};
