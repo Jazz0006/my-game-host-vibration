@@ -25,6 +25,16 @@ type AckSuccess = {
 
 type AckFailure = { ok: false; message: string };
 
+type RoomPromptState = {
+  roomId: string;
+  testPrompt?: {
+    id: string;
+    targetPlayerId: string;
+    status: string;
+    choice?: string;
+  };
+};
+
 function waitFor<T>(
   socket: ClientSocket,
   event: string,
@@ -125,10 +135,6 @@ describe("server session resume", () => {
     await offlineState;
 
     const resumedPlayer = await connect();
-    const privateState = waitFor<{ promptId: string; status: string }>(
-      resumedPlayer,
-      "player:test-prompt-state",
-    );
     const resumedPrompt = waitFor<{ promptId: string; resumed: boolean }>(
       resumedPlayer,
       "player:test-prompt",
@@ -147,7 +153,6 @@ describe("server session resume", () => {
       name: "玩家二号",
       isHost: false,
     });
-    expect(await privateState).toMatchObject({ promptId: prompt.promptId, status: "sent" });
     expect(await resumedPrompt).toMatchObject({ promptId: prompt.promptId, resumed: true });
 
     const room = game.rooms.get(hostSession.roomId);
@@ -158,7 +163,7 @@ describe("server session resume", () => {
     });
   });
 
-  it("continues an acknowledged prompt after restoring the player", async () => {
+  it("continues an acknowledged prompt after restoring the player without replaying the alert", async () => {
     const { host, player, hostSession, playerSession } = await createRoomWithPlayer();
     const promptPromise = waitFor<{ promptId: string }>(player, "player:test-prompt");
     await emitAck(host, "host:send-test-prompt", { targetPlayerId: playerSession.playerId });
@@ -170,16 +175,28 @@ describe("server session resume", () => {
     player.disconnect();
 
     const resumedPlayer = await connect();
-    const privateState = waitFor<{ promptId: string; status: string }>(
-      resumedPlayer,
-      "player:test-prompt-state",
+    let replayedPrompt = false;
+    resumedPlayer.on("player:test-prompt", () => {
+      replayedPrompt = true;
+    });
+    const hostPromptState = waitFor<RoomPromptState>(
+      host,
+      "room:state",
+      state =>
+        state.roomId === hostSession.roomId &&
+        state.testPrompt?.id === prompt.promptId &&
+        state.testPrompt.status === "acknowledged",
     );
     await emitAck<AckSuccess>(resumedPlayer, "player:resume", {
       roomId: hostSession.roomId,
       playerId: playerSession.playerId,
       resumeToken: playerSession.resumeToken,
     });
-    expect(await privateState).toMatchObject({ promptId: prompt.promptId, status: "acknowledged" });
+    expect(await hostPromptState).toMatchObject({
+      testPrompt: { id: prompt.promptId, status: "acknowledged" },
+    });
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(replayedPrompt).toBe(false);
 
     const submitted = await emitAck<AckSuccess | AckFailure>(
       resumedPlayer,

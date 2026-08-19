@@ -1,16 +1,21 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { LEGACY_SOCKET_IO_SURFACE } from "../src/protocol/client/LegacySocketIoSurface.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const serverSource = fs.readFileSync(path.join(__dirname, "../src/server.ts"), "utf8");
 
 const DEV_TEST_EVENTS = [
   "host:send-test-prompt",
   "player:ack-test-prompt",
   "player:submit-test-choice",
   "player:test-prompt",
-  "player:test-prompt-state",
 ] as const;
 
 describe("E2.3 dev/test-only Socket.IO classification", () => {
-  it("marks every test-support entry as an explicit dev/test-only exception", () => {
+  it("marks every remaining test-support entry as an explicit dev/test-only exception", () => {
     const testSupport = LEGACY_SOCKET_IO_SURFACE.filter(
       entry => entry.category === "test-support",
     );
@@ -46,5 +51,13 @@ describe("E2.3 dev/test-only Socket.IO classification", () => {
       scope: "dev-test",
     });
     expect(prompt?.protocolTarget).toBeUndefined();
+  });
+
+  it("retires test prompt state delivery while preserving the raw test prompt exception", () => {
+    expect(
+      LEGACY_SOCKET_IO_SURFACE.some(entry => entry.event === "player:test-prompt-state"),
+    ).toBe(false);
+    expect(serverSource).not.toContain('"player:test-prompt-state"');
+    expect(serverSource).toContain('"player:test-prompt"');
   });
 });

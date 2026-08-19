@@ -73,5 +73,4 @@ export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "client:event", direction: "server-to-client", family: "event", category: "delivery", protocolTarget: "event.envelope" },
   { event: "room:state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.room" },
   { event: "player:test-prompt", direction: "server-to-client", family: "event", category: "test-support", scope: "dev-test" },
-  { event: "player:test-prompt-state", direction: "server-to-client", family: "state", category: "test-support", scope: "dev-test" },
 ] as const;
