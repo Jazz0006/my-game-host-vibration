@@ -37,6 +37,8 @@ Page({
     generation: 0,
     revision: null,
     screen: "connecting",
+    failureCode: "",
+    failureMessage: "",
     roleName: "",
     actionId: "",
     targets: [],
@@ -146,12 +148,16 @@ Page({
 
       this._unsubscribe = slice.subscribe(viewModel => {
         const connection = slice.getConnectionState();
+        const failureCode = connection.failure?.code || "";
+        const failureMessage = connection.failure?.message || "";
         this.setData({
           started: connection.status !== "Idle" && connection.status !== "Disposed",
           connectionStatus: connection.status,
           generation: connection.generation,
           revision: viewModel.revision,
           screen: viewModel.screen,
+          failureCode,
+          failureMessage,
           roleName: viewModel.roleName || "",
           actionId: viewModel.actionId || "",
           targets: viewModel.targets || [],
@@ -159,7 +165,8 @@ Page({
           checkedAlignment: viewModel.checkedAlignment || "",
         });
         this.appendLog(
-          `state ${connection.status} gen=${connection.generation} rev=${viewModel.revision ?? "-"} screen=${viewModel.screen}`,
+          `state ${connection.status} gen=${connection.generation} rev=${viewModel.revision ?? "-"} screen=${viewModel.screen}` +
+            (failureCode ? ` failure=${failureCode}${failureMessage ? `: ${failureMessage}` : ""}` : ""),
         );
       });
 
@@ -169,7 +176,12 @@ Page({
     } catch (error) {
       this.appendLog(`Start failed: ${errorText(error)}`);
       this.cleanupSession();
-      this.setData({ started: false, connectionStatus: "Idle" });
+      this.setData({
+        started: false,
+        connectionStatus: "Idle",
+        failureCode: "start-exception",
+        failureMessage: errorText(error),
+      });
     }
   },
 
