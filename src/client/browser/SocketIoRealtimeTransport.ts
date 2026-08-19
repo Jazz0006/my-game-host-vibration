@@ -1,6 +1,7 @@
 import {
   CLIENT_PROTOCOL_VERSION,
   type ClientProtocolMessage,
+  type ClientRealtimeEventEnvelope,
   type ClientReconnectCredentials,
   type ClientStateEnvelope,
 } from "../../protocol/client/ClientProtocol.js";
@@ -75,11 +76,26 @@ function parseStateDelivery<TStatePayload>(
   };
 }
 
+function parseRealtimeEventEnvelope(value: unknown): ClientRealtimeEventEnvelope {
+  const envelope = asRecord(value);
+  if (
+    !envelope ||
+    envelope.protocolVersion !== CLIENT_PROTOCOL_VERSION ||
+    envelope.kind !== "event" ||
+    typeof envelope.type !== "string" ||
+    !envelope.type.trim()
+  ) {
+    throw new Error("client realtime event envelope is invalid");
+  }
+  return envelope as ClientRealtimeEventEnvelope;
+}
+
 /**
  * Browser Socket.IO implementation of the E2.2 ClientRealtimeTransport port.
  * Socket.IO remains responsible for low-level reconnect attempts; ClientSession
  * owns connection generation, synchronization, revision reconciliation, and
- * the meaning of Connected.
+ * the meaning of Connected. Transient client:event frames are generation-tagged
+ * here but remain non-authoritative and best-effort.
  */
 export class SocketIoRealtimeTransport<TStatePayload = unknown>
 implements ClientRealtimeTransport<TStatePayload> {
@@ -115,6 +131,19 @@ implements ClientRealtimeTransport<TStatePayload> {
     }
   };
 
+  private readonly handleEvent = (value: unknown) => {
+    if (this.activeGeneration <= 0) return;
+    try {
+      this.listener?.onEvent({
+        generation: this.activeGeneration,
+        envelope: parseRealtimeEventEnvelope(value),
+      });
+    } catch {
+      // Malformed transient effects are dropped. They must never fail an
+      // otherwise synchronized game session or alter authoritative state.
+    }
+  };
+
   constructor(
     private readonly socket: BrowserSocketIoLike,
     options: SocketIoRealtimeTransportOptions = {},
@@ -127,6 +156,7 @@ implements ClientRealtimeTransport<TStatePayload> {
     socket.on("connect", this.handleConnect);
     socket.on("disconnect", this.handleDisconnect);
     socket.on("client:state", this.handleState);
+    socket.on("client:event", this.handleEvent);
   }
 
   setListener(listener: ClientRealtimeTransportListener<TStatePayload>): void {
@@ -190,6 +220,7 @@ implements ClientRealtimeTransport<TStatePayload> {
     this.socket.off?.("connect", this.handleConnect);
     this.socket.off?.("disconnect", this.handleDisconnect);
     this.socket.off?.("client:state", this.handleState);
+    this.socket.off?.("client:event", this.handleEvent);
   }
 
   private emitAck<T>(event: string, payload: unknown): Promise<T> {
