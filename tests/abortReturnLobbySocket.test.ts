@@ -52,14 +52,19 @@ function emitAck<T>(
   });
 }
 
-function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResult> {
+function sendGameCommand(
+  socket: ClientSocket,
+  type: "werewolf.confirmRole" | "werewolf.startNight",
+  payload: Record<string, unknown>,
+  commandPrefix: string,
+): Promise<BasicResult> {
   return new Promise((resolve, reject) => {
     socket.timeout(TIMEOUT_MS).emit(
       "client:command",
       createClientCommandEnvelope(
-        "werewolf.confirmRole",
-        { actionId },
-        `c45-confirm-${commandSequence++}`,
+        type,
+        payload,
+        `${commandPrefix}-${commandSequence++}`,
       ),
       (error: Error | null, result: BasicResult) => {
         if (error) reject(error);
@@ -67,6 +72,14 @@ function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResul
       },
     );
   });
+}
+
+function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResult> {
+  return sendGameCommand(socket, "werewolf.confirmRole", { actionId }, "c45-confirm");
+}
+
+function startNight(socket: ClientSocket): Promise<BasicResult> {
+  return sendGameCommand(socket, "werewolf.startNight", {}, "c45-start-night");
 }
 
 type JoinResult = { ok: true; roomId: string; playerId: string };
@@ -171,7 +184,7 @@ describe("C4.5 abort current game and return to lobby", () => {
       "client:event",
       event => event.type === CLIENT_INTERACTION_TIMEOUT_STATE && event.payload.active,
     );
-    expect(await emitAck<BasicResult>(host, "host:start-night")).toEqual({ ok: true });
+    expect(await startNight(host)).toEqual({ ok: true });
     const activeTimeout = await timerStarted;
     expect(activeTimeout.payload.active).toBe(true);
     expect(server.interactionTimeouts.get(room.id)).toBeDefined();

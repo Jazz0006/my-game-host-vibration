@@ -49,14 +49,19 @@ function emitAck<T>(socket: ClientSocket, event: string, payload: Record<string,
   });
 }
 
-function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResult> {
+function sendGameCommand(
+  socket: ClientSocket,
+  type: "werewolf.confirmRole" | "werewolf.startNight",
+  payload: Record<string, unknown>,
+  commandPrefix: string,
+): Promise<BasicResult> {
   return new Promise((resolve, reject) => {
     socket.timeout(TIMEOUT_MS).emit(
       "client:command",
       createClientCommandEnvelope(
-        "werewolf.confirmRole",
-        { actionId },
-        `c4-confirm-${generatedCommandId++}`,
+        type,
+        payload,
+        `${commandPrefix}-${generatedCommandId++}`,
       ),
       (error: Error | null, result: BasicResult) => {
         if (error) reject(error);
@@ -64,6 +69,14 @@ function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResul
       },
     );
   });
+}
+
+function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResult> {
+  return sendGameCommand(socket, "werewolf.confirmRole", { actionId }, "c4-confirm");
+}
+
+function startNight(socket: ClientSocket): Promise<BasicResult> {
+  return sendGameCommand(socket, "werewolf.startNight", {}, "c4-start-night");
 }
 
 type JoinResult = { ok: true; roomId: string; playerId: string };
@@ -151,7 +164,7 @@ describe("C4.1 Socket.IO host recovery reminder", () => {
     expect(wolfIndex).toBeGreaterThanOrEqual(0);
     const wolf = sockets[wolfIndex]!;
     const wolfAction = waitForGameView(wolf, view => view.mode === "wolf_action");
-    expect(await emitAck<BasicResult>(host, "host:start-night")).toEqual({ ok: true });
+    expect(await startNight(host)).toEqual({ ok: true });
     await wolfAction;
     await new Promise(resolve => setTimeout(resolve, 25));
 

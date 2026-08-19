@@ -11,6 +11,7 @@ const retiredLegacyCommands = [
   ["player:submit-seer-target", "werewolf.submitSeerTarget"],
   ["host:begin-night-start", "werewolf.beginNightStart"],
   ["host:close-voting", "werewolf.closeVoting"],
+  ["host:start-night", "werewolf.startNight"],
 ] as const;
 
 describe("E2.3 legacy game handler contraction", () => {

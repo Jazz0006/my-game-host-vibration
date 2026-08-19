@@ -18,7 +18,6 @@ const IDEMPOTENT_SOCKET_EVENTS = new Set([
   "player:submit-vote",
   "host:start-game",
   "host:restart-game",
-  "host:start-night",
   "host:close-voting",
   "host:begin-night-start",
 ]);
@@ -80,6 +79,18 @@ function submitSeerTarget(
       "werewolf.submitSeerTarget",
       { actionId, targetPlayerId },
       `protocol-seer-target-${generatedCommandId++}`,
+    ),
+  );
+}
+
+function startNight(socket: ClientSocket): Promise<{ ok: boolean; message?: string }> {
+  return emitAck(
+    socket,
+    "client:command",
+    createClientCommandEnvelope(
+      "werewolf.startNight",
+      {},
+      `protocol-start-night-${generatedCommandId++}`,
     ),
   );
 }
@@ -173,7 +184,7 @@ describe("five-player Socket.IO game flow", () => {
     }
 
     const wolfAction = waitForGameView(wolf.socket, view => view.mode === "wolf_action");
-    expect(await emitAck<{ ok: boolean }>(host, "host:start-night", {})).toEqual({ ok: true });
+    expect(await startNight(host)).toEqual({ ok: true });
 
     const wolfView = await wolfAction;
     const victim = wolfView.targets![0]!;

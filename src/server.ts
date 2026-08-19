@@ -25,7 +25,6 @@ import {
 } from "./domain/game.js";
 import {
   runHostCommand,
-  runHostCommandIdempotent,
   runHostLifecycleMutationIdempotent,
   runHostRecoveryCommandIdempotent,
   runPlayerCommandIdempotent,
@@ -830,21 +829,6 @@ socket.on(
         }
       },
     );
-
-    socket.on("host:start-night", async (data: { commandId?: string }, ack: BasicAck) => {
-      const membership = findMembership(rooms, socket.id);
-      if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以开始夜晚" });
-      if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
-      const commandId = requiredCommandId(data, ack);
-      if (!commandId) return;
-      try {
-        const { outcome, replayed } = await runHostCommandIdempotent(membership.room, commandId, { type: "startNight" });
-        if (!replayed && outcome.kind === "afterNightAction") afterNightAction(io, membership.room);
-        ack({ ok: true });
-      } catch (error) {
-        ruleError(ack, error);
-      }
-    });
 
     socket.on(
       "host:resend-current-action",
