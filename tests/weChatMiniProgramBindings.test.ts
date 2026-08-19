@@ -4,7 +4,10 @@ import {
   type WeChatMiniProgramApi,
   type WeChatMiniProgramNetworkStatus,
 } from "../src/client/wechat/WeChatMiniProgramBindings.js";
-import type { WeChatSocketTaskLike } from "../src/client/wechat/WeChatRealtimeTransport.js";
+import type {
+  WeChatRequestOptions,
+  WeChatSocketTaskLike,
+} from "../src/client/wechat/WeChatRealtimeTransport.js";
 
 class SocketFake implements WeChatSocketTaskLike {
   onOpen(): void {}
@@ -24,7 +27,7 @@ class ApiFake implements WeChatMiniProgramApi {
   appShowListeners = new Set<(options?: unknown) => void>();
   networkListeners = new Set<(status: WeChatMiniProgramNetworkStatus) => void>();
 
-  request(options: any): unknown {
+  request(options: WeChatRequestOptions): unknown {
     this.requestCalls.push(options);
     return {};
   }
@@ -44,6 +47,16 @@ class ApiFake implements WeChatMiniProgramApi {
   offNetworkStatusChange(listener: (status: WeChatMiniProgramNetworkStatus) => void): void {
     this.networkListeners.delete(listener);
   }
+}
+
+function minimalApi(): WeChatMiniProgramApi {
+  const socket = new SocketFake();
+  return {
+    request: () => ({}),
+    connectSocket: () => socket,
+    onAppShow: () => undefined,
+    onNetworkStatusChange: () => undefined,
+  };
 }
 
 describe("E3.7 WeChat Mini Program bindings", () => {
@@ -103,11 +116,9 @@ describe("E3.7 WeChat Mini Program bindings", () => {
   });
 
   it("keeps optional unsupported effects absent instead of emulating them in shared runtime", () => {
-    const api = new ApiFake();
-    api.vibrateShort = undefined;
-    api.vibrateLong = undefined;
-    const bindings = createWeChatMiniProgramBindings(api);
+    const bindings = createWeChatMiniProgramBindings(minimalApi());
     expect(bindings.effects.vibrateShort).toBeUndefined();
     expect(bindings.effects.vibrateLong).toBeUndefined();
+    expect(bindings.effects.createInnerAudioContext).toBeUndefined();
   });
 });
