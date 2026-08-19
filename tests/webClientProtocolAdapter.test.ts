@@ -4,6 +4,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { WEREWOLF_CLIENT_COMMAND_TYPES } from "../src/protocol/client/werewolf/WerewolfClientProtocol.js";
+import { WEREWOLF_LIFECYCLE_CLIENT_COMMAND_TYPES } from "../src/protocol/client/werewolf/WerewolfLifecycleClientProtocol.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -160,7 +161,7 @@ describe("E2 Web client protocol adapter", () => {
     expect(response).toEqual({ ok: false, message: "invalid action" });
   });
 
-  it("translates migrated legacy Web emits into E1 envelopes and passes other events through", () => {
+  it("translates migrated legacy Web emits into E1 envelopes", () => {
     const deliveries: Array<{ event: string; payload: unknown }> = [];
     const rawSocket = {
       emit() {},
@@ -186,7 +187,7 @@ describe("E2 Web client protocol adapter", () => {
     );
     bridgedSocket.timeout(5000).emit(
       "host:start-game",
-      { commandId: "legacy-start", roleDeck: [] },
+      { commandId: "lifecycle-start", roleDeck: [] },
     );
 
     expect(deliveries).toEqual([
@@ -201,13 +202,19 @@ describe("E2 Web client protocol adapter", () => {
         },
       },
       {
-        event: "host:start-game",
-        payload: { commandId: "legacy-start", roleDeck: [] },
+        event: "client:command",
+        payload: {
+          protocolVersion: 1,
+          kind: "command",
+          commandId: "lifecycle-start",
+          type: "werewolf.startGame",
+          payload: { roleDeck: [] },
+        },
       },
     ]);
   });
 
-  it("loads before app.js, preserves the existing UI file, and covers all E1 Werewolf command types", () => {
+  it("loads before app.js, preserves the UI file, and covers gameplay plus lifecycle command types", () => {
     const api = loadWebClientProtocol();
     const html = source("public/index.html");
     const app = source("public/app.js");
@@ -216,11 +223,13 @@ describe("E2 Web client protocol adapter", () => {
     expect(html.indexOf('/webClientProtocol.js')).toBeLessThan(html.indexOf('/app.js'));
     expect(() => new Function(app)).not.toThrow();
     expect(Object.values(api.LEGACY_GAME_COMMAND_TYPES).sort()).toEqual(
-      [...WEREWOLF_CLIENT_COMMAND_TYPES].sort(),
+      [
+        ...WEREWOLF_CLIENT_COMMAND_TYPES,
+        ...WEREWOLF_LIFECYCLE_CLIENT_COMMAND_TYPES,
+      ].sort(),
     );
 
-    // UI stays unchanged in this transport-only E2 slice; the adapter owns the
-    // migration mapping and unrelated lifecycle calls remain legacy for now.
+    // UI event names stay unchanged; the bridge owns transport migration.
     expect(app).toContain("player:confirm-role");
     expect(app).toContain("host:start-game");
     expect(app).toContain("host:restart-game");
