@@ -23,4 +23,5 @@ export function createWebClientSession<TStatePayload = unknown>(
 
 export { attachBrowserClientEffects } from "./BrowserClientEffects.js";
 export { attachBrowserSessionLifecycle } from "./BrowserSessionLifecycle.js";
+export { attachBrowserSessionReplaced } from "./BrowserSessionEvents.js";
 export { SocketIoRealtimeTransport } from "./SocketIoRealtimeTransport.js";
