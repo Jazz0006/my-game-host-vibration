@@ -5,10 +5,12 @@ import {
   CLIENT_EFFECT_VIBRATE,
   type ClientVibrateEffectPayload,
 } from "../src/protocol/client/ClientEffects.js";
-import type {
-  ClientRealtimeEventEnvelope,
-  ClientStateEnvelope,
+import {
+  createClientCommandEnvelope,
+  type ClientRealtimeEventEnvelope,
+  type ClientStateEnvelope,
 } from "../src/protocol/client/ClientProtocol.js";
+import { attachSocketIoClientProtocolTransport } from "../src/runtime/node/SocketIoClientProtocolTransport.js";
 import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
@@ -44,6 +46,23 @@ function emitAck<T>(socket: ClientSocket, event: string, payload: Record<string,
       if (error) reject(error);
       else resolve(result);
     });
+  });
+}
+
+function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResult> {
+  return new Promise((resolve, reject) => {
+    socket.timeout(TIMEOUT_MS).emit(
+      "client:command",
+      createClientCommandEnvelope(
+        "werewolf.confirmRole",
+        { actionId },
+        `c4-confirm-${generatedCommandId++}`,
+      ),
+      (error: Error | null, result: BasicResult) => {
+        if (error) reject(error);
+        else resolve(result);
+      },
+    );
   });
 }
 
@@ -83,6 +102,7 @@ describe("C4.1 Socket.IO host recovery reminder", () => {
   beforeEach(async () => {
     generatedCommandId = 0;
     game = createGameServer();
+    attachSocketIoClientProtocolTransport(game);
     await new Promise<void>(resolve => game.httpServer.listen(0, "127.0.0.1", resolve));
     baseUrl = `http://127.0.0.1:${(game.httpServer.address() as AddressInfo).port}`;
     clients = [];
@@ -124,11 +144,7 @@ describe("C4.1 Socket.IO host recovery reminder", () => {
     const dealt = await Promise.all(roleViews);
 
     for (let index = 0; index < sockets.length; index += 1) {
-      expect(
-        await emitAck<BasicResult>(sockets[index]!, "player:confirm-role", {
-          actionId: dealt[index]!.actionId,
-        }),
-      ).toEqual({ ok: true });
+      expect(await confirmRole(sockets[index]!, dealt[index]!.actionId)).toEqual({ ok: true });
     }
 
     const wolfIndex = dealt.findIndex(view => view.role === "werewolf");

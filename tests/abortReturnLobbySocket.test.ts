@@ -5,9 +5,10 @@ import {
   CLIENT_INTERACTION_TIMEOUT_STATE,
   type ClientInteractionTimeoutStatePayload,
 } from "../src/protocol/client/ClientInteractionTimeoutEvents.js";
-import type {
-  ClientRealtimeEventEnvelope,
-  ClientStateEnvelope,
+import {
+  createClientCommandEnvelope,
+  type ClientRealtimeEventEnvelope,
+  type ClientStateEnvelope,
 } from "../src/protocol/client/ClientProtocol.js";
 import { createTimedGameServer } from "../src/timedServer.js";
 
@@ -44,6 +45,23 @@ function emitAck<T>(
       event,
       { commandId: `c45-command-${commandSequence++}`, ...payload },
       (error: Error | null, result: T) => {
+        if (error) reject(error);
+        else resolve(result);
+      },
+    );
+  });
+}
+
+function confirmRole(socket: ClientSocket, actionId: string): Promise<BasicResult> {
+  return new Promise((resolve, reject) => {
+    socket.timeout(TIMEOUT_MS).emit(
+      "client:command",
+      createClientCommandEnvelope(
+        "werewolf.confirmRole",
+        { actionId },
+        `c45-confirm-${commandSequence++}`,
+      ),
+      (error: Error | null, result: BasicResult) => {
         if (error) reject(error);
         else resolve(result);
       },
@@ -142,9 +160,7 @@ describe("C4.5 abort current game and return to lobby", () => {
     const dealt = await Promise.all(roleViews);
 
     for (let index = 0; index < sockets.length; index += 1) {
-      expect(await emitAck<BasicResult>(sockets[index]!, "player:confirm-role", {
-        actionId: dealt[index]!.actionId,
-      })).toEqual({ ok: true });
+      expect(await confirmRole(sockets[index]!, dealt[index]!.actionId)).toEqual({ ok: true });
     }
 
     const wolfIndex = dealt.findIndex(view => view.role === "werewolf");

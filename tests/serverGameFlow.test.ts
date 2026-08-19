@@ -1,12 +1,15 @@
 import type { AddressInfo } from "node:net";
 import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { ClientStateEnvelope } from "../src/protocol/client/ClientProtocol.js";
+import {
+  createClientCommandEnvelope,
+  type ClientStateEnvelope,
+} from "../src/protocol/client/ClientProtocol.js";
+import { attachSocketIoClientProtocolTransport } from "../src/runtime/node/SocketIoClientProtocolTransport.js";
 import { createGameServer } from "../src/server.js";
 
 const TIMEOUT_MS = 3000;
 const IDEMPOTENT_SOCKET_EVENTS = new Set([
-  "player:confirm-role",
   "player:submit-wolf-target",
   "player:submit-witch-action",
   "player:submit-seer-target",
@@ -54,6 +57,18 @@ function emitAck<T>(socket: ClientSocket, event: string, payload: unknown): Prom
   });
 }
 
+function confirmRole(
+  socket: ClientSocket,
+  actionId: string,
+  commandId = `protocol-confirm-${generatedCommandId++}`,
+): Promise<{ ok: boolean; message?: string }> {
+  return emitAck(
+    socket,
+    "client:command",
+    createClientCommandEnvelope("werewolf.confirmRole", { actionId }, commandId),
+  );
+}
+
 type JoinResult = { ok: true; roomId: string; playerId: string };
 type GameView = {
   mode: string;
@@ -88,6 +103,7 @@ describe("five-player Socket.IO game flow", () => {
 
   beforeEach(async () => {
     game = createGameServer();
+    attachSocketIoClientProtocolTransport(game);
     await new Promise<void>(resolve => game.httpServer.listen(0, "127.0.0.1", resolve));
     baseUrl = `http://127.0.0.1:${(game.httpServer.address() as AddressInfo).port}`;
     clients = [];
@@ -138,10 +154,7 @@ describe("five-player Socket.IO game flow", () => {
 
     const wolf = byRole.get("werewolf")!;
     for (let index = 0; index < sockets.length; index += 1) {
-      const result = await emitAck<{ ok: boolean }>(sockets[index]!, "player:confirm-role", {
-        actionId: dealt[index]!.actionId,
-      });
-      expect(result.ok).toBe(true);
+      expect(await confirmRole(sockets[index]!, dealt[index]!.actionId)).toEqual({ ok: true });
     }
 
     const wolfAction = waitForGameView(wolf.socket, view => view.mode === "wolf_action");
@@ -195,7 +208,7 @@ describe("five-player Socket.IO game flow", () => {
     }
   });
 
-  it("dedupes Socket.IO command retries by stable actor without replaying the role-confirm transition", async () => {
+  it("dedupes stable role-confirm retries by actor without replaying the transition", async () => {
     const sockets = await Promise.all(Array.from({ length: 5 }, () => connect()));
     const host = sockets[0]!;
     const hostSession = await emitAck<JoinResult>(host, "host:create-room", { name: "房主" });
@@ -213,33 +226,21 @@ describe("five-player Socket.IO game flow", () => {
     const dealt = await Promise.all(roleViews);
     const commandId = "shared-retry-id";
 
-    expect(await emitAck<{ ok: boolean }>(sockets[0]!, "player:confirm-role", {
-      commandId,
-      actionId: dealt[0]!.actionId,
-    })).toEqual({ ok: true });
-    expect(await emitAck<{ ok: boolean }>(sockets[1]!, "player:confirm-role", {
-      commandId,
-      actionId: dealt[1]!.actionId,
-    })).toEqual({ ok: true });
+    expect(await confirmRole(sockets[0]!, dealt[0]!.actionId, commandId)).toEqual({ ok: true });
+    expect(await confirmRole(sockets[1]!, dealt[1]!.actionId, commandId)).toEqual({ ok: true });
 
     const room = game.rooms.get(hostSession.roomId)!;
     expect(room.game?.confirmedRolePlayerIds).toHaveLength(2);
 
     for (let index = 2; index < sockets.length - 1; index += 1) {
-      expect(await emitAck<{ ok: boolean }>(sockets[index]!, "player:confirm-role", {
-        commandId: `confirm-${index}`,
-        actionId: dealt[index]!.actionId,
-      })).toEqual({ ok: true });
+      expect(await confirmRole(sockets[index]!, dealt[index]!.actionId, `confirm-${index}`)).toEqual({ ok: true });
     }
     const reachedNightStart = waitFor<{ game: { phase: string } }>(
       host,
       "room:state",
       state => state.game.phase === "night_start",
     );
-    expect(await emitAck<{ ok: boolean }>(sockets[4]!, "player:confirm-role", {
-      commandId: "confirm-4",
-      actionId: dealt[4]!.actionId,
-    })).toEqual({ ok: true });
+    expect(await confirmRole(sockets[4]!, dealt[4]!.actionId, "confirm-4")).toEqual({ ok: true });
     await reachedNightStart;
     const actionIdAfterFirstDelivery = room.game?.actionId;
     expect(room.game?.phase).toBe("night_start");
@@ -247,20 +248,12 @@ describe("five-player Socket.IO game flow", () => {
     let replayedBroadcasts = 0;
     const countReplayBroadcast = () => { replayedBroadcasts += 1; };
     host.on("room:state", countReplayBroadcast);
-    expect(await emitAck<{ ok: boolean }>(sockets[4]!, "player:confirm-role", {
-      commandId: "confirm-4",
-      actionId: dealt[4]!.actionId,
-    })).toEqual({ ok: true });
+    expect(await confirmRole(sockets[4]!, dealt[4]!.actionId, "confirm-4")).toEqual({ ok: true });
     await new Promise(resolve => setTimeout(resolve, 25));
     host.off("room:state", countReplayBroadcast);
     expect(replayedBroadcasts).toBe(0);
     expect(room.game?.phase).toBe("night_start");
     expect(room.game?.actionId).toBe(actionIdAfterFirstDelivery);
-
-    const missingCommandId = await new Promise<{ ok: boolean; message?: string }>(resolve => {
-      sockets[4]!.emit("player:confirm-role", { actionId: dealt[4]!.actionId }, resolve);
-    });
-    expect(missingCommandId).toEqual({ ok: false, message: "缺少有效的 commandId，请重试" });
   });
 
   it("dedupes host start/restart lifecycle retries without recreating game state", async () => {
