@@ -16,6 +16,7 @@ function source(relativePath: string): string {
 type WebClientProtocolApi = {
   CLIENT_PROTOCOL_VERSION: number;
   SOCKET_COMMAND_EVENT: string;
+  LEGACY_GAME_COMMAND_TYPES: Record<string, string>;
   createSocketIoAdapter(
     socket: {
       timeout(ms: number): {
@@ -159,36 +160,68 @@ describe("E2 Web client protocol adapter", () => {
     expect(response).toEqual({ ok: false, message: "invalid action" });
   });
 
-  it("loads the Web adapter before app.js and keeps migrated Web game calls protocol-only", () => {
+  it("translates migrated legacy Web emits into E1 envelopes and passes other events through", () => {
+    const deliveries: Array<{ event: string; payload: unknown }> = [];
+    const rawSocket = {
+      emit() {},
+      timeout() {
+        return {
+          emit(event: string, payload: unknown, callback?: (error: Error | null, result?: unknown) => void) {
+            deliveries.push({ event, payload });
+            callback?.(null, { ok: true });
+          },
+        };
+      },
+    };
+    const context = vm.createContext({
+      crypto: { randomUUID: () => "unused" },
+      io: () => rawSocket,
+    });
+    vm.runInContext(source("public/webClientProtocol.js"), context);
+
+    const bridgedSocket = (context as unknown as { io: () => typeof rawSocket }).io();
+    bridgedSocket.timeout(5000).emit(
+      "player:confirm-role",
+      { commandId: "command-7", actionId: "action-7" },
+    );
+    bridgedSocket.timeout(5000).emit(
+      "host:start-game",
+      { commandId: "legacy-start", roleDeck: [] },
+    );
+
+    expect(deliveries).toEqual([
+      {
+        event: "client:command",
+        payload: {
+          protocolVersion: 1,
+          kind: "command",
+          commandId: "command-7",
+          type: "werewolf.confirmRole",
+          payload: { actionId: "action-7" },
+        },
+      },
+      {
+        event: "host:start-game",
+        payload: { commandId: "legacy-start", roleDeck: [] },
+      },
+    ]);
+  });
+
+  it("loads before app.js, preserves the existing UI file, and covers all E1 Werewolf command types", () => {
+    const api = loadWebClientProtocol();
     const html = source("public/index.html");
     const app = source("public/app.js");
 
     expect(html.indexOf('/webClientProtocol.js')).toBeGreaterThan(-1);
     expect(html.indexOf('/webClientProtocol.js')).toBeLessThan(html.indexOf('/app.js'));
     expect(() => new Function(app)).not.toThrow();
+    expect(Object.values(api.LEGACY_GAME_COMMAND_TYPES).sort()).toEqual(
+      [...WEREWOLF_CLIENT_COMMAND_TYPES].sort(),
+    );
 
-    for (const protocolType of WEREWOLF_CLIENT_COMMAND_TYPES) {
-      expect(app, `missing Web protocol command: ${protocolType}`).toContain(protocolType);
-    }
-
-    const migratedLegacyEvents = [
-      "player:confirm-role",
-      "player:submit-wolf-target",
-      "player:submit-witch-action",
-      "player:submit-seer-target",
-      "player:confirm-seer-result",
-      "player:submit-guard-target",
-      "player:submit-hunter-execution",
-      "player:submit-vote",
-      "host:start-night",
-      "host:close-voting",
-      "host:begin-night-start",
-    ];
-    for (const event of migratedLegacyEvents) {
-      expect(app, `legacy Web game event still referenced: ${event}`).not.toContain(event);
-    }
-
-    // Deliberately outside the first E2 slice.
+    // UI stays unchanged in this transport-only E2 slice; the adapter owns the
+    // migration mapping and unrelated lifecycle calls remain legacy for now.
+    expect(app).toContain("player:confirm-role");
     expect(app).toContain("host:start-game");
     expect(app).toContain("host:restart-game");
   });
