@@ -8,6 +8,7 @@
 
   let webClientSession = null;
   let unsubscribeClientSession = null;
+  let detachClientLifecycle = null;
   let pendingEntryResult = null;
   let activationId = 0;
 
@@ -38,6 +39,8 @@
   function teardownClientSession() {
     const session = webClientSession;
     webClientSession = null;
+    detachClientLifecycle?.();
+    detachClientLifecycle = null;
     unsubscribeClientSession?.();
     unsubscribeClientSession = null;
     pendingEntryResult = null;
@@ -142,11 +145,15 @@
     };
 
     try {
-      const { createWebClientSession } = await runtimePromise;
+      const {
+        createWebClientSession,
+        attachBrowserSessionLifecycle,
+      } = await runtimePromise;
       if (myActivationId !== activationId) return;
 
       const session = createWebClientSession(socket);
       webClientSession = session;
+      detachClientLifecycle = attachBrowserSessionLifecycle(session);
       unsubscribeClientSession = session.subscribe(snapshot => {
         renderSessionSnapshot(session, snapshot);
       });
