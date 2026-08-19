@@ -12,11 +12,11 @@ export type CloudflareEnv = {
 
 type RoomRoute = {
   roomCode: string;
-  resource: "identity" | "snapshot";
+  resource: "identity" | "snapshot" | "websocket-ticket" | "websocket";
 };
 
 function roomRouteFromPath(pathname: string): RoomRoute | null {
-  const match = /^\/rooms\/(\d{4})\/(identity|snapshot)$/.exec(pathname);
+  const match = /^\/rooms\/(\d{4})\/(identity|snapshot|websocket-ticket|websocket)$/.exec(pathname);
   if (!match?.[1] || !match[2]) return null;
   return {
     roomCode: match[1],
@@ -26,7 +26,11 @@ function roomRouteFromPath(pathname: string): RoomRoute | null {
 
 async function roomRequest(request: Request, resource: RoomRoute["resource"]): Promise<Request> {
   const method = request.method.toUpperCase();
-  return new Request(`https://game-room.internal/${resource}`, {
+  const sourceUrl = new URL(request.url);
+  const internalUrl = new URL(`https://game-room.internal/${resource}`);
+  internalUrl.search = sourceUrl.search;
+
+  return new Request(internalUrl, {
     method,
     headers: request.headers,
     ...(method === "GET" || method === "HEAD"
