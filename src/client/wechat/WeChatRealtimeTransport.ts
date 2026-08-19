@@ -1,13 +1,11 @@
 import {
   CLIENT_PROTOCOL_VERSION,
   type ClientProtocolMessage,
+  type ClientRealtimeEventEnvelope,
   type ClientReconnectCredentials,
   type ClientStateEnvelope,
 } from "../../protocol/client/ClientProtocol.js";
-import type {
-  ClientRawWebSocketResponse,
-  ClientRawWebSocketStatePush,
-} from "../../protocol/client/ClientRawWebSocketProtocol.js";
+import type { ClientRawWebSocketResponse } from "../../protocol/client/ClientRawWebSocketProtocol.js";
 import type {
   ClientAuthoritativeStateDelivery,
   ClientRealtimeTransport,
@@ -170,9 +168,10 @@ implements ClientRealtimeTransport<TStatePayload> {
 
     void this.openSocket(generation).catch(error => {
       if (generation !== this.activeGeneration) return;
+      const message = errorMessage(error);
       this.listener?.onError(generation, {
         code: "websocket-connect-failed",
-        ...(errorMessage(error) ? { message: errorMessage(error) } : {}),
+        ...(message ? { message } : {}),
       });
     });
   }
@@ -205,7 +204,7 @@ implements ClientRealtimeTransport<TStatePayload> {
       kind: "push",
       type: "client:state",
       payload: record,
-    } satisfies ClientRawWebSocketStatePush<TStatePayload>, generation);
+    }, generation);
   }
 
   send(message: ClientProtocolMessage): Promise<unknown> {
@@ -241,9 +240,10 @@ implements ClientRealtimeTransport<TStatePayload> {
     });
     socket.onError(error => {
       if (this.socket !== socket || generation !== this.activeGeneration) return;
+      const message = errorMessage(error);
       this.listener?.onError(generation, {
         code: "websocket-error",
-        ...(errorMessage(error) ? { message: errorMessage(error) } : {}),
+        ...(message ? { message } : {}),
       });
     });
     socket.onMessage(result => {
@@ -286,7 +286,11 @@ implements ClientRealtimeTransport<TStatePayload> {
     });
   }
 
-  private sendRequest(generation: number, type: "client:sync-state" | "client:command", payload: unknown) {
+  private sendRequest(
+    generation: number,
+    type: "client:sync-state" | "client:command",
+    payload: unknown,
+  ): Promise<unknown> {
     if (generation !== this.activeGeneration) {
       return Promise.reject(new Error("stale WeChat request generation"));
     }
@@ -344,9 +348,10 @@ implements ClientRealtimeTransport<TStatePayload> {
       try {
         this.listener?.onState(parseStatePush<TStatePayload>(frame, generation));
       } catch (error) {
+        const message = errorMessage(error);
         this.listener?.onError(generation, {
           code: "invalid-authoritative-state",
-          ...(errorMessage(error) ? { message: errorMessage(error) } : {}),
+          ...(message ? { message } : {}),
         });
       }
       return;
@@ -363,7 +368,10 @@ implements ClientRealtimeTransport<TStatePayload> {
       ) {
         return;
       }
-      this.listener?.onEvent({ generation, envelope: envelope as any });
+      this.listener?.onEvent({
+        generation,
+        envelope: envelope as ClientRealtimeEventEnvelope,
+      });
     }
   }
 
