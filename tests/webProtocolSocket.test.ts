@@ -120,7 +120,9 @@ describe("E2 Web protocol over Socket.IO", () => {
     let replayBroadcasts = 0;
     const countReplay = () => { replayBroadcasts += 1; };
     host.on("room:state", countReplay);
-    expect(await emitAck(host === sockets.at(-1) ? host : sockets.at(-1)!, "client:command", finalEnvelope!)).toEqual({ ok: true });
+    expect(
+      await emitAck(sockets.at(-1)!, "client:command", finalEnvelope!),
+    ).toEqual({ ok: true });
     await new Promise(resolve => setTimeout(resolve, 25));
     host.off("room:state", countReplay);
 
