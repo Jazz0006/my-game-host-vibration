@@ -38,6 +38,10 @@ function waitForConnected<TStatePayload>(
         finish(() => reject(originalError));
       }
     });
+
+    // subscribe() immediately emits the current snapshot. If that synchronous
+    // emission settled the promise before unsubscribe was assigned, detach now.
+    if (settled) unsubscribe();
   });
 }
 
