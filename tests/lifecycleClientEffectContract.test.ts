@@ -6,6 +6,10 @@ const delivery = fs.readFileSync(
   "utf8",
 );
 const server = fs.readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+const transport = fs.readFileSync(
+  new URL("../src/runtime/node/SocketIoClientProtocolTransport.ts", import.meta.url),
+  "utf8",
+);
 const app = fs.readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 
 function count(source: string, value: string): number {
@@ -27,7 +31,11 @@ describe("E2.3b lifecycle legacy event contraction", () => {
     expect(server).not.toContain('emit("game:over"');
     expect(count(server, "emitNightCompleteEffects(io, room);")).toBe(2);
     expect(count(server, "emitGameOverEffects(io, room);")).toBe(2);
-    expect(count(server, "emitGameOverEffects(io, membership.room);")).toBe(1);
+    expect(server).not.toContain("emitGameOverEffects(io, membership.room);");
+
+    expect(transport).toContain('case "hunterResolved"');
+    expect(transport).toContain('case "vote"');
+    expect(transport).toContain("emitGameOverEffects(io, room);");
   });
 
   it("keeps lifecycle event ownership out of raw Web Socket.IO listeners", () => {
