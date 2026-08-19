@@ -68,7 +68,6 @@ export const LEGACY_SOCKET_IO_SURFACE: readonly LegacySocketSurfaceEntry[] = [
   { event: "client:state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.player" },
   { event: "client:event", direction: "server-to-client", family: "event", category: "delivery", protocolTarget: "event.envelope" },
   { event: "room:state", direction: "server-to-client", family: "state", category: "delivery", protocolTarget: "state.room" },
-  { event: "game:aborted-to-lobby", direction: "server-to-client", family: "event", category: "recovery", protocolTarget: "game.abortedToLobby" },
   { event: "player:interaction-timeout-state", direction: "server-to-client", family: "event", category: "interaction-timeout", protocolTarget: "player.interactionTimeoutState" },
   { event: "player:interaction-timeout-error", direction: "server-to-client", family: "event", category: "interaction-timeout", protocolTarget: "player.interactionTimeoutError" },
   { event: "player:test-prompt", direction: "server-to-client", family: "event", category: "test-support" },

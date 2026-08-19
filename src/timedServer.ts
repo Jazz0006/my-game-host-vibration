@@ -229,7 +229,6 @@ export function createTimedGameServer(): TimedServer {
           if (!replayed) {
             clearRoomInteractionTimeout(room);
             delivery.broadcastRoom(room);
-            io.to(room.id).emit("game:aborted-to-lobby", { roomId: room.id });
           }
           ack({ ok: true });
         } catch (error) {
