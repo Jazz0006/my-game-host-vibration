@@ -1,3 +1,4 @@
+export { createWeChatClientSession } from "./WeChatClientSession.js";
 export {
   WeChatRealtimeTransport,
   type WeChatRealtimePlatform,
