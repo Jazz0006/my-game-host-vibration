@@ -18,4 +18,5 @@ export function createWebClientSession<TStatePayload = unknown>(
   );
 }
 
+export { attachBrowserSessionLifecycle } from "./BrowserSessionLifecycle.js";
 export { SocketIoRealtimeTransport } from "./SocketIoRealtimeTransport.js";
