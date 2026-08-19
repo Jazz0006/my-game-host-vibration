@@ -13,7 +13,8 @@ describe("E2.2 Web ClientSession direct integration", () => {
     const app = source("public/app.js");
 
     expect(app).toContain("const socket = io({ autoConnect: false })");
-    expect(app).toContain('import("/client-runtime/client/browser/WebClientSession.js")');
+    expect(app).toContain('const CLIENT_RUNTIME_URL = "/client-runtime/client/browser/WebClientSession.js"');
+    expect(app).toContain("import(CLIENT_RUNTIME_URL)");
     expect(app).toContain("createWebClientSession(socket)");
     expect(app).toContain("attachBrowserSessionLifecycle(session)");
     expect(app).toContain("session.subscribe(snapshot =>");
