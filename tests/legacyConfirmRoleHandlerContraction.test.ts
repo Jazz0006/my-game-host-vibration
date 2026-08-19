@@ -9,6 +9,7 @@ function source(path: string): string {
 const retiredLegacyCommands = [
   ["player:confirm-role", "werewolf.confirmRole"],
   ["player:submit-seer-target", "werewolf.submitSeerTarget"],
+  ["host:begin-night-start", "werewolf.beginNightStart"],
 ] as const;
 
 describe("E2.3 legacy game handler contraction", () => {

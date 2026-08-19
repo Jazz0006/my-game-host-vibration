@@ -935,21 +935,6 @@ socket.on(
       }
     });
 
-    socket.on("host:begin-night-start", async (data: { commandId?: string }, ack: BasicAck) => {
-      const membership = findMembership(rooms, socket.id);
-      if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以操作" });
-      if (!membership.room.game) return ack({ ok: false, message: "游戏尚未开始" });
-      const commandId = requiredCommandId(data, ack);
-      if (!commandId) return;
-      try {
-        const { replayed } = await runHostCommandIdempotent(membership.room, commandId, { type: "beginNightStart" });
-        if (!replayed) broadcastRoom(io, membership.room);
-        ack({ ok: true });
-      } catch (error) {
-        ruleError(ack, error);
-      }
-    });
-
     socket.on(
       "host:restart-game",
       async (
