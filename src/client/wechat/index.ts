@@ -20,3 +20,13 @@ export {
   type WeChatRequestSuccess,
   type WeChatSocketTaskLike,
 } from "./WeChatRealtimeTransport.js";
+export {
+  createWeChatWerewolfVerticalSlice,
+  type WeChatWerewolfAuthoritativeView,
+  type WeChatWerewolfPlayerRef,
+  type WeChatWerewolfSliceScreen,
+  type WeChatWerewolfSliceViewModel,
+  type WeChatWerewolfVerticalSlice,
+  type WeChatWerewolfVerticalSliceOptions,
+  type WeChatWerewolfVerticalSlicePlatform,
+} from "./WeChatWerewolfVerticalSlice.js";
