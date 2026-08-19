@@ -21,6 +21,7 @@ export function createWebClientSession<TStatePayload = unknown>(
   return session;
 }
 
+export { CLIENT_SESSION_REPLACED } from "../../protocol/client/ClientSessionEvents.js";
 export { attachBrowserClientEffects } from "./BrowserClientEffects.js";
 export { attachBrowserSessionLifecycle } from "./BrowserSessionLifecycle.js";
 export { SocketIoRealtimeTransport } from "./SocketIoRealtimeTransport.js";
