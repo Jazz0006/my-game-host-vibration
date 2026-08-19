@@ -197,7 +197,7 @@ Page({
     this._slice.reconnect();
   },
 
-  testVibration() {
+  testShortVibration() {
     try {
       const bindings = this._bindings || createWeChatMiniProgramBindings(wx);
       if (!bindings.effects.vibrateShort) {
@@ -207,7 +207,21 @@ Page({
       bindings.effects.vibrateShort({ type: "medium" });
       this.appendLog("Requested medium short vibration");
     } catch (error) {
-      this.appendLog(`Vibration failed: ${errorText(error)}`);
+      this.appendLog(`Short vibration failed: ${errorText(error)}`);
+    }
+  },
+
+  testLongVibration() {
+    try {
+      const bindings = this._bindings || createWeChatMiniProgramBindings(wx);
+      if (!bindings.effects.vibrateLong) {
+        this.appendLog("vibrateLong capability unavailable");
+        return;
+      }
+      bindings.effects.vibrateLong();
+      this.appendLog("Requested long vibration");
+    } catch (error) {
+      this.appendLog(`Long vibration failed: ${errorText(error)}`);
     }
   },
 
