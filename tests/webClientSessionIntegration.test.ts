@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { publicAppSource } from "./publicAppSource.js";
 
 const repoRoot = process.cwd();
 
@@ -9,8 +10,8 @@ function source(relativePath: string): string {
 }
 
 describe("E2.2 Web ClientSession direct integration", () => {
-  it("makes app.js the explicit owner of the production ClientSession lifecycle", () => {
-    const app = source("public/app.js");
+  it("makes the split public app the explicit owner of the production ClientSession lifecycle", () => {
+    const app = publicAppSource(repoRoot);
 
     expect(app).toContain("const socket = io({ autoConnect: false })");
     expect(app).toContain('const CLIENT_RUNTIME_URL = "/client-runtime/client/browser/WebClientSession.js"');
@@ -30,12 +31,13 @@ describe("E2.2 Web ClientSession direct integration", () => {
   });
 
   it("keeps room:state as room/UI compatibility data rather than connection authority", () => {
-    const app = source("public/app.js");
+    const app = publicAppSource(repoRoot);
     const start = app.indexOf('socket.on("room:state"');
-    const end = app.indexOf("// ── Audio", start);
+    const end = app.indexOf("// ── Game events", start);
     const roomStateHandler = app.slice(start, end);
 
     expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
     expect(roomStateHandler).not.toContain("membershipActive = true");
     expect(roomStateHandler).not.toContain('setConnectionStatus("已连接")');
     expect(roomStateHandler).not.toContain('setError("")');
@@ -56,7 +58,7 @@ describe("E2.2 Web ClientSession direct integration", () => {
   });
 
   it("routes host/join/recovery entry through authoritative ClientSession synchronization", () => {
-    const app = source("public/app.js");
+    const app = publicAppSource(repoRoot);
     const recovery = source("public/recoveryIdentity.js");
 
     expect(app).toContain("saveSession(result);\n    activateClientSession(result);");
