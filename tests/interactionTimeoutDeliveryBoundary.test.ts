@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { publicAppSource } from "./publicAppSource.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,7 +23,7 @@ describe("E2.3f4 interaction-timeout delivery contraction", () => {
   });
 
   it("routes production Web timeout UI through ClientSession and retires raw listeners", () => {
-    const app = source("public/app.js");
+    const app = publicAppSource(repoRoot);
     const recovery = source("public/recoveryStatus.js");
     const webRuntime = source("src/client/browser/WebClientSession.ts");
 
