@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { publicAppSource } from "./publicAppSource.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +25,7 @@ describe("E2.3e3 room lifecycle delivery boundary", () => {
 
   it("retires raw room lifecycle Socket.IO events from server, Web, and inventory", () => {
     const server = source("src/server.ts");
-    const web = source("public/app.js");
+    const web = publicAppSource(repoRoot);
     const inventory = source("src/protocol/client/LegacySocketIoSurface.ts");
 
     expect(server).not.toContain('targetSocket.emit("room:removed"');
@@ -36,7 +37,7 @@ describe("E2.3e3 room lifecycle delivery boundary", () => {
   });
 
   it("wires production Web room lifecycle handling through ClientSession", () => {
-    const web = source("public/app.js");
+    const web = publicAppSource(repoRoot);
     const adapter = source("src/client/browser/BrowserSessionEvents.ts");
 
     expect(web).toContain("attachBrowserRoomLifecycle");

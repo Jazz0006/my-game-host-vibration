@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { WEREWOLF_CLIENT_COMMAND_TYPES } from "../src/protocol/client/werewolf/WerewolfClientProtocol.js";
 import { WEREWOLF_LIFECYCLE_CLIENT_COMMAND_TYPES } from "../src/protocol/client/werewolf/WerewolfLifecycleClientProtocol.js";
+import { PUBLIC_APP_SCRIPT_URLS, publicAppSource } from "./publicAppSource.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -214,13 +215,19 @@ describe("E2 Web client protocol adapter", () => {
     ]);
   });
 
-  it("loads before app.js, preserves the UI file, and covers gameplay plus lifecycle command types", () => {
+  it("loads before the split public app, preserves the UI scripts, and covers gameplay plus lifecycle command types", () => {
     const api = loadWebClientProtocol();
     const html = source("public/index.html");
-    const app = source("public/app.js");
+    const app = publicAppSource(repoRoot);
 
-    expect(html.indexOf('/webClientProtocol.js')).toBeGreaterThan(-1);
-    expect(html.indexOf('/webClientProtocol.js')).toBeLessThan(html.indexOf('/app.js'));
+    const protocolIndex = html.indexOf('/webClientProtocol.js');
+    expect(protocolIndex).toBeGreaterThan(-1);
+    let previousIndex = protocolIndex;
+    for (const scriptUrl of PUBLIC_APP_SCRIPT_URLS) {
+      const scriptIndex = html.indexOf(scriptUrl);
+      expect(scriptIndex).toBeGreaterThan(previousIndex);
+      previousIndex = scriptIndex;
+    }
     expect(() => new Function(app)).not.toThrow();
     expect(Object.values(api.LEGACY_GAME_COMMAND_TYPES).sort()).toEqual(
       [

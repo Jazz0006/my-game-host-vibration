@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { publicAppSource } from "./publicAppSource.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +24,7 @@ describe("E2.3d3 session lifecycle delivery boundary", () => {
   it("keeps the Web UI behind the semantic browser session event adapter", () => {
     const webSession = source("src/client/browser/WebClientSession.ts");
     const adapter = source("src/client/browser/BrowserSessionEvents.ts");
-    const web = source("public/app.js");
+    const web = publicAppSource(repoRoot);
 
     expect(webSession).toContain('export { attachBrowserSessionReplaced } from "./BrowserSessionEvents.js"');
     expect(adapter).toContain("CLIENT_SESSION_REPLACED");
