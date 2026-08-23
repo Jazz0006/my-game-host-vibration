@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { publicAppSource } from "./publicAppSource.js";
 
 const root = process.cwd();
 const source = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
@@ -13,7 +14,7 @@ describe("E2.3b canonical Node realtime effect delivery boundary", () => {
       source("src/protocol/client/LegacySocketIoSurface.ts"),
       source("src/server.ts"),
       source("src/timedServer.ts"),
-      source("public/app.js"),
+      publicAppSource(root),
     ];
 
     for (const eventName of [
