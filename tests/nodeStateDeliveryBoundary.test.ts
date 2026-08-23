@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { publicAppSource } from "./publicAppSource.js";
 
 const root = process.cwd();
 const source = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
@@ -17,7 +18,7 @@ describe("E2.3c2 canonical Node private state delivery boundary", () => {
   it("keeps the retired private state event out of runtime, production Web, and the surface inventory", () => {
     const protocolTransport = source("src/runtime/node/SocketIoClientProtocolTransport.ts");
     const server = source("src/server.ts");
-    const web = source("public/app.js");
+    const web = publicAppSource(root);
     const inventory = source("src/protocol/client/LegacySocketIoSurface.ts");
 
     expect(protocolTransport).not.toContain("onAnyOutgoing");
