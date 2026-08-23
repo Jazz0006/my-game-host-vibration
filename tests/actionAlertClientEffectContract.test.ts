@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { publicAppSource } from "./publicAppSource.js";
 
 const repoRoot = process.cwd();
 const source = (relativePath: string) => fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
@@ -21,7 +22,7 @@ describe("E2.3b action-alert legacy event contraction", () => {
   });
 
   it("keeps the Web runtime on ClientSession effects without a legacy listener", () => {
-    const app = source("public/app.js");
+    const app = publicAppSource(repoRoot);
     const webSession = source("src/client/browser/WebClientSession.ts");
     const transport = source("src/client/browser/SocketIoRealtimeTransport.ts");
 
