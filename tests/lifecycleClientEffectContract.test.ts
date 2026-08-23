@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
+import { publicAppSource } from "./publicAppSource.js";
 
 const delivery = fs.readFileSync(
   new URL("../src/runtime/node/SocketIoClientEffectDelivery.ts", import.meta.url),
@@ -10,7 +11,7 @@ const transport = fs.readFileSync(
   new URL("../src/runtime/node/SocketIoClientProtocolTransport.ts", import.meta.url),
   "utf8",
 );
-const app = fs.readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const app = publicAppSource();
 
 function count(source: string, value: string): number {
   return source.split(value).length - 1;
