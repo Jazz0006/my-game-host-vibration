@@ -14,7 +14,7 @@
 
 ## 当前开发状态
 
-截至 2026-09-27，主线阶段状态：
+截至 2026-09-28，主线阶段状态：
 
 ```text
 C1–C4  Reconnect / Recovery                     ✅
@@ -29,7 +29,8 @@ E3.2b  Raw WebSocket stable wire + CF bridge    ✅
 E3.2c  Minimal WeChat realtime transport        ✅
 E3.3   WeChat state sync + reconnect PoC        ✅
 E3.4   WeChat command ACK / retry PoC           ✅
-E3.5   WeChat vibration / audio adapter         ← NEXT
+E3.5   WeChat vibration / audio adapter         ✅
+E3.6   Minimal native WeChat vertical slice     ← NEXT
 R1     Reliability Hardening / Effect Outbox
 Cloudflare production cutover + real-device validation
 BotC production expansion
@@ -126,7 +127,7 @@ UI intention
 → shared authoritative Werewolf runtime
 ```
 
-private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.2c 已建立微信 ticket + Raw WebSocket transport；E3.3 完成 reconnect/state-sync；E3.4 已完成 bounded command ACK retry：每次 wire retry 使用新 requestId，但保持同一 commandId，Cloudflare idempotency ledger 返回 replay 而不重复 mutation。下一步只补微信 vibration/audio effect capability。
+private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.2c 已建立微信 ticket + Raw WebSocket transport；E3.3 完成 reconnect/state-sync；E3.4 完成 same-commandId bounded ACK retry；E3.5 已通过共享 EffectDispatcher 接入微信 vibration / semantic audio capability，平台失败保持 best-effort 且不影响 authoritative state。下一步建立最小真实微信 composition/lifecycle/lobby vertical slice。
 
 ## 多玩家模拟器
 

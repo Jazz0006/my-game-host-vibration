@@ -506,7 +506,8 @@ protocol event
 EffectDispatcher
   ├─ WebVibrationCapability
   ├─ WebAudioCapability
-  ├─ WeChatVibrationCapability
+  ├─ WeChatVibrationCapability ✅
+  ├─ WeChatAudioCapability ✅
   └─ Future Native Capability
 ```
 
@@ -604,9 +605,11 @@ GameRoom Durable Object
 - ClientSession；
 - command protocol；
 - realtime transport；
-- `wx` vibration；
+- vibration / semantic audio platform effects；
 - lifecycle；
 - reconnect。
+
+E3.5 已证明 effect adapter 只消费稳定 `client:event`：vibration pattern 在平台层近似为 short/long pulse，semantic audio cue 映射到 composition 提供的 source；unsupported capability 或 native failure 都是 best-effort no-op。
 
 不复制：
 
@@ -724,7 +727,8 @@ E3 Native WeChat Thin Client
   ├─ E3.2c minimal WeChat transport ✅
   ├─ E3.3 state sync + reconnect PoC ✅
   ├─ E3.4 command ACK / retry PoC ✅
-  └─ E3.5 vibration / audio adapter ← CURRENT
+  ├─ E3.5 vibration / audio adapter ✅
+  └─ E3.6 minimal native vertical slice ← CURRENT
         ↓
 Reliability Hardening
   └─ Post-commit Effect Outbox
@@ -734,7 +738,7 @@ Cloudflare Production Cutover + Real-device Field Validation
 BotC Production Expansion
 ```
 
-E2 已完成；E3.1–E3.4 已完成第二客户端边界、pre-connect credential seam、Raw WebSocket stable wire、最小 WeChat native transport、ClientSession reconnect/state-sync，以及 ACK 丢失时 same-commandId bounded retry。当前进入 E3.5 vibration / audio adapter，只补平台 effect capability，不改变 authoritative state。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 已完成；E3.1–E3.5 已完成第二客户端边界、pre-connect credential seam、Raw WebSocket stable wire、最小 WeChat native transport、ClientSession reconnect/state-sync、same-commandId bounded retry，以及微信 vibration/audio effect capability。当前进入 E3.6 minimal native vertical slice，首次建立真实微信 composition/lifecycle/minimal lobby，但继续保持 thin-client 与 authoritative-state 边界。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 

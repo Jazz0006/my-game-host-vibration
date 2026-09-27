@@ -39,4 +39,14 @@ describe("platform boundaries", () => {
     expect(serverSource).toContain('from "./runtime/node/NodeSessionTokenCryptoProvider.js"');
     expect(serverSource).not.toContain("./domain/sessionToken.js");
   });
+
+  it("keeps the WeChat effect adapter game-agnostic and free of global wx coupling", () => {
+    const effectSource = source("src/client/WeChatClientEffects.ts");
+
+    expect(effectSource).toContain("dispatchClientRealtimeEffect");
+    expect(effectSource).not.toContain("wx.");
+    expect(effectSource).not.toMatch(/from\s+["']\.\.\/domain\//u);
+    expect(effectSource).not.toMatch(/from\s+["']\.\.\/games\//u);
+    expect(effectSource).not.toMatch(/from\s+["']\.\.\/runtime\//u);
+  });
 });
