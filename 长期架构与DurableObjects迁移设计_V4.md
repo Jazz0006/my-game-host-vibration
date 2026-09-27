@@ -358,7 +358,8 @@ server -> client
 - stable player identity 来自 ticket 绑定后的 Hibernation WebSocket attachment/tag，不在每个 frame 重发 `resumeToken`；
 - malformed wire traffic 使用 `error` frame；可解析的 application request failure 使用 correlated `response { ok:false }`；
 - authoritative state push 使用 persisted RoomSnapshot revision；
-- realtime `event` frame 只定义 delivery contract，不把 Node effect orchestration 复制进 Cloudflare transport。
+- E3.6 sync 必须同时返回 private PlayerView + transport-neutral public room projection；两者共享 revision 但进入客户端不同 state channel；
+- realtime `event` frame 只定义 delivery contract；E3.6 仅补 next-active-actor action-alert，不复制 Node 全部 effect orchestration。
 
 Transport 不负责：
 
@@ -408,6 +409,20 @@ incoming revision < current revision
 对于同一活跃 transport 若出现无法解释的 revision 倒退、非法 state version 或非法 protocol envelope，应视为 protocol failure，而不是普通业务错误。
 
 客户端 store 不自行推导秘密结果，不自行推进 phase。
+
+E3.6 将 public room projection 与 private PlayerView 明确分离：
+
+```text
+RoomSnapshot
+  ├─ public ClientRoomProjection
+  │    roomId / gameType / viewer / players / gameStarted
+  │    no resumeTokenHash / socket/runtime fields
+  │
+  └─ private PlayerView
+       role / actionable secret information
+```
+
+`ClientSession` 为两者维护独立 revision/generation snapshots。微信 sync 必须同时获得两类 envelope 后才完成最小 native UI 所需的数据闭环；Web 现有 raw `room:state` 暂不迁移。
 
 ---
 
@@ -611,6 +626,13 @@ GameRoom Durable Object
 
 E3.5 已证明 effect adapter 只消费稳定 `client:event`：vibration pattern 在平台层近似为 short/long pulse，semantic audio cue 映射到 composition 提供的 source；unsupported capability 或 native failure 都是 best-effort no-op。
 
+E3.6 已建立 native composition root：
+- `WeChatSessionCredentialStore` owns local reconnect credentials；
+- `WeChatSessionLifecycle` owns hide/show recovery；
+- `WeChatNativeClient` 组合 transport/session/effects/storage/lifecycle，并成为唯一允许绑定全局 `wx` 的 concrete owner；
+- `WeChatMinimalPageController` 只把 view-model 交给页面，并转发用户 intention；
+- fake-`wx` vertical slice 已证明 lobby/start command/night action/effect/background reconnect contract，真实开发者工具/真机行为留到 E3.7。
+
 不复制：
 
 - Werewolf rules；
@@ -728,7 +750,8 @@ E3 Native WeChat Thin Client
   ├─ E3.3 state sync + reconnect PoC ✅
   ├─ E3.4 command ACK / retry PoC ✅
   ├─ E3.5 vibration / audio adapter ✅
-  └─ E3.6 minimal native vertical slice ← CURRENT
+  ├─ E3.6 minimal native vertical slice ✅
+  └─ E3.7 Developer Tools + real-device lifecycle validation ← CURRENT
         ↓
 Reliability Hardening
   └─ Post-commit Effect Outbox
@@ -738,7 +761,7 @@ Cloudflare Production Cutover + Real-device Field Validation
 BotC Production Expansion
 ```
 
-E2 已完成；E3.1–E3.5 已完成第二客户端边界、pre-connect credential seam、Raw WebSocket stable wire、最小 WeChat native transport、ClientSession reconnect/state-sync、same-commandId bounded retry，以及微信 vibration/audio effect capability。当前进入 E3.6 minimal native vertical slice，首次建立真实微信 composition/lifecycle/minimal lobby，但继续保持 thin-client 与 authoritative-state 边界。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 已完成；E3.1–E3.6 已完成第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle，以及 native composition/storage/lifecycle/minimal page vertical slice。当前进入 E3.7：生成最薄的微信开发者工具工程壳并做真实设备 foreground/background 验收；真实设备结果优先于 fake-`wx` contract。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 

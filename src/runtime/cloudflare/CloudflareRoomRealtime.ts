@@ -64,6 +64,12 @@ export class CloudflareRoomRealtime {
     return parseAttachment(webSocket.deserializeAttachment())?.playerId;
   }
 
+  isPlayerConnected(playerId: string): boolean {
+    return this.state
+      .getWebSockets(playerWebSocketTag(playerId))
+      .some(webSocket => isOpen(webSocket));
+  }
+
   sendToPlayer(playerId: string, message: string | ArrayBuffer): number {
     let delivered = 0;
     for (const webSocket of this.state.getWebSockets(playerWebSocketTag(playerId))) {

@@ -1,8 +1,10 @@
+import type { ClientRoomProjection } from "../../protocol/client/ClientRoomProjection.js";
 import {
   createReconnectEnvelope,
   type ClientProtocolMessage,
   type ClientRealtimeEventEnvelope,
   type ClientReconnectCredentials,
+  type ClientStateEnvelope,
 } from "../../protocol/client/ClientProtocol.js";
 import {
   AuthoritativeClientStateStore,
@@ -19,6 +21,7 @@ import {
 } from "./ClientConnectionFSM.js";
 import {
   ClientTransportRequestError,
+  type ClientAuthoritativeRoomStateDelivery,
   type ClientAuthoritativeStateDelivery,
   type ClientRealtimeEventDelivery,
   type ClientRealtimeTransport,
@@ -35,6 +38,16 @@ export type ClientSessionListener<TStatePayload = unknown> = (
 
 export type ClientSessionRealtimeEventListener = (
   event: ClientRealtimeEventEnvelope,
+) => void;
+
+export type ClientRoomStateSnapshot = {
+  generation: number;
+  revision: number | null;
+  envelope: ClientStateEnvelope<ClientRoomProjection> | null;
+};
+
+export type ClientSessionRoomStateListener = (
+  snapshot: ClientRoomStateSnapshot,
 ) => void;
 
 function clonedConnection(context: ClientConnectionContext): ClientConnectionContext {
@@ -65,6 +78,20 @@ function sessionMismatchFailure(): ClientConnectionFailure {
   };
 }
 
+function cloneRoomStateEnvelope(
+  envelope: ClientStateEnvelope<ClientRoomProjection> | null,
+): ClientStateEnvelope<ClientRoomProjection> | null {
+  if (!envelope) return null;
+  return {
+    ...envelope,
+    payload: {
+      ...envelope.payload,
+      viewer: { ...envelope.payload.viewer },
+      players: envelope.payload.players.map(player => ({ ...player })),
+    },
+  };
+}
+
 /**
  * E2.2 transport-neutral client session manager.
  *
@@ -83,7 +110,13 @@ export class ClientSession<TStatePayload = unknown> {
   private connection: ClientConnectionContext = createInitialClientConnectionContext();
   private readonly stateStore = new AuthoritativeClientStateStore<TStatePayload>();
   private readonly listeners = new Set<ClientSessionListener<TStatePayload>>();
+  private readonly roomStateListeners = new Set<ClientSessionRoomStateListener>();
   private readonly realtimeEventListeners = new Set<ClientSessionRealtimeEventListener>();
+  private roomState: ClientRoomStateSnapshot = {
+    generation: 0,
+    revision: null,
+    envelope: null,
+  };
   private credentials: ClientReconnectCredentials | null = null;
 
   constructor(private readonly transport: ClientRealtimeTransport<TStatePayload>) {
@@ -99,6 +132,9 @@ export class ClientSession<TStatePayload = unknown> {
       },
       onState: delivery => {
         this.receiveAuthoritativeState(delivery);
+      },
+      onRoomState: delivery => {
+        this.receiveAuthoritativeRoomState(delivery);
       },
       onEvent: delivery => {
         this.receiveRealtimeEvent(delivery);
@@ -121,11 +157,27 @@ export class ClientSession<TStatePayload = unknown> {
     };
   }
 
+  getRoomState(): ClientRoomStateSnapshot {
+    return {
+      generation: this.roomState.generation,
+      revision: this.roomState.revision,
+      envelope: cloneRoomStateEnvelope(this.roomState.envelope),
+    };
+  }
+
   subscribe(listener: ClientSessionListener<TStatePayload>): () => void {
     this.listeners.add(listener);
     listener(this.getSnapshot());
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  subscribeRoomState(listener: ClientSessionRoomStateListener): () => void {
+    this.roomStateListeners.add(listener);
+    listener(this.getRoomState());
+    return () => {
+      this.roomStateListeners.delete(listener);
     };
   }
 
@@ -149,7 +201,13 @@ export class ClientSession<TStatePayload = unknown> {
       { roomId: normalized.roomId, playerId: normalized.playerId },
       this.connection.generation,
     );
+    this.roomState = {
+      generation: this.connection.generation,
+      revision: null,
+      envelope: null,
+    };
     this.notify();
+    this.notifyRoomState();
     this.runEffects(transition.effects);
   }
 
@@ -160,7 +218,12 @@ export class ClientSession<TStatePayload = unknown> {
 
     if (this.connection.generation !== previousGeneration) {
       this.stateStore.advanceGeneration(this.connection.generation);
+      this.roomState = {
+        ...this.roomState,
+        generation: this.connection.generation,
+      };
       this.notify();
+      this.notifyRoomState();
     }
     this.runEffects(transition.effects);
   }
@@ -201,9 +264,16 @@ export class ClientSession<TStatePayload = unknown> {
       this.stateStore.clearSession(state.generation + 1);
     }
 
+    this.roomState = {
+      generation: state.session ? state.generation + 1 : this.roomState.generation + 1,
+      revision: null,
+      envelope: null,
+    };
     this.notify();
+    this.notifyRoomState();
     this.runEffects(transition.effects);
     this.listeners.clear();
+    this.roomStateListeners.clear();
     this.realtimeEventListeners.clear();
   }
 
@@ -350,6 +420,60 @@ export class ClientSession<TStatePayload = unknown> {
     }
   }
 
+  private receiveAuthoritativeRoomState(
+    delivery: ClientAuthoritativeRoomStateDelivery<ClientRoomProjection>,
+  ): void {
+    if (this.connection.status !== "Syncing" && this.connection.status !== "Connected") {
+      return;
+    }
+    if (delivery.generation !== this.connection.generation) return;
+    if (!Number.isSafeInteger(delivery.revision) || delivery.revision < 0) {
+      this.dispatch({
+        type: "protocolFailed",
+        generation: this.connection.generation,
+        failure: {
+          code: "invalid-authoritative-room-revision",
+          message: "authoritative room revision is invalid",
+        },
+      });
+      return;
+    }
+
+    const credentials = this.credentials;
+    const envelope = delivery.envelope;
+    const payload = envelope.payload;
+    if (
+      !credentials ||
+      envelope.kind !== "state" ||
+      envelope.scope !== "room" ||
+      envelope.roomId !== credentials.roomId ||
+      payload.roomId !== credentials.roomId ||
+      payload.viewer.playerId !== credentials.playerId
+    ) {
+      this.dispatch({
+        type: "protocolFailed",
+        generation: this.connection.generation,
+        failure: {
+          code: "authoritative-room-session-mismatch",
+          message: "authoritative room state belongs to another session",
+        },
+      });
+      return;
+    }
+
+    if (this.roomState.revision !== null) {
+      if (delivery.revision === this.roomState.revision) return;
+      if (delivery.revision < this.roomState.revision) return;
+    }
+
+    this.roomState = {
+      generation: delivery.generation,
+      revision: delivery.revision,
+      envelope: cloneRoomStateEnvelope(envelope),
+    };
+    this.notifyRoomState();
+  }
+
   private receiveRealtimeEvent(delivery: ClientRealtimeEventDelivery): void {
     if (this.connection.status !== "Connected") return;
     if (delivery.generation !== this.connection.generation) return;
@@ -367,5 +491,11 @@ export class ClientSession<TStatePayload = unknown> {
     if (this.listeners.size === 0) return;
     const snapshot = this.getSnapshot();
     for (const listener of this.listeners) listener(snapshot);
+  }
+
+  private notifyRoomState(): void {
+    if (this.roomStateListeners.size === 0) return;
+    const snapshot = this.getRoomState();
+    for (const listener of this.roomStateListeners) listener(snapshot);
   }
 }

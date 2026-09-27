@@ -1,3 +1,4 @@
+import type { ClientRoomProjection } from "../../protocol/client/ClientRoomProjection.js";
 import type {
   ClientProtocolMessage,
   ClientRealtimeEventEnvelope,
@@ -23,6 +24,14 @@ export type ClientAuthoritativeStateDelivery<TPayload = unknown> = {
   envelope: ClientStateEnvelope<TPayload>;
 };
 
+export type ClientAuthoritativeRoomStateDelivery<
+  TPayload = ClientRoomProjection,
+> = {
+  generation: number;
+  revision: number;
+  envelope: ClientStateEnvelope<TPayload>;
+};
+
 export type ClientRealtimeEventDelivery<
   TType extends string = string,
   TPayload = unknown,
@@ -36,6 +45,7 @@ export type ClientRealtimeTransportListener<TStatePayload = unknown> = {
   onClose(generation: number, reason?: string): void;
   onError(generation: number, failure: ClientConnectionFailure): void;
   onState(delivery: ClientAuthoritativeStateDelivery<TStatePayload>): void;
+  onRoomState?(delivery: ClientAuthoritativeRoomStateDelivery): void;
   onEvent(delivery: ClientRealtimeEventDelivery): void;
 };
 

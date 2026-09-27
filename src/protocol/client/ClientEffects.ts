@@ -47,6 +47,15 @@ export function createClientVibrateEffectEvent(
   });
 }
 
+export function createClientActionAlertEffectEvent(
+  context?: Record<string, unknown>,
+): ClientRealtimeEventEnvelope<typeof CLIENT_EFFECT_VIBRATE, ClientVibrateEffectPayload> {
+  return createClientVibrateEffectEvent([300, 150, 300], {
+    reason: "action-alert",
+    ...(context === undefined ? {} : { context }),
+  });
+}
+
 export function createClientAudioCueEffectEvent(
   cue: ClientAudioCue,
   options: Omit<ClientAudioCueEffectPayload, "cue"> = {},

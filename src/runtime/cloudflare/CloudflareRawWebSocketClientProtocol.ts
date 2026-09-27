@@ -1,8 +1,11 @@
 import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
 import { GameRuleError } from "../../games/werewolf/WerewolfDomainFacade.js";
+import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlanner.js";
+import { createClientActionAlertEffectEvent } from "../../protocol/client/ClientEffects.js";
 import type { ClientCommandEnvelope } from "../../protocol/client/ClientProtocol.js";
 import {
+  createClientRawWebSocketEventFrame,
   createClientRawWebSocketFailureResponse,
   createClientRawWebSocketStateFrame,
   createClientRawWebSocketSuccessResponse,
@@ -11,12 +14,14 @@ import {
 } from "../../protocol/client/ClientRawWebSocketProtocol.js";
 import {
   isWerewolfLifecycleClientCommand,
+  parseWerewolfLifecycleClientCommandEnvelope,
 } from "../../protocol/client/werewolf/WerewolfLifecycleClientProtocol.js";
 import {
   parseWerewolfClientCommandEnvelope,
 } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
 import {
   createCloudflarePlayerStateEnvelope,
+  createCloudflareRoomStateEnvelope,
   executeCloudflareClientProtocolCommand,
 } from "./CloudflareClientProtocolAdapter.js";
 import {
@@ -28,8 +33,15 @@ import {
   type DurableObjectStorageLike,
 } from "./CloudflareRoomSnapshotRepository.js";
 import { CloudflareWerewolfCommandRuntime } from "./CloudflareWerewolfCommandRuntime.js";
+import { CloudflareWerewolfLifecycleRuntime } from "./CloudflareWerewolfLifecycleRuntime.js";
 
-type ClientSnapshot = RoomSnapshot<GameState, GameConfig, unknown, unknown, unknown>;
+type ClientSnapshot = RoomSnapshot<
+  GameState,
+  GameConfig,
+  unknown,
+  WerewolfInteraction,
+  unknown
+>;
 
 function commandFailureMessage(error: unknown): string {
   return error instanceof GameRuleError ? error.message : "操作失败，请重试";
@@ -45,6 +57,7 @@ function commandFailureMessage(error: unknown): string {
 export class CloudflareRawWebSocketClientProtocol {
   private readonly snapshots: CloudflareRoomSnapshotRepository<ClientSnapshot>;
   private readonly commands: CloudflareWerewolfCommandRuntime;
+  private readonly lifecycle: CloudflareWerewolfLifecycleRuntime;
 
   constructor(
     storage: DurableObjectStorageLike,
@@ -52,6 +65,9 @@ export class CloudflareRawWebSocketClientProtocol {
   ) {
     this.snapshots = new CloudflareRoomSnapshotRepository<ClientSnapshot>(storage);
     this.commands = new CloudflareWerewolfCommandRuntime(storage);
+    this.lifecycle = new CloudflareWerewolfLifecycleRuntime(storage, {
+      isPlayerConnected: playerId => realtime.isPlayerConnected(playerId),
+    });
   }
 
   async handleRequest(
@@ -93,6 +109,7 @@ export class CloudflareRawWebSocketClientProtocol {
     const result = {
       revision: snapshot.revision,
       envelope: createCloudflarePlayerStateEnvelope(snapshot, playerId),
+      roomEnvelope: createCloudflareRoomStateEnvelope(snapshot, playerId),
     };
     webSocket.send(encodeClientRawWebSocketFrame(
       createClientRawWebSocketSuccessResponse(requestId, result),
@@ -106,12 +123,26 @@ export class CloudflareRawWebSocketClientProtocol {
     envelope: ClientCommandEnvelope,
   ): Promise<void> {
     if (isWerewolfLifecycleClientCommand(envelope)) {
-      this.sendFailure(
-        webSocket,
-        requestId,
-        "unsupported_command",
-        "当前 Cloudflare runtime 尚未支持该生命周期命令",
-      );
+      try {
+        const execution = await this.lifecycle.execute(
+          playerId,
+          parseWerewolfLifecycleClientCommandEnvelope(envelope),
+        );
+        webSocket.send(encodeClientRawWebSocketFrame(
+          createClientRawWebSocketSuccessResponse(requestId, {
+            revision: execution.revision,
+            replayed: execution.replayed,
+          }),
+        ));
+        if (!execution.replayed) this.pushAuthoritativeStates(execution.snapshot);
+      } catch (error) {
+        this.sendFailure(
+          webSocket,
+          requestId,
+          "command_failed",
+          commandFailureMessage(error),
+        );
+      }
       return;
     }
 
@@ -140,7 +171,12 @@ export class CloudflareRawWebSocketClientProtocol {
           replayed: execution.replayed,
         }),
       ));
-      this.pushPrivateStates(execution.snapshot);
+      if (!execution.replayed) {
+        this.pushAuthoritativeStates(execution.snapshot);
+        if (execution.outcome.kind === "afterNightAction") {
+          this.pushActionAlertEffect(execution.snapshot);
+        }
+      }
     } catch (error) {
       this.sendFailure(
         webSocket,
@@ -162,16 +198,43 @@ export class CloudflareRawWebSocketClientProtocol {
     ));
   }
 
-  private pushPrivateStates(snapshot: ClientSnapshot): void {
+  private pushActionAlertEffect(snapshot: ClientSnapshot): void {
+    const interaction = snapshot.pendingInteraction;
+    if (!interaction || interaction.status !== "active") return;
+
+    const frame = createClientRawWebSocketEventFrame(
+      createClientActionAlertEffectEvent({
+        actionId: interaction.id,
+        ...(snapshot.game?.phase === undefined ? {} : { phase: snapshot.game.phase }),
+      }),
+    );
+    const encoded = encodeClientRawWebSocketFrame(frame);
+
+    for (const playerId of interaction.actorPlayerIds) {
+      try {
+        this.realtime.sendToPlayer(playerId, encoded);
+      } catch {
+        // Transient action alerts are best-effort. Authoritative state remains
+        // recoverable through the state push / explicit sync path.
+      }
+    }
+  }
+
+  private pushAuthoritativeStates(snapshot: ClientSnapshot): void {
     for (const member of snapshot.membership) {
       try {
-        const frame = createClientRawWebSocketStateFrame(
+        const roomFrame = createClientRawWebSocketStateFrame(
+          snapshot.revision,
+          createCloudflareRoomStateEnvelope(snapshot, member.id),
+        );
+        const playerFrame = createClientRawWebSocketStateFrame(
           snapshot.revision,
           createCloudflarePlayerStateEnvelope(snapshot, member.id),
         );
-        this.realtime.sendToPlayer(member.id, encodeClientRawWebSocketFrame(frame));
+        this.realtime.sendToPlayer(member.id, encodeClientRawWebSocketFrame(roomFrame));
+        this.realtime.sendToPlayer(member.id, encodeClientRawWebSocketFrame(playerFrame));
       } catch {
-        // State push is recoverable via explicit authoritative sync. A delivery
+        // Authoritative pushes are recoverable via explicit sync. A delivery
         // failure after a committed command must not turn a successful ACK into
         // a contradictory request failure.
       }

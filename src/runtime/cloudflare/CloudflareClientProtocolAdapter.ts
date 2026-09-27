@@ -1,9 +1,13 @@
 import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
 import { restoreRoomSnapshot } from "../../core/room/RoomSnapshot.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
-import { createPlayerStateEnvelope } from "../../protocol/client/ClientProtocol.js";
+import {
+  createPlayerStateEnvelope,
+  createRoomStateEnvelope,
+} from "../../protocol/client/ClientProtocol.js";
 import type { WerewolfClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
 import { mapWerewolfClientCommand } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
+import { createClientRoomProjection } from "../shared/clientRoomProjection.js";
 import { werewolfPlayerGameView } from "../shared/werewolfRoomView.js";
 import type { CloudflareWerewolfCommandRuntime } from "./CloudflareWerewolfCommandRuntime.js";
 
@@ -34,5 +38,16 @@ export function createCloudflarePlayerStateEnvelope(
     restored.room.id,
     playerId,
     werewolfPlayerGameView(restored.room, playerId),
+  );
+}
+
+export function createCloudflareRoomStateEnvelope(
+  snapshot: RoomSnapshot<GameState, GameConfig, unknown, unknown, unknown>,
+  playerId: string,
+) {
+  const restored = restoreRoomSnapshot(snapshot);
+  return createRoomStateEnvelope(
+    restored.room.id,
+    createClientRoomProjection(restored.room, playerId),
   );
 }

@@ -3,6 +3,7 @@ import {
   createClientCommandEnvelope,
   createClientRealtimeEventEnvelope,
   createPlayerStateEnvelope,
+  createRoomStateEnvelope,
   type ClientReconnectCredentials,
 } from "../src/protocol/client/ClientProtocol.js";
 import {
@@ -23,6 +24,16 @@ const credentials: ClientReconnectCredentials = {
   playerId: "p1",
   resumeToken: "resume-secret",
 };
+
+function roomEnvelope(gameStarted = true) {
+  return createRoomStateEnvelope("1234", {
+    roomId: "1234",
+    gameType: "werewolf",
+    viewer: { playerId: "p1", isHost: true },
+    players: [{ id: "p1", name: "Host", seat: 1, isHost: true }],
+    gameStarted,
+  });
+}
 
 class FakeSocketTask implements WeChatSocketTaskLike {
   readonly sent: string[] = [];
@@ -123,12 +134,14 @@ function captureListener() {
   const closes: Array<{ generation: number; reason?: string }> = [];
   const errors: Array<{ generation: number; failure: { code: string; message?: string } }> = [];
   const states: unknown[] = [];
+  const roomStates: unknown[] = [];
   const events: unknown[] = [];
   return {
     opens,
     closes,
     errors,
     states,
+    roomStates,
     events,
     listener: {
       onOpen(generation: number) {
@@ -142,6 +155,9 @@ function captureListener() {
       },
       onState(delivery: unknown) {
         states.push(delivery);
+      },
+      onRoomState(delivery: unknown) {
+        roomStates.push(delivery);
       },
       onEvent(delivery: unknown) {
         events.push(delivery);
@@ -193,14 +209,15 @@ describe("E3.2c WeChatRealtimeTransport", () => {
     expect(captured.opens).toEqual([4]);
   });
 
-  it("synchronizes authoritative state through a correlated Raw WebSocket request", async () => {
+  it("synchronizes private and public authoritative state through one correlated Raw WebSocket request", async () => {
     let requestSequence = 0;
     const platform = new FakeWeChatPlatform();
     const transport = new WeChatRealtimeTransport<View>(platform, {
       baseUrl: "https://game.example/",
       requestIdFactory: () => `request-${++requestSequence}`,
     });
-    transport.setListener(captureListener().listener);
+    const captured = captureListener();
+    transport.setListener(captured.listener);
     transport.connect(credentials, 2);
     platform.issueTicket();
     platform.socket.open();
@@ -215,7 +232,7 @@ describe("E3.2c WeChatRealtimeTransport", () => {
     const envelope = createPlayerStateEnvelope("1234", "p1", { phase: "night" });
     platform.socket.serverMessage(createClientRawWebSocketSuccessResponse(
       request.requestId,
-      { revision: 7, envelope },
+      { revision: 7, envelope, roomEnvelope: roomEnvelope() },
     ));
 
     await expect(pending).resolves.toEqual({
@@ -223,6 +240,11 @@ describe("E3.2c WeChatRealtimeTransport", () => {
       revision: 7,
       envelope,
     });
+    expect(captured.roomStates).toEqual([{
+      generation: 2,
+      revision: 7,
+      envelope: roomEnvelope(),
+    }]);
   });
 
   it("rejects a sync response for the wrong bound room/player identity", async () => {
@@ -241,7 +263,7 @@ describe("E3.2c WeChatRealtimeTransport", () => {
     const wrongEnvelope = createPlayerStateEnvelope("1234", "p2", { phase: "night" });
     platform.socket.serverMessage(createClientRawWebSocketSuccessResponse(
       request.requestId,
-      { revision: 7, envelope: wrongEnvelope },
+      { revision: 7, envelope: wrongEnvelope, roomEnvelope: roomEnvelope() },
     ));
 
     await expect(pending).rejects.toThrow("authoritative client state envelope is invalid");

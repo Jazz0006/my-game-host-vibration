@@ -9,10 +9,13 @@ const source = (relativePath: string) => fs.readFileSync(path.join(repoRoot, rel
 describe("E2.3b action-alert legacy event contraction", () => {
   it("publishes action alerts only through the stable client:event effect boundary", () => {
     const delivery = source("src/runtime/node/SocketIoClientEffectDelivery.ts");
+    const effects = source("src/protocol/client/ClientEffects.ts");
 
-    expect(delivery).toContain('createClientVibrateEffectEvent([300, 150, 300]');
+    expect(delivery).toContain("createClientActionAlertEffectEvent(context)");
+    expect(delivery).not.toContain("createClientVibrateEffectEvent([300, 150, 300]");
+    expect(effects).toContain("createClientVibrateEffectEvent([300, 150, 300]");
+    expect(effects).toContain('reason: "action-alert"');
     expect(delivery).toContain('"client:event"');
-    expect(delivery).toContain('reason: "action-alert"');
     expect(delivery).not.toContain('"player:action-alert"');
   });
 

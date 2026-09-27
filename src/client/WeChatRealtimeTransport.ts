@@ -1,3 +1,4 @@
+import type { ClientRoomProjection } from "../protocol/client/ClientRoomProjection.js";
 import {
   CLIENT_PROTOCOL_VERSION,
   type ClientProtocolMessage,
@@ -70,6 +71,7 @@ type TicketResponse = {
 type SyncResponse<TPayload> = {
   revision: number;
   envelope: ClientStateEnvelope<TPayload>;
+  roomEnvelope: ClientStateEnvelope<ClientRoomProjection>;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -125,6 +127,49 @@ function parseTicketResponse(response: WeChatRequestResponse): TicketResponse {
   };
 }
 
+function parseRoomProjectionEnvelope(
+  value: unknown,
+): ClientStateEnvelope<ClientRoomProjection> {
+  const envelope = asRecord(value);
+  const payload = asRecord(envelope?.payload);
+  const viewer = asRecord(payload?.viewer);
+  const players = payload?.players;
+
+  if (
+    !envelope ||
+    envelope.protocolVersion !== CLIENT_PROTOCOL_VERSION ||
+    envelope.kind !== "state" ||
+    envelope.scope !== "room" ||
+    typeof envelope.roomId !== "string" ||
+    !payload ||
+    payload.roomId !== envelope.roomId ||
+    typeof payload.gameType !== "string" ||
+    !viewer ||
+    typeof viewer.playerId !== "string" ||
+    typeof viewer.isHost !== "boolean" ||
+    !Array.isArray(players) ||
+    typeof payload.gameStarted !== "boolean"
+  ) {
+    throw new Error("authoritative room state envelope is invalid");
+  }
+
+  for (const player of players) {
+    const record = asRecord(player);
+    if (
+      !record ||
+      typeof record.id !== "string" ||
+      typeof record.name !== "string" ||
+      !Number.isSafeInteger(record.seat) ||
+      Number(record.seat) < 1 ||
+      typeof record.isHost !== "boolean"
+    ) {
+      throw new Error("authoritative room state player is invalid");
+    }
+  }
+
+  return envelope as ClientStateEnvelope<ClientRoomProjection>;
+}
+
 function parseSyncResult<TStatePayload>(
   value: unknown,
   credentials: ClientReconnectCredentials,
@@ -144,9 +189,18 @@ function parseSyncResult<TStatePayload>(
   ) {
     throw new Error("authoritative client state envelope is invalid");
   }
+  const roomEnvelope = parseRoomProjectionEnvelope(record?.roomEnvelope);
+  if (
+    roomEnvelope.roomId !== credentials.roomId ||
+    roomEnvelope.payload.viewer.playerId !== credentials.playerId
+  ) {
+    throw new Error("authoritative room state envelope is invalid");
+  }
+
   return {
     revision: Number(record?.revision),
     envelope: envelope as ClientStateEnvelope<TStatePayload>,
+    roomEnvelope,
   };
 }
 
@@ -284,6 +338,11 @@ implements ClientRealtimeTransport<TStatePayload> {
       generation,
     );
     const parsed = parseSyncResult<TStatePayload>(result, credentials);
+    this.listener?.onRoomState?.({
+      generation,
+      revision: parsed.revision,
+      envelope: parsed.roomEnvelope,
+    });
     return {
       generation,
       revision: parsed.revision,
@@ -415,10 +474,25 @@ implements ClientRealtimeTransport<TStatePayload> {
         return;
 
       case "state":
+        if (frame.envelope.scope === "room") {
+          try {
+            this.listener?.onRoomState?.({
+              generation,
+              revision: frame.revision,
+              envelope: parseRoomProjectionEnvelope(frame.envelope),
+            });
+          } catch (error) {
+            this.listener?.onError(generation, {
+              code: "invalid-authoritative-room-state",
+              ...(errorMessage(error) ? { message: errorMessage(error)! } : {}),
+            });
+          }
+          return;
+        }
         if (frame.envelope.scope !== "player") {
           this.listener?.onError(generation, {
             code: "invalid-authoritative-state",
-            message: "WeChat transport received non-player authoritative state",
+            message: "WeChat transport received unsupported authoritative state",
           });
           return;
         }

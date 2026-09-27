@@ -1,6 +1,7 @@
 import type { Server } from "socket.io";
 import {
   CLIENT_AUDIO_CUE_NIGHT_COMPLETE,
+  createClientActionAlertEffectEvent,
   createClientAudioCueEffectEvent,
   createClientVibrateEffectEvent,
 } from "../../protocol/client/ClientEffects.js";
@@ -39,10 +40,7 @@ export function emitActionAlertEffects(
 
     io.to(player.socketId).emit(
       "client:event",
-      createClientVibrateEffectEvent([300, 150, 300], {
-        reason: "action-alert",
-        context,
-      }),
+      createClientActionAlertEffectEvent(context),
     );
   }
 }

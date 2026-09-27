@@ -98,6 +98,30 @@ function lobbySnapshot() {
   );
 }
 
+function fivePlayerLobbySnapshot() {
+  const playerIds = ["p1", "p2", "p3", "p4", "p5"];
+  return createRoomSnapshot(
+    {
+      id: "1234",
+      gameType: "werewolf",
+      players: playerIds.map((id, index) => ({
+        id,
+        name: index === 0 ? "Host" : `Player ${index + 1}`,
+        seat: index + 1,
+        isHost: index === 0,
+        resumeTokenHash: String(index + 1).repeat(64),
+      })),
+      createdAt: 10,
+      updatedAt: 20,
+      gameConfig: configFromRoleDeck(
+        5,
+        ["werewolf", "seer", "witch", "villager", "villager"],
+      ),
+    },
+    { revision: 3 },
+  );
+}
+
 function activeSnapshot() {
   const playerIds = ["p1", "p2", "p3", "p4", "p5"];
   const config = configFromRoleDeck(
@@ -137,6 +161,54 @@ function activeSnapshot() {
   );
 }
 
+function wolfActionSnapshot() {
+  const playerIds = ["p1", "p2", "p3", "p4", "p5"];
+  const config = configFromRoleDeck(
+    5,
+    ["werewolf", "seer", "witch", "villager", "villager"],
+  );
+  return createRoomSnapshot(
+    {
+      id: "1234",
+      gameType: "werewolf",
+      players: playerIds.map((id, index) => ({
+        id,
+        name: `Player ${index + 1}`,
+        seat: index + 1,
+        isHost: index === 0,
+        resumeTokenHash: String(index + 1).repeat(64),
+      })),
+      createdAt: 10,
+      updatedAt: 20,
+      gameConfig: config,
+      game: {
+        config,
+        phase: "night_werewolf" as const,
+        nightNumber: 1,
+        dayNumber: 0,
+        roles: {
+          p1: "werewolf" as const,
+          p2: "seer" as const,
+          p3: "witch" as const,
+          p4: "villager" as const,
+          p5: "villager" as const,
+        },
+        confirmedRolePlayerIds: [...playerIds],
+        actionId: "wolf-action",
+        witchUsedAntidote: false,
+        witchAntidoteSpent: false,
+        witchPoisonSpent: false,
+        seerResultConfirmed: false,
+        deaths: [],
+        votes: {},
+        pkCandidateIds: [],
+        deadPlayerIds: [],
+      },
+    },
+    { revision: 20 },
+  );
+}
+
 function parsedFrames(socket: FakeWebSocket): Array<Record<string, unknown>> {
   return socket.sent.map(value => JSON.parse(value) as Record<string, unknown>);
 }
@@ -166,6 +238,24 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
           roomId: "1234",
           playerId: "p1",
           payload: { phase: "lobby", mode: "lobby" },
+        },
+        roomEnvelope: {
+          protocolVersion: 1,
+          kind: "state",
+          scope: "room",
+          roomId: "1234",
+          payload: {
+            roomId: "1234",
+            gameType: "werewolf",
+            viewer: { playerId: "p1", isHost: true },
+            players: [{
+              id: "p1",
+              name: "Host",
+              seat: 1,
+              isHost: true,
+            }],
+            gameStarted: false,
+          },
         },
       },
     });
@@ -231,12 +321,18 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
     expect((persisted?.game as { phase?: string } | undefined)?.phase).toBe("night_start");
   });
 
-  it("returns a correlated application failure for a valid unsupported lifecycle command", async () => {
+  it("starts a five-player lobby through the Cloudflare lifecycle command and replays safely", async () => {
     const storage = new MemoryStorage();
-    await new CloudflareRoomSnapshotRepository(storage).save(lobbySnapshot());
+    await new CloudflareRoomSnapshotRepository(storage).save(fivePlayerLobbySnapshot());
     const hibernation = new FakeHibernationState();
-    const socket = new FakeWebSocket();
-    new CloudflareRoomRealtime(hibernation).acceptPlayerSocket(socket, "p1");
+    const realtime = new CloudflareRoomRealtime(hibernation);
+    const sockets = new Map<string, FakeWebSocket>();
+    for (const playerId of ["p1", "p2", "p3", "p4", "p5"]) {
+      const playerSocket = new FakeWebSocket();
+      sockets.set(playerId, playerSocket);
+      realtime.acceptPlayerSocket(playerSocket, playerId);
+    }
+    const socket = sockets.get("p1")!;
 
     const room = new GameRoomDurableObject(stateLike(storage, hibernation));
     const command = createClientCommandEnvelope(
@@ -246,18 +342,75 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
     );
     await room.webSocketMessage(
       socket,
-      JSON.stringify(createClientRawWebSocketCommandRequest("request-lifecycle", command)),
+      JSON.stringify(createClientRawWebSocketCommandRequest("request-lifecycle-1", command)),
     );
 
-    expect(parsedFrames(socket).at(-1)).toMatchObject({
-      wireVersion: 1,
+    expect(parsedFrames(socket)).toContainEqual(expect.objectContaining({
       kind: "response",
-      requestId: "request-lifecycle",
-      ok: false,
-      error: {
-        code: "unsupported_command",
+      requestId: "request-lifecycle-1",
+      ok: true,
+      result: { revision: 4, replayed: false },
+    }));
+    expect(parsedFrames(socket)).toContainEqual(expect.objectContaining({
+      kind: "state",
+      revision: 4,
+      envelope: expect.objectContaining({
+        scope: "room",
+        roomId: "1234",
+        payload: expect.objectContaining({ gameStarted: true }),
+      }),
+    }));
+
+    await room.webSocketMessage(
+      socket,
+      JSON.stringify(createClientRawWebSocketCommandRequest("request-lifecycle-2", command)),
+    );
+    expect(parsedFrames(socket)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "request-lifecycle-2",
+      ok: true,
+      result: { revision: 4, replayed: true },
+    }));
+
+    const persisted = await new CloudflareRoomSnapshotRepository(storage).load();
+    expect(persisted?.revision).toBe(4);
+    expect((persisted?.game as { phase?: string } | undefined)?.phase).toBe("role_reveal");
+  });
+
+  it("delivers the canonical action-alert effect to the next night actor after a committed action", async () => {
+    const storage = new MemoryStorage();
+    await new CloudflareRoomSnapshotRepository(storage).save(wolfActionSnapshot());
+    const hibernation = new FakeHibernationState();
+    const realtime = new CloudflareRoomRealtime(hibernation);
+    const wolf = new FakeWebSocket();
+    const witch = new FakeWebSocket();
+    realtime.acceptPlayerSocket(wolf, "p1");
+    realtime.acceptPlayerSocket(witch, "p3");
+
+    const room = new GameRoomDurableObject(stateLike(storage, hibernation));
+    const command = createClientCommandEnvelope(
+      "werewolf.submitWolfTarget",
+      { actionId: "wolf-action", targetPlayerId: "p4" },
+      "wolf-target-1",
+    );
+
+    await room.webSocketMessage(
+      wolf,
+      JSON.stringify(createClientRawWebSocketCommandRequest("wolf-request-1", command)),
+    );
+
+    expect(parsedFrames(witch)).toContainEqual(expect.objectContaining({
+      kind: "event",
+      envelope: {
+        protocolVersion: 1,
+        kind: "event",
+        type: "client.effect.vibrate",
+        payload: expect.objectContaining({
+          pattern: [300, 150, 300],
+          reason: "action-alert",
+        }),
       },
-    });
+    }));
   });
 
   it("uses stable protocol-error frames for malformed Raw WebSocket traffic", async () => {

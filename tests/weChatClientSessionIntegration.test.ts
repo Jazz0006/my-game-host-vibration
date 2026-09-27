@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPlayerStateEnvelope,
+  createRoomStateEnvelope,
   type ClientReconnectCredentials,
 } from "../src/protocol/client/ClientProtocol.js";
 import {
@@ -142,6 +143,13 @@ function completeSync(
     {
       revision,
       envelope: createPlayerStateEnvelope("1234", playerId, { phase }),
+      roomEnvelope: createRoomStateEnvelope("1234", {
+        roomId: "1234",
+        gameType: "werewolf",
+        viewer: { playerId: "p1", isHost: true },
+        players: [{ id: "p1", name: "Host", seat: 1, isHost: true }],
+        gameStarted: phase !== "lobby",
+      }),
     },
   ));
 }

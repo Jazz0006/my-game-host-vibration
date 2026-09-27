@@ -40,13 +40,28 @@ describe("platform boundaries", () => {
     expect(serverSource).not.toContain("./domain/sessionToken.js");
   });
 
-  it("keeps the WeChat effect adapter game-agnostic and free of global wx coupling", () => {
+  it("keeps WeChat adapters game-agnostic and limits global wx binding to the composition root", () => {
     const effectSource = source("src/client/WeChatClientEffects.ts");
+    const transportSource = source("src/client/WeChatRealtimeTransport.ts");
+    const credentialSource = source("src/client/WeChatSessionCredentialStore.ts");
+    const lifecycleSource = source("src/client/WeChatSessionLifecycle.ts");
+    const nativeSource = source("src/client/WeChatNativeClient.ts");
 
     expect(effectSource).toContain("dispatchClientRealtimeEffect");
-    expect(effectSource).not.toContain("wx.");
-    expect(effectSource).not.toMatch(/from\s+["']\.\.\/domain\//u);
-    expect(effectSource).not.toMatch(/from\s+["']\.\.\/games\//u);
-    expect(effectSource).not.toMatch(/from\s+["']\.\.\/runtime\//u);
+    for (const contents of [
+      effectSource,
+      transportSource,
+      credentialSource,
+      lifecycleSource,
+    ]) {
+      expect(contents).not.toMatch(/\bwx\b/u);
+      expect(contents).not.toMatch(/from\s+["']\.\.\/domain\//u);
+      expect(contents).not.toMatch(/from\s+["']\.\.\/games\//u);
+    }
+
+    expect(nativeSource).toContain("declare const wx: WeChatNativeApi");
+    expect(nativeSource).toContain("createWeChatNativeClient<TPlayerView>(wx, options)");
+    expect(nativeSource).not.toMatch(/from\s+["']\.\.\/domain\//u);
+    expect(nativeSource).not.toMatch(/from\s+["']\.\.\/games\//u);
   });
 });
