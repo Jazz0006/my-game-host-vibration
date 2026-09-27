@@ -2,7 +2,7 @@ import {
   configFromPlayerCount,
   configFromRoleDeck,
   GameRuleError,
-} from "../../domain/game.js";
+} from "../../games/werewolf/WerewolfDomainFacade.js";
 import type { WerewolfLifecycleClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfLifecycleClientProtocol.js";
 import {
   createWerewolfGame,

@@ -6,7 +6,10 @@
 > 目标平台：Cloudflare Workers + Durable Objects + Web / 微信小程序，多游戏扩展到 Blood on the Clocktower  
 > 参考实现：`Jazz0006/WerewolfGameJudge`（fork，自 `olveryu/WerewolfGameJudge`）  
 > 文档版本：V4  
-> 日期：2026-08-19
+> 日期：2026-08-19  
+> 最近同步：2026-09-27
+
+> 当前 milestone / 下一步以 `开发计划_V5_客户端运行时与网络韧性实施路线.md` 为准。本文负责长期架构；其中 E2.2 / E2.3 的实施拆分保留为历史设计记录，不应覆盖 V5 的当前阶段状态。
 
 ---
 
@@ -18,7 +21,7 @@ V4 不推翻已经完成并通过 CI 的 C1–E2.1 基础，而是在再次审�
 
 核心结论：
 
-> **服务端权威状态、命令幂等、Durable Object 房间模型和多客户端协议方向保持不变；下一阶段重点不是继续增加 Socket 事件，而是建立稳定的 Client Session / Connection FSM / Realtime Transport 边界。**
+> **服务端权威状态、命令幂等、Durable Object 房间模型和多客户端协议方向保持不变。Client Session / Connection FSM / Realtime Transport 边界已在 E2 完成；当前执行阶段进入 E3 第二客户端验证。**
 
 ---
 
@@ -663,11 +666,11 @@ E1 Client Protocol Boundary ✅
         ↓
 E2.1 Web Command Transport Adapter ✅
         ↓
-E2.2 Client Runtime / Connection FSM
+E2.2 Client Runtime / Connection FSM ✅
         ↓
-E2.3 Legacy Realtime Boundary Contraction
+E2.3 Legacy Realtime Boundary Contraction ✅
         ↓
-E3 Native WeChat Thin Client
+E3 Native WeChat Thin Client ← CURRENT
         ↓
 Reliability Hardening
   └─ Post-commit Effect Outbox
@@ -677,9 +680,11 @@ Cloudflare Production Cutover + Real-device Field Validation
 BotC Production Expansion
 ```
 
+E2 已完成；当前从 E3.1 开始验证第二种真实客户端。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+
 ---
 
-# 21. E2.2 推荐拆分
+# 21. E2.2 推荐拆分（历史已完成）
 
 为了保持小 PR：
 
@@ -717,7 +722,7 @@ BotC Production Expansion
 
 ---
 
-# 22. E2.3 目标
+# 22. E2.3 目标（历史已完成）
 
 当 E2.2 稳定后，再逐步减少 legacy Socket.IO application semantics：
 

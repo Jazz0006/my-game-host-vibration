@@ -2,44 +2,41 @@
 
 面向线下面杀的自动主持系统。玩家在同一房间面对面交流，每人使用自己的手机接收私密身份、夜间行动和震动提醒；系统负责自动主持，因此不需要牺牲一名玩家担任真人法官。
 
-## 当前正式文档
+## 当前权威文档
 
-为了避免旧设计和历史 architecture spike 干扰后续开发，当前工作树只保留两份正式设计文档：
+开发时按以下顺序理解项目状态：
 
-- [开发计划 V4：当前实施路线](./开发计划_V4_架构验证后实施路线.md) — **当前开发进度和下一步工作的唯一执行基线**；
-- [长期架构与 Durable Objects 迁移设计 V3](./长期架构与DurableObjects迁移设计_V3.md) — 长期平台边界、Cloudflare、Reconnect、多客户端和 BotC 方向参考。
+- [开发计划 V5：客户端运行时与网络韧性实施路线](./开发计划_V5_客户端运行时与网络韧性实施路线.md) — **当前进度、当前阶段、下一实施切片的执行基线**；
+- [长期架构与 Durable Objects 迁移设计 V4](./长期架构与DurableObjects迁移设计_V4.md) — 长期平台边界、ClientSession、Cloudflare、多客户端和 BotC 方向；
+- [AGENTS.md](./AGENTS.md) — AI/自动化开发的项目级规范与 ownership 约束。
 
-如果两份文档的“当前进度”描述不同，以开发计划 V4 为准；V3 主要负责长期架构原则。
-
-旧 MVP 设计、已完成的 B3–B5.1 spike 文档和废弃的探索性长期架构 V4 已从当前树移除，需要时可从 Git history 查看。
+旧的 `开发计划_V4_架构验证后实施路线.md` 与 `长期架构与DurableObjects迁移设计_V3.md` 仅保留历史参考价值，不再决定当前开发顺序。
 
 ## 当前开发状态
 
-截至 2026-08-18，主线已完成：
+截至 2026-09-27，主线阶段状态：
 
 ```text
-PR #17  post-B5.1 hotfix
-PR #18  C1 Rejoin Identity Contract
-PR #19  C2 Room Snapshot Contract
-PR #20  C3 Idempotent Commands
+C1–C4  Reconnect / Recovery                     ✅
+D1–D5  Cloudflare / Durable Objects foundation ✅
+E1     Client Protocol Boundary                ✅
+E2.1   Web Command Transport Adapter           ✅
+E2.2   Client Runtime / Connection FSM         ✅
+E2.3   Legacy Realtime Boundary Contraction    ✅
+
+E3.1   WeChat transport/runtime boundary audit ← NEXT
+R1     Reliability Hardening / Effect Outbox
+Cloudflare production cutover + real-device validation
+BotC production expansion
 ```
 
-当前 `main` 基线：
+最近确认的远端 `main` HEAD：
 
 ```text
-2148c18a42a6ce6107b6d713bcc48be37ae86bea
+71fc3238e3290c131abd2b0776fe25972d5774e2
 ```
 
-下一步：
-
-```text
-C3.1 Explicit Socket Command Wiring
-→ C4 Host Recovery
-→ D1 Cloud Room abstraction
-→ Cloudflare Durable Objects
-```
-
-之前的 PR #21 middleware + AsyncLocalStorage 方案已关闭且未合并，不是正式设计。C3.1 应在本地/Codex 直接修改 `public/app.js` 和 `src/server.ts`，使用显式 `commandId` transport envelope。
+HEAD、working tree、PR/CI 都是可变事实，开始开发前仍必须重新查询 live state。
 
 ## 当前技术栈
 
@@ -118,16 +115,19 @@ command receipts
 
 Socket runtime 字段和 plaintext resume token 不进入持久化 snapshot；private view 由服务器根据 playerId 重建。
 
-### Idempotent command core
+### Stable client protocol / runtime
 
-C3 已建立 bounded command receipt ledger 和 snapshot recovery。当前下一步 C3.1 是把真实浏览器 / Socket.IO mutation 显式接入：
+生产狼人杀 gameplay command 已全部收敛到稳定协议边界：
 
 ```text
-client commandId
-→ Socket.IO handler
-→ runPlayerCommandIdempotent / runHostCommandIdempotent
-→ game module
+UI intention
+→ ClientSession / ClientRealtimeTransport
+→ client:command + commandId
+→ Node / Cloudflare protocol adapter
+→ shared authoritative Werewolf runtime
 ```
+
+private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`，下一阶段用微信客户端验证同一协议和 ClientSession 模型是否真正可跨平台复用。
 
 ## 多玩家模拟器
 

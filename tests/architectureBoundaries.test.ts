@@ -31,6 +31,24 @@ function importsOf(relativePath: string): string[] {
   return imports;
 }
 
+type StaticImport = {
+  specifier: string;
+  typeOnly: boolean;
+};
+
+function staticImportsOf(relativePath: string): StaticImport[] {
+  const contents = source(relativePath);
+  const imports: StaticImport[] = [];
+  const pattern = /import\s+(type\s+)?[^;]*?\s+from\s+["']([^"']+)["'];/gu;
+  for (const match of contents.matchAll(pattern)) {
+    imports.push({
+      specifier: match[2]!,
+      typeOnly: Boolean(match[1]),
+    });
+  }
+  return imports;
+}
+
 function expectNoImportsMatching(relativePaths: string[], forbidden: RegExp[]): void {
   for (const relativePath of relativePaths) {
     for (const imported of importsOf(relativePath)) {
@@ -91,6 +109,58 @@ describe("architecture boundaries", () => {
     expect(playerRef).toContain("name: string");
     expect(playerRef).toContain("seat: number");
     expect(playerRef).not.toContain("isHost");
+  });
+
+  it("keeps legacy Werewolf domain runtime values behind games/werewolf ownership", () => {
+    const nonGameProductionFiles = typescriptFiles("src").filter(
+      relativePath =>
+        !relativePath.startsWith(path.join("src", "domain")) &&
+        !relativePath.startsWith(path.join("src", "games", "werewolf")),
+    );
+
+    for (const relativePath of nonGameProductionFiles) {
+      for (const imported of staticImportsOf(relativePath)) {
+        if (!/(?:^|\/)domain\/game\.js$/u.test(imported.specifier)) continue;
+        expect(
+          imported.typeOnly,
+          `${relativePath} may only type-import legacy domain/game; runtime values belong behind games/werewolf`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("keeps runtime adapters from directly mutating concrete Werewolf state fields", () => {
+    const directAssignment =
+      /\b(?:room\.)?game\.[A-Za-z_$][\w$]*\s*(?:\+\+|--|\+=|-=|\*=|\/=|\?\?=|\|\|=|&&=|=(?!=))/u;
+    const directDelete = /\bdelete\s+(?:room\.)?game\.[A-Za-z_$][\w$]*/u;
+
+    for (const relativePath of typescriptFiles("src/runtime")) {
+      const contents = source(relativePath);
+      expect(
+        contents,
+        `${relativePath} must delegate Werewolf state mutation to the game owner`,
+      ).not.toMatch(directAssignment);
+      expect(
+        contents,
+        `${relativePath} must not delete concrete Werewolf state fields`,
+      ).not.toMatch(directDelete);
+    }
+  });
+
+  it("keeps Werewolf display metadata owned by the role registry", () => {
+    const server = source("src/server.ts");
+    const gameModule = source("src/games/werewolf/WerewolfGameModule.ts");
+
+    expect(server).toContain("werewolfRoleCatalog");
+    expect(gameModule).toContain("getWerewolfRoleDefinition");
+
+    for (const relativePath of typescriptFiles("src")) {
+      if (relativePath === path.join("src", "games", "werewolf", "roles", "registry.ts")) continue;
+      expect(
+        source(relativePath),
+        `${relativePath} must not recreate a parallel ROLE_INFO metadata owner`,
+      ).not.toMatch(/\bROLE_INFO\b/u);
+    }
   });
 
   it("keeps concrete Werewolf mutations behind the GameModule/runtime bridge boundary", () => {

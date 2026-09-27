@@ -1,5 +1,5 @@
 import type { Server, Socket } from "socket.io";
-import { GameRuleError } from "../../domain/game.js";
+import { GameRuleError } from "../../games/werewolf/WerewolfDomainFacade.js";
 import { parseWerewolfClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
 import {
   isWerewolfLifecycleClientCommand,

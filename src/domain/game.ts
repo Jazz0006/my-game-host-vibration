@@ -1,3 +1,11 @@
+/**
+ * LEGACY WEREWOLF DOMAIN OWNER.
+ *
+ * Existing Werewolf state/mutations remain here during incremental migration,
+ * but new Werewolf semantics must be authored by the concrete Werewolf module.
+ * Non-game production code should consume runtime values through the
+ * WerewolfDomainFacade ownership seam rather than importing this file directly.
+ */
 import {
   defaultGameRandomSource,
   type GameRandomSource,

@@ -20,6 +20,8 @@ export {
   configFromPlayerCount,
   configFromRoleDeck,
   confirmRole,
+  DEFAULT_GAME_CONFIG,
+  GameRuleError,
   dealRoles,
   playerIdForRole,
   startDayVote,

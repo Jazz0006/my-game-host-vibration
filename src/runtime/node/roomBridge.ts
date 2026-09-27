@@ -10,6 +10,10 @@ import {
 } from "../../games/werewolf/WerewolfGameModule.js";
 import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlanner.js";
 import {
+  recoverTimedOutWerewolfInteraction as recoverTimedOutWerewolfGameInteraction,
+  type WerewolfTimeoutRecoveryResult,
+} from "../../games/werewolf/WerewolfTimeoutRecovery.js";
+import {
   executeWerewolfRoomCommand,
   type WerewolfCommandEnvironment,
   type WerewolfCommandOutcome,
@@ -129,6 +133,26 @@ export function createWerewolfGame(room: RuntimeRoom, config: GameConfig): GameS
   room.commandReceipts = [];
   room.updatedAt = Date.now();
   return room.game;
+}
+
+/**
+ * Node adapter for the game-owned timeout policy. Node supplies its random/clock
+ * capabilities and room bookkeeping but does not decide Werewolf semantics.
+ */
+export function recoverTimedOutWerewolfInteraction(
+  room: RuntimeRoom,
+  expectedActionId: string,
+): WerewolfTimeoutRecoveryResult {
+  if (!room.game) {
+    return { previousActionId: expectedActionId, recovered: false };
+  }
+  const result = recoverTimedOutWerewolfGameInteraction(
+    room.game,
+    expectedActionId,
+    nodeCommandEnvironment.random,
+  );
+  if (result.recovered) room.updatedAt = nodeCommandEnvironment.now();
+  return result;
 }
 
 export function executeWerewolfCommand(

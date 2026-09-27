@@ -1,7 +1,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Server, Socket } from "socket.io";
-import { GameRuleError } from "./domain/game.js";
+import { GameRuleError } from "./games/werewolf/WerewolfDomainFacade.js";
+import { isTimedWerewolfInteraction } from "./games/werewolf/WerewolfTimeoutRecovery.js";
 import {
   InteractionTimeoutCoordinator,
   type InteractionTimeoutClientState,
@@ -11,13 +12,16 @@ import {
   emitClientInteractionTimeoutState,
 } from "./runtime/node/SocketIoClientInteractionTimeoutDelivery.js";
 import { attachSocketIoClientProtocolTransport } from "./runtime/node/SocketIoClientProtocolTransport.js";
-import { activeInteraction, type RuntimeRoom } from "./runtime/node/roomBridge.js";
+import {
+  activeInteraction,
+  recoverTimedOutWerewolfInteraction,
+  type RuntimeRoom,
+} from "./runtime/node/roomBridge.js";
 import {
   emitActionAlertEffects,
   emitGameOverEffects,
   emitNightCompleteEffects,
 } from "./runtime/node/SocketIoClientEffectDelivery.js";
-import { recoverTimedOutWerewolfInteraction } from "./runtime/node/werewolfInteractionTimeout.js";
 import {
   runHostCommand,
   runHostLifecycleMutationIdempotent,
@@ -60,17 +64,6 @@ function emitTimeoutState(
       emitClientInteractionTimeoutState(io, player.socketId, room.id, state);
     }
   }
-}
-
-function isTimedSecretInteraction(room: RuntimeRoom): boolean {
-  const phase = room.game?.phase;
-  if (
-    phase === "night_guard" ||
-    phase === "night_werewolf" ||
-    phase === "night_witch" ||
-    phase === "night_seer"
-  ) return true;
-  return phase === "day_hunter" && room.game?.hunterTrigger === "night";
 }
 
 function afterTimedRecovery(
@@ -302,7 +295,7 @@ export function createTimedGameServer(): TimedServer {
 
     for (const room of rooms.values()) {
       const interaction = activeInteraction(room);
-      const shouldTime = Boolean(room.game && interaction && isTimedSecretInteraction(room));
+      const shouldTime = Boolean(room.game && interaction && isTimedWerewolfInteraction(room.game));
 
       if (!shouldTime || !room.game || !interaction) {
         clearRoomInteractionTimeout(room);

@@ -26,6 +26,7 @@ import {
   type GameState,
   type Role,
 } from "./WerewolfDomainFacade.js";
+import { getWerewolfRoleDefinition } from "./roles/registry.js";
 
 export type WerewolfCreateInput = {
   playerIds: readonly string[];
@@ -122,15 +123,6 @@ export type WerewolfPublicView = {
 
 export type WerewolfHostView = WerewolfPublicView & {
   voteTally: Record<string, number> | undefined;
-};
-
-const ROLE_INFO: Record<Role, { name: string; description: string }> = {
-  werewolf: { name: "狼人", description: "夜间可以击杀任意一名存活玩家（包括狼人）或选择空刀。" },
-  seer: { name: "预言家", description: "每晚可以查验一名其他玩家的阵营。" },
-  witch: { name: "女巫", description: "拥有一瓶解药和一瓶毒药，同一晚只能使用一瓶。" },
-  guard: { name: "守卫", description: "每晚可以保护一名玩家（包括自己）或空守，但不能连续两晚保护同一人。" },
-  hunter: { name: "猎人", description: "被狼刀或放逐出局时可以开枪带走一人，也可以不开枪；被毒死不能开枪。" },
-  villager: { name: "平民", description: "没有夜间技能，请观察发言并找出狼人。" },
 };
 
 function requirePlayerId(context: GameCommandContext): string {
@@ -356,11 +348,12 @@ export class WerewolfGameModule implements GameModule<
     const targets = playerRefs(context);
     const alive = (target: { id: string }) => !game.deadPlayerIds.includes(target.id);
     const isDead = game.deadPlayerIds.includes(playerId);
+    const roleDefinition = getWerewolfRoleDefinition(role);
     const base = {
       phase: game.phase,
       role,
-      roleName: ROLE_INFO[role].name,
-      roleDescription: ROLE_INFO[role].description,
+      roleName: roleDefinition.name,
+      roleDescription: roleDefinition.description,
       actionId: game.actionId,
       deadPlayerIds: game.deadPlayerIds,
     };

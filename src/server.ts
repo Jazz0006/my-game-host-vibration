@@ -20,8 +20,8 @@ import {
   configFromPlayerCount,
   DEFAULT_GAME_CONFIG,
   GameRuleError,
-  type Role,
-} from "./domain/game.js";
+} from "./games/werewolf/WerewolfDomainFacade.js";
+import { werewolfRoleCatalog } from "./games/werewolf/roles/registry.js";
 import {
   runHostCommand,
   runHostRecoveryCommandIdempotent,
@@ -54,15 +54,6 @@ type BasicAck = ClientAck<{ ok: true } | { ok: false; message: string }>;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const devDirectory = path.join(__dirname, "../dev");
-
-const ROLE_INFO: Record<Role, { name: string; description: string }> = {
-  werewolf: { name: "狼人", description: "夜间可以击杀任意一名存活玩家（包括狼人）或选择空刀。" },
-  seer: { name: "预言家", description: "每晚可以查验一名其他玩家的阵营。" },
-  witch: { name: "女巫", description: "拥有一瓶解药和一瓶毒药，同一晚只能使用一瓶。" },
-  guard: { name: "守卫", description: "每晚可以保护一名玩家（包括自己）或空守，但不能连续两晚保护同一人。" },
-  hunter: { name: "猎人", description: "被狼刀或放逐出局时可以开枪带走一人，也可以不开枪；被毒死不能开枪。" },
-  villager: { name: "平民", description: "没有夜间技能，请观察发言并找出狼人。" },
-};
 
 function createRoomId(rooms: Map<string, Room>): string {
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -136,7 +127,7 @@ function roomView(room: Room, viewer: Player) {
           : room.gameConfig.roleDeck)
       : undefined,
     roleCatalog: !room.game
-      ? Object.entries(ROLE_INFO).map(([id, info]) => ({ id, name: info.name }))
+      ? werewolfRoleCatalog().map(({ id, name }) => ({ id, name }))
       : undefined,
     game: gameView
       ? {

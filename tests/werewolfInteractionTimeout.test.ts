@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { configFromPlayerCount } from "../src/domain/game.js";
+import { recoverTimedOutWerewolfInteraction } from "../src/games/werewolf/WerewolfTimeoutRecovery.js";
 import {
   createWerewolfGame,
   type RuntimeRoom,
 } from "../src/runtime/node/roomBridge.js";
-import { recoverTimedOutWerewolfInteraction } from "../src/runtime/node/werewolfInteractionTimeout.js";
 
 function room(): RuntimeRoom {
   const config = configFromPlayerCount(5);
@@ -42,7 +42,7 @@ describe("C4.4 werewolf interaction timeout recovery", () => {
     currentRoom.game!.phase = "night_guard";
     currentRoom.game!.actionId = "guard-action";
 
-    expect(recoverTimedOutWerewolfInteraction(currentRoom, "guard-action").recovered).toBe(true);
+    expect(recoverTimedOutWerewolfInteraction(currentRoom.game!, "guard-action").recovered).toBe(true);
     expect(currentRoom.game!.guardProtectedId).toBeUndefined();
     expect(currentRoom.game!.phase).toBe("night_werewolf");
     expect(currentRoom.game!.actionId).not.toBe("guard-action");
@@ -54,7 +54,7 @@ describe("C4.4 werewolf interaction timeout recovery", () => {
     currentRoom.game!.actionId = "new-action";
     const before = JSON.stringify(currentRoom.game);
 
-    expect(recoverTimedOutWerewolfInteraction(currentRoom, "old-action")).toEqual({
+    expect(recoverTimedOutWerewolfInteraction(currentRoom.game!, "old-action")).toEqual({
       previousActionId: "old-action",
       recovered: false,
     });
@@ -70,7 +70,7 @@ describe("C4.4 werewolf interaction timeout recovery", () => {
     delete game.seerTargetId;
     game.seerResultConfirmed = false;
 
-    expect(recoverTimedOutWerewolfInteraction(currentRoom, "seer-action").recovered).toBe(true);
+    expect(recoverTimedOutWerewolfInteraction(currentRoom.game!, "seer-action").recovered).toBe(true);
     expect(game.seerTargetId).toBeUndefined();
     expect(game.seerResultConfirmed).toBe(false);
     expect(game.deadPlayerIds).toContain("p5");
@@ -85,7 +85,7 @@ describe("C4.4 werewolf interaction timeout recovery", () => {
     game.seerTargetId = "p2";
     game.seerResultConfirmed = false;
 
-    expect(recoverTimedOutWerewolfInteraction(currentRoom, "seer-result-action").recovered).toBe(true);
+    expect(recoverTimedOutWerewolfInteraction(currentRoom.game!, "seer-result-action").recovered).toBe(true);
     expect(game.seerTargetId).toBe("p2");
     expect(game.seerResultConfirmed).toBe(true);
     expect(game.phase).toBe("night_complete");
@@ -106,7 +106,7 @@ describe("C4.4 werewolf interaction timeout recovery", () => {
     game.actionId = "hunter-action";
     game.hunterTrigger = "night";
 
-    expect(recoverTimedOutWerewolfInteraction(currentRoom, "hunter-action").recovered).toBe(true);
+    expect(recoverTimedOutWerewolfInteraction(currentRoom.game!, "hunter-action").recovered).toBe(true);
     expect(game.hunterExecutionTargetId).toBeUndefined();
     expect(game.hunterTrigger).toBeUndefined();
     expect(game.phase).toBe("night_complete");

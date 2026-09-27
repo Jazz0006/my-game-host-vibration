@@ -1,5 +1,8 @@
 # 无法官桌游主持平台：Cloudflare Durable Objects 长期架构与源码借鉴实施方案 V3
 
+> **SUPERSEDED / 历史文档**  
+> 当前长期架构基线为 `长期架构与DurableObjects迁移设计_V4.md`；当前执行路线为 `开发计划_V5_客户端运行时与网络韧性实施路线.md`。本文件仅用于追溯早期设计决策。
+
 > 项目：`Jazz0006/my-game-host-vibration`  
 > 主分支：`main`  
 > 当前系统：Node.js + TypeScript + Express + Socket.IO + Web 客户端  
@@ -12,7 +15,7 @@
 
 # 1. 文档定位
 
-本文件取代旧版 `长期架构与DurableObjects迁移设计_V2.md`，作为 `my-game-host-vibration` 后续实施的主设计基线。
+本文件曾取代旧版 `长期架构与DurableObjects迁移设计_V2.md`；目前已被长期架构 V4 取代，不再作为后续实施的主设计基线。
 
 V3 最重要的修正，是重新明确产品边界：
 
@@ -1184,7 +1187,7 @@ Storyteller Intelligence
 
 ---
 
-# 30. 当前下一步
+# 30. 历史当时下一步（已 superseded）
 
 当前最合适的下一步不是立刻改 Durable Objects。
 
