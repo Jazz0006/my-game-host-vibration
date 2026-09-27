@@ -335,6 +335,29 @@ Transport 负责：
 
 E3.1 审计确认：transport 必须在建立 Raw WebSocket 之前获得足够的 credential context。E3.2a 已将 E2 的 `connect(generation)` 硬化为 `connect(credentials, generation)`。persistent credential storage 仍由 platform composition/storage adapter 拥有，transport 只为当前连接使用 credentials。异步 ticket exchange 由 transport 内部启动，并通过 generation-tagged `onOpen/onError` 回报结果，因此 connect 本身保持 listener-driven `void` contract。现有 `synchronize(credentials, generation)` 先保留，等第二种真实 transport 落地后再判断是否值得收敛签名。
 
+E3.2b 已建立 Raw WebSocket stable wire：
+
+```text
+client -> server
+  request { wireVersion, requestId, operation: sync | command, ... }
+
+server -> client
+  response { requestId, ok, result | error }
+  state    { revision, envelope: ClientStateEnvelope }
+  event    { envelope: ClientRealtimeEventEnvelope }
+  error    { code, requestId? }
+```
+
+关键规则：
+
+- `wireVersion` 属于 Raw WS framing；内层 `protocolVersion` 仍属于稳定 client protocol；
+- `requestId` 只做请求/ACK correlation，不承担命令幂等；
+- `commandId` 继续是 command retry / idempotency identity；
+- stable player identity 来自 ticket 绑定后的 Hibernation WebSocket attachment/tag，不在每个 frame 重发 `resumeToken`；
+- malformed wire traffic 使用 `error` frame；可解析的 application request failure 使用 correlated `response { ok:false }`；
+- authoritative state push 使用 persisted RoomSnapshot revision；
+- realtime `event` frame 只定义 delivery contract，不把 Node effect orchestration 复制进 Cloudflare transport。
+
 Transport 不负责：
 
 - reconnect policy；
@@ -677,7 +700,8 @@ E2.3 Legacy Realtime Boundary Contraction ✅
 E3 Native WeChat Thin Client
   ├─ E3.1 transport / ClientSession boundary audit ✅
   ├─ E3.2a pre-connect credential / ticket seam ✅
-  └─ E3.2b Raw WebSocket stable wire ← CURRENT
+  ├─ E3.2b Raw WebSocket stable wire ✅
+  └─ E3.2c minimal WeChat transport ← CURRENT
         ↓
 Reliability Hardening
   └─ Post-commit Effect Outbox
@@ -687,7 +711,7 @@ Cloudflare Production Cutover + Real-device Field Validation
 BotC Production Expansion
 ```
 
-E2 已完成；E3.1 已完成第二客户端边界审计，E3.2a 已完成 pre-connect credential/ticket seam。当前进入 E3.2b Raw WebSocket stable wire contract + Cloudflare server bridge，之后才实现最小 WeChat transport。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 已完成；E3.1 / E3.2a / E3.2b 已依次完成第二客户端边界、pre-connect credential seam 与 Raw WebSocket stable wire + Cloudflare bridge。当前进入 E3.2c minimal WeChat ClientRealtimeTransport。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 

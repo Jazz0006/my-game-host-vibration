@@ -1,6 +1,12 @@
 import { SessionTokenService } from "../../core/session/SessionTokenService.js";
 import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
 import {
+  ClientRawWebSocketWireError,
+  createClientRawWebSocketProtocolErrorFrame,
+  encodeClientRawWebSocketFrame,
+  parseClientRawWebSocketRequest,
+} from "../../protocol/client/ClientRawWebSocketProtocol.js";
+import {
   CloudflareRoomSnapshotRepository,
   type DurableObjectStorageLike,
 } from "./CloudflareRoomSnapshotRepository.js";
@@ -9,6 +15,7 @@ import {
   type DurableObjectHibernationStateLike,
   type HibernationWebSocketLike,
 } from "./CloudflareRoomRealtime.js";
+import { CloudflareRawWebSocketClientProtocol } from "./CloudflareRawWebSocketClientProtocol.js";
 import { CloudflareSessionTokenCryptoProvider } from "./CloudflareSessionTokenCryptoProvider.js";
 import { CloudflareWebSocketTicketRepository } from "./CloudflareWebSocketTicketRepository.js";
 
@@ -139,7 +146,9 @@ export class GameRoomDurableObject {
     }
 
     if (typeof message !== "string") {
-      webSocket.send(jsonMessage("realtime:error", { code: "binary_not_supported" }));
+      webSocket.send(encodeClientRawWebSocketFrame(
+        createClientRawWebSocketProtocolErrorFrame("binary_not_supported"),
+      ));
       return;
     }
 
@@ -147,7 +156,9 @@ export class GameRoomDurableObject {
     try {
       parsed = JSON.parse(message);
     } catch {
-      webSocket.send(jsonMessage("realtime:error", { code: "invalid_json" }));
+      webSocket.send(encodeClientRawWebSocketFrame(
+        createClientRawWebSocketProtocolErrorFrame("invalid_json"),
+      ));
       return;
     }
 
@@ -160,7 +171,24 @@ export class GameRoomDurableObject {
       return;
     }
 
-    webSocket.send(jsonMessage("realtime:error", { code: "unsupported_message" }));
+    try {
+      const request = parseClientRawWebSocketRequest(parsed);
+      await new CloudflareRawWebSocketClientProtocol(
+        this.state.storage,
+        realtime,
+      ).handleRequest(webSocket, playerId, request);
+    } catch (error) {
+      const wireError = error instanceof ClientRawWebSocketWireError ? error : undefined;
+      webSocket.send(encodeClientRawWebSocketFrame(
+        createClientRawWebSocketProtocolErrorFrame(
+          wireError?.code ?? "server_error",
+          {
+            ...(wireError?.requestId ? { requestId: wireError.requestId } : {}),
+            ...(wireError?.message ? { message: wireError.message } : {}),
+          },
+        ),
+      ));
+    }
   }
 
   webSocketClose(
