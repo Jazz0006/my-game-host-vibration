@@ -23,8 +23,8 @@ E1     Client Protocol Boundary                ✅
 E2.1   Web Command Transport Adapter           ✅
 E2.2   Client Runtime / Connection FSM         ✅
 E2.3   Legacy Realtime Boundary Contraction    ✅
-
-E3.1   WeChat transport/runtime boundary audit ← NEXT
+E3.1   WeChat transport / ClientSession audit   ✅
+E3.2a  Pre-connect credential / ticket seam     ← NEXT
 R1     Reliability Hardening / Effect Outbox
 Cloudflare production cutover + real-device validation
 BotC production expansion
@@ -127,7 +127,7 @@ UI intention
 → shared authoritative Werewolf runtime
 ```
 
-private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`，下一阶段用微信客户端验证同一协议和 ClientSession 模型是否真正可跨平台复用。
+private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.1 已确认 ClientSession 的 source boundary 可跨平台复用，但现有 transport contract 仍带有“socket 先 open、credentials 后用于 synchronize”的 Socket.IO 假设；下一步先完成 pre-connect credential/ticket seam，再建立 Cloudflare Raw WebSocket stable wire 与最小微信 transport。
 
 ## 多玩家模拟器
 

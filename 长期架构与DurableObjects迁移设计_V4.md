@@ -316,9 +316,10 @@ response.generation == currentGeneration
 
 ```ts
 interface IRealtimeTransport {
-  connect(...): Promise<void>;
-  disconnect(): void;
-  send(message: string): boolean;
+  connect(credentials, generation): Promise<void> | void;
+  disconnect(generation): void;
+  synchronize(credentials, generation): Promise<AuthoritativeStateDelivery>;
+  send(message): Promise<unknown>;
   setHandlers(...): void;
 }
 ```
@@ -326,10 +327,13 @@ interface IRealtimeTransport {
 Transport 负责：
 
 - transport URL / ticket；
+- 在 socket open 前使用调用方提供的 session credentials 完成必要的 ticket/auth exchange；
 - socket create / destroy；
 - wire parser；
 - open / close / error；
 - state/event message delivery。
+
+E3.1 审计确认：transport 必须在建立 Raw WebSocket 之前获得足够的 credential context。当前 E2 的 `connect(generation)` 是 Socket.IO 历史形态，E3.2a 应最小硬化为 `connect(credentials, generation)`。persistent credential storage 仍由 platform composition/storage adapter 拥有，transport 只为当前连接使用 credentials。现有 `synchronize(credentials, generation)` 可先保留，等第二种真实 transport 落地后再判断是否值得收敛签名。
 
 Transport 不负责：
 
@@ -670,7 +674,9 @@ E2.2 Client Runtime / Connection FSM ✅
         ↓
 E2.3 Legacy Realtime Boundary Contraction ✅
         ↓
-E3 Native WeChat Thin Client ← CURRENT
+E3 Native WeChat Thin Client
+  ├─ E3.1 transport / ClientSession boundary audit ✅
+  └─ E3.2 transport foundation ← CURRENT
         ↓
 Reliability Hardening
   └─ Post-commit Effect Outbox
@@ -680,7 +686,7 @@ Cloudflare Production Cutover + Real-device Field Validation
 BotC Production Expansion
 ```
 
-E2 已完成；当前从 E3.1 开始验证第二种真实客户端。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 已完成；E3.1 已于 2026-09-27 完成第二客户端边界审计。当前先修 pre-connect credential/ticket seam，再补 Raw WebSocket stable wire contract，之后才实现最小 WeChat transport。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 
