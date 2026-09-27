@@ -28,6 +28,7 @@ export type ClientConnectionEvent =
   | { type: "resyncRequested" }
   | { type: "transportOpened"; generation: number }
   | { type: "transportClosed"; generation: number }
+  | { type: "transportUnavailable"; generation: number }
   | { type: "authoritativeStateSynchronized"; generation: number }
   | { type: "protocolFailed"; generation: number; failure: ClientConnectionFailure }
   | { type: "dispose" };
@@ -68,6 +69,7 @@ function eventGeneration(event: ClientConnectionEvent): number | undefined {
   switch (event.type) {
     case "transportOpened":
     case "transportClosed":
+    case "transportUnavailable":
     case "authoritativeStateSynchronized":
     case "protocolFailed":
       return event.generation;
@@ -159,6 +161,13 @@ export function transitionClientConnection(
       return {
         context: { status: "Disconnected", generation: context.generation },
         effects: [],
+      };
+
+    case "transportUnavailable":
+      if (!shouldCloseTransport(context.status)) return unchanged(context);
+      return {
+        context: { status: "Disconnected", generation: context.generation },
+        effects: [{ type: "closeTransport", generation: context.generation }],
       };
 
     case "protocolFailed":

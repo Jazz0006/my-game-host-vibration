@@ -439,6 +439,22 @@ Connected
 
 普通 reconnect 不要求 replay 历史 realtime events。
 
+E3.3 增加了 transport request failure 的可恢复分类：
+
+```text
+retryable transport request failure
+  -> transportUnavailable
+  -> Disconnected + closeTransport
+  -> reconnect()
+  -> new generation + authoritative sync
+
+protocol / identity failure
+  -> Failed
+  -> fail closed
+```
+
+reconnectable 路径包括两类 transport-level failure：socket/ticket network unavailable 直接走 transport close/unavailable；correlated request timeout/send failure 则使用 `ClientTransportRequestError(..., retryable=true)`。非法 ticket credentials、非法 PlayerView、session mismatch、malformed protocol 仍保持 Failed。
+
 原因：
 
 > 已发生的游戏变化应该体现在 authoritative state 中，而不是依赖客户端补收所有历史广播。
@@ -704,7 +720,8 @@ E3 Native WeChat Thin Client
   ├─ E3.2a pre-connect credential / ticket seam ✅
   ├─ E3.2b Raw WebSocket stable wire ✅
   ├─ E3.2c minimal WeChat transport ✅
-  └─ E3.3 state sync + reconnect PoC ← CURRENT
+  ├─ E3.3 state sync + reconnect PoC ✅
+  └─ E3.4 command ACK / retry PoC ← CURRENT
         ↓
 Reliability Hardening
   └─ Post-commit Effect Outbox
@@ -714,7 +731,7 @@ Cloudflare Production Cutover + Real-device Field Validation
 BotC Production Expansion
 ```
 
-E2 已完成；E3.1 / E3.2a / E3.2b / E3.2c 已依次完成第二客户端边界、pre-connect credential seam、Raw WebSocket stable wire 与最小 WeChat native transport。当前进入 E3.3 authoritative state sync + reconnect PoC，把 ClientSession 与微信 transport 组合验证。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 已完成；E3.1–E3.3 已完成第二客户端边界、pre-connect credential seam、Raw WebSocket stable wire、最小 WeChat native transport，以及 ClientSession reconnect/state-sync 组合验证。当前进入 E3.4 command ACK / retry PoC，重点验证 ACK 丢失时同一 commandId 的安全重试。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 

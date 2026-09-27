@@ -17,10 +17,11 @@ import {
   type ClientConnectionEvent,
   type ClientConnectionFailure,
 } from "./ClientConnectionFSM.js";
-import type {
-  ClientAuthoritativeStateDelivery,
-  ClientRealtimeEventDelivery,
-  ClientRealtimeTransport,
+import {
+  ClientTransportRequestError,
+  type ClientAuthoritativeStateDelivery,
+  type ClientRealtimeEventDelivery,
+  type ClientRealtimeTransport,
 } from "./ClientRealtimeTransport.js";
 
 export type ClientSessionSnapshot<TStatePayload = unknown> = {
@@ -261,6 +262,11 @@ export class ClientSession<TStatePayload = unknown> {
       delivery => this.acceptSynchronization(generation, delivery),
       error => {
         if (!this.isCurrentSync(generation)) return;
+        if (error instanceof ClientTransportRequestError && error.retryable) {
+          this.dispatch({ type: "transportUnavailable", generation });
+          return;
+        }
+
         const message = error instanceof Error ? error.message.trim() : "";
         const failure: ClientConnectionFailure = message
           ? { code: "authoritative-sync-failed", message }

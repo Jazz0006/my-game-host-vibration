@@ -83,6 +83,25 @@ describe("E2.2a ClientConnectionFSM", () => {
     expect(freshSync.context.status).toBe("Connected");
   });
 
+  it("turns current-generation transport unavailability into reconnectable Disconnected", () => {
+    let context = createInitialClientConnectionContext();
+    context = step(context, { type: "connectRequested" });
+    context = step(context, { type: "transportOpened", generation: 1 });
+
+    const unavailable = transitionClientConnection(context, {
+      type: "transportUnavailable",
+      generation: 1,
+    });
+
+    expect(unavailable.context).toEqual({
+      status: "Disconnected",
+      generation: 1,
+    });
+    expect(unavailable.effects).toEqual([
+      { type: "closeTransport", generation: 1 },
+    ]);
+  });
+
   it("moves a current-generation protocol failure to Failed", () => {
     let context = createInitialClientConnectionContext();
     context = step(context, { type: "connectRequested" });

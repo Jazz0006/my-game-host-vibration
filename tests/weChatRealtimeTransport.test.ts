@@ -333,7 +333,7 @@ describe("E3.2c WeChatRealtimeTransport", () => {
     expect(captured.opens).toEqual([2]);
   });
 
-  it("reports ticket failures and socket close/error through the active generation", () => {
+  it("keeps invalid ticket responses fatal but reports transport/network failures as reconnectable close", () => {
     const platform = new FakeWeChatPlatform();
     const transport = new WeChatRealtimeTransport<View>(platform, {
       baseUrl: "https://game.example",
@@ -359,15 +359,19 @@ describe("E3.2c WeChatRealtimeTransport", () => {
     platform.issueTicket();
     platform.socket.open();
     platform.socket.serverError({ errMsg: "socket failed" });
-    platform.socket.serverClose("network lost");
 
-    expect(captured.errors.at(-1)).toMatchObject({
-      generation: 6,
-      failure: { code: "websocket-error" },
-    });
+    expect(captured.errors).toHaveLength(1);
     expect(captured.closes).toContainEqual({
       generation: 6,
-      reason: "network lost",
+      reason: "socket failed",
+    });
+    expect(platform.socket.closeCalls).toBe(1);
+
+    transport.connect(credentials, 7);
+    platform.requests.at(-1)?.fail({ errMsg: "ticket network failed" });
+    expect(captured.closes).toContainEqual({
+      generation: 7,
+      reason: "ticket network failed",
     });
   });
 });

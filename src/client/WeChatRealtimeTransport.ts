@@ -11,10 +11,11 @@ import {
   parseClientRawWebSocketServerFrame,
   type ClientRawWebSocketResponse,
 } from "../protocol/client/ClientRawWebSocketProtocol.js";
-import type {
-  ClientAuthoritativeStateDelivery,
-  ClientRealtimeTransport,
-  ClientRealtimeTransportListener,
+import {
+  ClientTransportRequestError,
+  type ClientAuthoritativeStateDelivery,
+  type ClientRealtimeTransport,
+  type ClientRealtimeTransportListener,
 } from "./runtime/ClientRealtimeTransport.js";
 
 export type WeChatRequestResponse = {
@@ -49,10 +50,12 @@ export type WeChatPlatformLike = {
 export type WeChatRealtimeTransportOptions = {
   baseUrl: string;
   requestIdFactory?: () => string;
+  requestTimeoutMs?: number;
 };
 
 type PendingRequest = {
   generation: number;
+  timeoutHandle: ReturnType<typeof setTimeout>;
   resolve(value: unknown): void;
   reject(error: Error): void;
 };
@@ -159,6 +162,7 @@ implements ClientRealtimeTransport<TStatePayload> {
   private readonly baseUrl: string;
   private readonly requestIdFactory: () => string;
   private requestSequence = 0;
+  private readonly requestTimeoutMs: number;
   private activeGeneration = 0;
   private socket: WeChatSocketTaskLike | null = null;
   private readonly pending = new Map<string, PendingRequest>();
@@ -170,6 +174,9 @@ implements ClientRealtimeTransport<TStatePayload> {
     this.baseUrl = normalizedBaseUrl(options.baseUrl);
     this.requestIdFactory = options.requestIdFactory ??
       (() => `wechat-${++this.requestSequence}`);
+    this.requestTimeoutMs = Number.isFinite(options.requestTimeoutMs)
+      ? Math.max(1, Number(options.requestTimeoutMs))
+      : 5000;
   }
 
   setListener(listener: ClientRealtimeTransportListener<TStatePayload>): void {
@@ -177,6 +184,20 @@ implements ClientRealtimeTransport<TStatePayload> {
   }
 
   connect(credentials: ClientReconnectCredentials, generation: number): void {
+    const previousGeneration = this.activeGeneration;
+    const previousSocket = this.socket;
+    if (previousGeneration > 0 && previousGeneration !== generation) {
+      this.rejectPendingGeneration(
+        previousGeneration,
+        new ClientTransportRequestError(
+          "transport-replaced",
+          "WeChat realtime transport generation was replaced",
+          true,
+        ),
+      );
+      previousSocket?.close({ code: 1000, reason: "connection generation replaced" });
+    }
+
     this.activeGeneration = generation;
     this.socket = null;
 
@@ -207,10 +228,10 @@ implements ClientRealtimeTransport<TStatePayload> {
             url: websocketUrl(this.baseUrl, credentials.roomId, ticket.ticket),
           });
         } catch (error) {
-          this.listener?.onError(generation, {
-            code: "websocket-connect-failed",
-            ...(errorMessage(error) ? { message: errorMessage(error)! } : {}),
-          });
+          this.listener?.onClose(
+            generation,
+            errorMessage(error) || "WeChat WebSocket connect failed",
+          );
           return;
         }
 
@@ -224,10 +245,10 @@ implements ClientRealtimeTransport<TStatePayload> {
       },
       fail: error => {
         if (generation !== this.activeGeneration) return;
-        this.listener?.onError(generation, {
-          code: "websocket-ticket-failed",
-          ...(errorMessage(error) ? { message: errorMessage(error)! } : {}),
-        });
+        this.listener?.onClose(
+          generation,
+          errorMessage(error) || "WeChat WebSocket ticket request failed",
+        );
       },
     });
   }
@@ -237,7 +258,14 @@ implements ClientRealtimeTransport<TStatePayload> {
     const socket = this.socket;
     this.socket = null;
     this.activeGeneration = 0;
-    this.rejectPendingGeneration(generation, new Error("WeChat realtime transport disconnected"));
+    this.rejectPendingGeneration(
+      generation,
+      new ClientTransportRequestError(
+        "transport-disconnected",
+        "WeChat realtime transport disconnected",
+        true,
+      ),
+    );
     socket?.close({ code: 1000, reason: "client disconnect" });
   }
 
@@ -287,7 +315,11 @@ implements ClientRealtimeTransport<TStatePayload> {
       this.socket = null;
       this.rejectPendingGeneration(
         generation,
-        new Error(event.reason?.trim() || "WeChat WebSocket closed"),
+        new ClientTransportRequestError(
+          "transport-closed",
+          event.reason?.trim() || "WeChat WebSocket closed",
+          true,
+        ),
       );
       this.listener?.onClose(
         generation,
@@ -297,10 +329,14 @@ implements ClientRealtimeTransport<TStatePayload> {
 
     socket.onError(error => {
       if (!this.isActive(socket, generation)) return;
-      this.listener?.onError(generation, {
-        code: "websocket-error",
-        ...(errorMessage(error) ? { message: errorMessage(error)! } : {}),
-      });
+      const reason = errorMessage(error) || "WeChat WebSocket error";
+      this.socket = null;
+      this.rejectPendingGeneration(
+        generation,
+        new ClientTransportRequestError("websocket-error", reason, true),
+      );
+      this.listener?.onClose(generation, reason);
+      socket.close({ reason });
     });
 
     socket.onMessage(event => {
@@ -368,9 +404,10 @@ implements ClientRealtimeTransport<TStatePayload> {
         return;
 
       case "error": {
-        const pending = frame.requestId ? this.pending.get(frame.requestId) : undefined;
-        if (pending && pending.generation === generation) {
-          this.pending.delete(frame.requestId!);
+        const pending = frame.requestId
+          ? this.takePending(frame.requestId, generation)
+          : undefined;
+        if (pending) {
           pending.reject(new Error(frame.message || frame.code));
           return;
         }
@@ -387,9 +424,8 @@ implements ClientRealtimeTransport<TStatePayload> {
     frame: ClientRawWebSocketResponse,
     generation: number,
   ): void {
-    const pending = this.pending.get(frame.requestId);
-    if (!pending || pending.generation !== generation) return;
-    this.pending.delete(frame.requestId);
+    const pending = this.takePending(frame.requestId, generation);
+    if (!pending) return;
 
     if (frame.ok) {
       pending.resolve(frame.result);
@@ -412,15 +448,34 @@ implements ClientRealtimeTransport<TStatePayload> {
     if (!socket) return Promise.reject(new Error("WeChat WebSocket is not open"));
 
     return new Promise((resolve, reject) => {
-      this.pending.set(request.requestId, { generation, resolve, reject });
+      const timeoutHandle = setTimeout(() => {
+        const pending = this.takePending(request.requestId, generation);
+        if (!pending) return;
+        pending.reject(new ClientTransportRequestError(
+          "request-timeout",
+          "WeChat realtime request timed out",
+          true,
+        ));
+      }, this.requestTimeoutMs);
+
+      this.pending.set(request.requestId, {
+        generation,
+        timeoutHandle,
+        resolve,
+        reject,
+      });
+
       socket.send({
         data: encodeClientRawWebSocketFrame(request),
         success: () => {},
         fail: error => {
-          const pending = this.pending.get(request.requestId);
-          if (!pending || pending.generation !== generation) return;
-          this.pending.delete(request.requestId);
-          reject(new Error(errorMessage(error) || "WeChat WebSocket send failed"));
+          const pending = this.takePending(request.requestId, generation);
+          if (!pending) return;
+          pending.reject(new ClientTransportRequestError(
+            "send-failed",
+            errorMessage(error) || "WeChat WebSocket send failed",
+            true,
+          ));
         },
       });
     });
@@ -445,10 +500,22 @@ implements ClientRealtimeTransport<TStatePayload> {
     return generation === this.activeGeneration && socket === this.socket;
   }
 
+  private takePending(
+    requestId: string,
+    generation: number,
+  ): PendingRequest | undefined {
+    const pending = this.pending.get(requestId);
+    if (!pending || pending.generation !== generation) return undefined;
+    this.pending.delete(requestId);
+    clearTimeout(pending.timeoutHandle);
+    return pending;
+  }
+
   private rejectPendingGeneration(generation: number, error: Error): void {
     for (const [requestId, pending] of this.pending) {
       if (pending.generation !== generation) continue;
       this.pending.delete(requestId);
+      clearTimeout(pending.timeoutHandle);
       pending.reject(error);
     }
   }

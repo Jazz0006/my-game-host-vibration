@@ -6,6 +6,17 @@ import type {
 } from "../../protocol/client/ClientProtocol.js";
 import type { ClientConnectionFailure } from "./ClientConnectionFSM.js";
 
+export class ClientTransportRequestError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message);
+    this.name = "ClientTransportRequestError";
+  }
+}
+
 export type ClientAuthoritativeStateDelivery<TPayload = unknown> = {
   generation: number;
   revision: number;
