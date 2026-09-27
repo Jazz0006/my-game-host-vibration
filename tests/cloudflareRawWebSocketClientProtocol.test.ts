@@ -171,7 +171,7 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
     });
   });
 
-  it("executes a command once, correlates each ACK, and pushes private state by room revision", async () => {
+  it("replays the same commandId under a new requestId without advancing revision twice", async () => {
     const storage = new MemoryStorage();
     const initial = activeSnapshot();
     await new CloudflareRoomSnapshotRepository(storage).save(initial);

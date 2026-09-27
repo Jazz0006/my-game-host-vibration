@@ -28,7 +28,8 @@ E3.2a  Pre-connect credential / ticket seam     ✅
 E3.2b  Raw WebSocket stable wire + CF bridge    ✅
 E3.2c  Minimal WeChat realtime transport        ✅
 E3.3   WeChat state sync + reconnect PoC        ✅
-E3.4   WeChat command ACK / retry PoC           ← NEXT
+E3.4   WeChat command ACK / retry PoC           ✅
+E3.5   WeChat vibration / audio adapter         ← NEXT
 R1     Reliability Hardening / Effect Outbox
 Cloudflare production cutover + real-device validation
 BotC production expansion
@@ -125,7 +126,7 @@ UI intention
 → shared authoritative Werewolf runtime
 ```
 
-private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.2c 已建立微信 ticket + Raw WebSocket transport；E3.3 已完成 `ClientSession + WeChatRealtimeTransport` 的 initial sync、disconnect/reconnect、new-generation revision reconciliation 和 retryable sync-timeout recovery。协议/身份错误仍保持 fail-closed。下一步验证 command ACK 丢失后的 same-commandId retry。
+private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.2c 已建立微信 ticket + Raw WebSocket transport；E3.3 完成 reconnect/state-sync；E3.4 已完成 bounded command ACK retry：每次 wire retry 使用新 requestId，但保持同一 commandId，Cloudflare idempotency ledger 返回 replay 而不重复 mutation。下一步只补微信 vibration/audio effect capability。
 
 ## 多玩家模拟器
 

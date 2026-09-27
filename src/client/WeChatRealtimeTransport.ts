@@ -51,6 +51,7 @@ export type WeChatRealtimeTransportOptions = {
   baseUrl: string;
   requestIdFactory?: () => string;
   requestTimeoutMs?: number;
+  commandRetries?: number;
 };
 
 type PendingRequest = {
@@ -163,6 +164,7 @@ implements ClientRealtimeTransport<TStatePayload> {
   private readonly requestIdFactory: () => string;
   private requestSequence = 0;
   private readonly requestTimeoutMs: number;
+  private readonly commandRetries: number;
   private activeGeneration = 0;
   private socket: WeChatSocketTaskLike | null = null;
   private readonly pending = new Map<string, PendingRequest>();
@@ -177,6 +179,9 @@ implements ClientRealtimeTransport<TStatePayload> {
     this.requestTimeoutMs = Number.isFinite(options.requestTimeoutMs)
       ? Math.max(1, Number(options.requestTimeoutMs))
       : 5000;
+    this.commandRetries = Number.isInteger(options.commandRetries)
+      ? Math.max(0, Number(options.commandRetries))
+      : 1;
   }
 
   setListener(listener: ClientRealtimeTransportListener<TStatePayload>): void {
@@ -298,10 +303,38 @@ implements ClientRealtimeTransport<TStatePayload> {
     } catch (error) {
       return Promise.reject(error);
     }
-    return this.sendRequest(
-      createClientRawWebSocketCommandRequest(this.nextRequestId(), message),
-      generation,
-    );
+    return this.sendCommandWithRetry(message, generation);
+  }
+
+  private async sendCommandWithRetry(
+    message: Extract<ClientProtocolMessage, { kind: "command" }>,
+    generation: number,
+  ): Promise<unknown> {
+    let retries = 0;
+    let previousRequestId: string | null = null;
+
+    while (true) {
+      const requestId = this.nextRequestId();
+      if (previousRequestId === requestId) {
+        throw new Error("WeChat command retry must use a new requestId");
+      }
+      previousRequestId = requestId;
+
+      try {
+        return await this.sendRequest(
+          createClientRawWebSocketCommandRequest(requestId, message),
+          generation,
+        );
+      } catch (error) {
+        const retryable = error instanceof ClientTransportRequestError &&
+          error.retryable &&
+          generation === this.activeGeneration &&
+          this.socket !== null;
+
+        if (!retryable || retries >= this.commandRetries) throw error;
+        retries += 1;
+      }
+    }
   }
 
   private bindSocket(socket: WeChatSocketTaskLike, generation: number): void {

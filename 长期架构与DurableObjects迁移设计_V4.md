@@ -353,6 +353,8 @@ server -> client
 - `wireVersion` 属于 Raw WS framing；内层 `protocolVersion` 仍属于稳定 client protocol；
 - `requestId` 只做请求/ACK correlation，不承担命令幂等；
 - `commandId` 继续是 command retry / idempotency identity；
+- E3.4 command retry 每次必须换新的 `requestId`，但必须保持同一 `commandId`；
+- retry 只针对 bounded transport-level timeout/send failure；application `ok:false` 不自动重试；
 - stable player identity 来自 ticket 绑定后的 Hibernation WebSocket attachment/tag，不在每个 frame 重发 `resumeToken`；
 - malformed wire traffic 使用 `error` frame；可解析的 application request failure 使用 correlated `response { ok:false }`；
 - authoritative state push 使用 persisted RoomSnapshot revision；
@@ -721,7 +723,8 @@ E3 Native WeChat Thin Client
   ├─ E3.2b Raw WebSocket stable wire ✅
   ├─ E3.2c minimal WeChat transport ✅
   ├─ E3.3 state sync + reconnect PoC ✅
-  └─ E3.4 command ACK / retry PoC ← CURRENT
+  ├─ E3.4 command ACK / retry PoC ✅
+  └─ E3.5 vibration / audio adapter ← CURRENT
         ↓
 Reliability Hardening
   └─ Post-commit Effect Outbox
@@ -731,7 +734,7 @@ Cloudflare Production Cutover + Real-device Field Validation
 BotC Production Expansion
 ```
 
-E2 已完成；E3.1–E3.3 已完成第二客户端边界、pre-connect credential seam、Raw WebSocket stable wire、最小 WeChat native transport，以及 ClientSession reconnect/state-sync 组合验证。当前进入 E3.4 command ACK / retry PoC，重点验证 ACK 丢失时同一 commandId 的安全重试。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 已完成；E3.1–E3.4 已完成第二客户端边界、pre-connect credential seam、Raw WebSocket stable wire、最小 WeChat native transport、ClientSession reconnect/state-sync，以及 ACK 丢失时 same-commandId bounded retry。当前进入 E3.5 vibration / audio adapter，只补平台 effect capability，不改变 authoritative state。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 
