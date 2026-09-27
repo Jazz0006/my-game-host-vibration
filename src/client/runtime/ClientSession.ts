@@ -218,7 +218,7 @@ export class ClientSession<TStatePayload = unknown> {
     for (const effect of effects) {
       switch (effect.type) {
         case "openTransport":
-          this.transport.connect(effect.generation);
+          this.connectTransport(effect.generation);
           break;
 
         case "closeTransport":
@@ -230,6 +230,20 @@ export class ClientSession<TStatePayload = unknown> {
           break;
       }
     }
+  }
+
+  private connectTransport(generation: number): void {
+    const credentials = this.credentials;
+    if (!credentials) {
+      this.dispatch({
+        type: "protocolFailed",
+        generation,
+        failure: { code: "missing-session-credentials" },
+      });
+      return;
+    }
+
+    this.transport.connect(credentials, generation);
   }
 
   private synchronize(generation: number): void {

@@ -5,7 +5,10 @@ import type {
   ClientRealtimeTransport,
   ClientRealtimeTransportListener,
 } from "../src/client/runtime/ClientRealtimeTransport.js";
-import { createPlayerStateEnvelope } from "../src/protocol/client/ClientProtocol.js";
+import {
+  createPlayerStateEnvelope,
+  type ClientReconnectCredentials,
+} from "../src/protocol/client/ClientProtocol.js";
 
 type View = { phase: string };
 
@@ -31,7 +34,7 @@ class PushTransport implements ClientRealtimeTransport<View> {
     this.listener = listener;
   }
 
-  connect(): void {}
+  connect(_credentials: ClientReconnectCredentials, _generation: number): void {}
 
   disconnect(generation: number): void {
     this.disconnects.push(generation);

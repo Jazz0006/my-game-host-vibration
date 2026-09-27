@@ -5,6 +5,12 @@ import { createClientVibrateEffectEvent } from "../src/protocol/client/ClientEff
 
 type View = { phase: string };
 
+const credentials = {
+  roomId: "room-1",
+  playerId: "p1",
+  resumeToken: "token",
+} as const;
+
 class FakeSocket {
   connected = false;
   private readonly handlers = new Map<string, Set<(...args: any[]) => void>>();
@@ -50,7 +56,7 @@ describe("E2.2c2 Socket.IO realtime event transport", () => {
     const transport = new SocketIoRealtimeTransport<View>(socket);
     const captured = captureListener();
     transport.setListener(captured.listener);
-    transport.connect(4);
+    transport.connect(credentials, 4);
 
     const event = createClientVibrateEffectEvent([300, 150, 300], {
       reason: "action-alert",
@@ -66,7 +72,7 @@ describe("E2.2c2 Socket.IO realtime event transport", () => {
     const transport = new SocketIoRealtimeTransport<View>(socket);
     const captured = captureListener();
     transport.setListener(captured.listener);
-    transport.connect(2);
+    transport.connect(credentials, 2);
 
     socket.serverEmit("client:event", { protocolVersion: 1, kind: "state" });
     socket.serverEmit("client:event", { protocolVersion: 99, kind: "event", type: "x", payload: {} });
@@ -81,7 +87,7 @@ describe("E2.2c2 Socket.IO realtime event transport", () => {
     const transport = new SocketIoRealtimeTransport<View>(socket);
     const captured = captureListener();
     transport.setListener(captured.listener);
-    transport.connect(3);
+    transport.connect(credentials, 3);
     transport.disconnect(3);
 
     socket.serverEmit("client:event", createClientVibrateEffectEvent([100]));

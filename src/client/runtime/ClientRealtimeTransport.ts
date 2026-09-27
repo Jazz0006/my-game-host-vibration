@@ -31,17 +31,19 @@ export type ClientRealtimeTransportListener<TStatePayload = unknown> = {
 /**
  * E2.2 transport port shared by Web and future native clients.
  *
- * A transport owns wire connectivity/framing only. It reports open/close/error
- * callbacks tagged with the connection generation, can request one current
- * authoritative state for synchronization, forwards revised authoritative
- * state pushes and transient realtime events, and can send protocol messages.
+ * A transport owns wire connectivity/framing only. Connection credentials are
+ * provided before opening so transports that require a ticket/auth exchange
+ * can complete it without owning credential persistence. It reports open/close/
+ * error callbacks tagged with the connection generation, can request one current
+ * authoritative state for synchronization, forwards revised authoritative state
+ * pushes and transient realtime events, and can send protocol messages.
  * Reconnect policy, revision reconciliation, event replay policy, and game/UI
  * behavior stay outside the transport.
  */
 export interface ClientRealtimeTransport<TStatePayload = unknown> {
   setListener(listener: ClientRealtimeTransportListener<TStatePayload>): void;
 
-  connect(generation: number): void;
+  connect(credentials: ClientReconnectCredentials, generation: number): void;
 
   disconnect(generation: number): void;
 

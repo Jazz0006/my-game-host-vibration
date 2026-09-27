@@ -32,7 +32,10 @@ function deferred<T>(): Deferred<T> {
 
 class FakeRealtimeTransport implements ClientRealtimeTransport<View> {
   listener: ClientRealtimeTransportListener | null = null;
-  readonly connects: number[] = [];
+  readonly connects: Array<{
+    credentials: ClientReconnectCredentials;
+    generation: number;
+  }> = [];
   readonly disconnects: number[] = [];
   readonly syncs: Array<{
     credentials: ClientReconnectCredentials;
@@ -45,8 +48,8 @@ class FakeRealtimeTransport implements ClientRealtimeTransport<View> {
     this.listener = listener;
   }
 
-  connect(generation: number): void {
-    this.connects.push(generation);
+  connect(credentials: ClientReconnectCredentials, generation: number): void {
+    this.connects.push({ credentials: { ...credentials }, generation });
   }
 
   disconnect(generation: number): void {
@@ -108,7 +111,9 @@ describe("E2.2b1 ClientSession", () => {
 
     session.start(credentials);
     expect(session.getConnectionState()).toEqual({ status: "Connecting", generation: 1 });
-    expect(transport.connects).toEqual([1]);
+    expect(transport.connects).toEqual([
+      { credentials, generation: 1 },
+    ]);
 
     transport.open(1);
     expect(session.getConnectionState()).toEqual({ status: "Syncing", generation: 1 });
@@ -137,6 +142,10 @@ describe("E2.2b1 ClientSession", () => {
 
     session.reconnect();
     expect(session.getConnectionState()).toEqual({ status: "Reconnecting", generation: 2 });
+    expect(transport.connects).toEqual([
+      { credentials, generation: 1 },
+      { credentials, generation: 2 },
+    ]);
     expect(session.getAuthoritativeState().revision).toBe(12);
     expect(session.getAuthoritativeState().envelope?.payload).toEqual({ phase: "day" });
 

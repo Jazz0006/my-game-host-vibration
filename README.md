@@ -24,19 +24,14 @@ E2.1   Web Command Transport Adapter           ✅
 E2.2   Client Runtime / Connection FSM         ✅
 E2.3   Legacy Realtime Boundary Contraction    ✅
 E3.1   WeChat transport / ClientSession audit   ✅
-E3.2a  Pre-connect credential / ticket seam     ← NEXT
+E3.2a  Pre-connect credential / ticket seam     ✅
+E3.2b  Raw WebSocket stable wire + CF bridge    ← NEXT
 R1     Reliability Hardening / Effect Outbox
 Cloudflare production cutover + real-device validation
 BotC production expansion
 ```
 
-最近确认的远端 `main` HEAD：
-
-```text
-71fc3238e3290c131abd2b0776fe25972d5774e2
-```
-
-HEAD、working tree、PR/CI 都是可变事实，开始开发前仍必须重新查询 live state。
+HEAD、working tree、remote、PR/CI 都是可变事实，不在 README 固化具体 commit；开始开发前必须重新查询 live state。
 
 ## 当前技术栈
 
@@ -127,7 +122,7 @@ UI intention
 → shared authoritative Werewolf runtime
 ```
 
-private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.1 已确认 ClientSession 的 source boundary 可跨平台复用，但现有 transport contract 仍带有“socket 先 open、credentials 后用于 synchronize”的 Socket.IO 假设；下一步先完成 pre-connect credential/ticket seam，再建立 Cloudflare Raw WebSocket stable wire 与最小微信 transport。
+private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a 已完成 `connect(credentials, generation)` seam，使 ticket-based transport 能在 socket open 前获得 session credentials；下一步建立 Cloudflare Raw WebSocket stable wire，再实现最小微信 transport。
 
 ## 多玩家模拟器
 

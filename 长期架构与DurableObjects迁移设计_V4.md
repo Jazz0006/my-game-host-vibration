@@ -316,7 +316,7 @@ response.generation == currentGeneration
 
 ```ts
 interface IRealtimeTransport {
-  connect(credentials, generation): Promise<void> | void;
+  connect(credentials, generation): void;
   disconnect(generation): void;
   synchronize(credentials, generation): Promise<AuthoritativeStateDelivery>;
   send(message): Promise<unknown>;
@@ -333,7 +333,7 @@ Transport 负责：
 - open / close / error；
 - state/event message delivery。
 
-E3.1 审计确认：transport 必须在建立 Raw WebSocket 之前获得足够的 credential context。当前 E2 的 `connect(generation)` 是 Socket.IO 历史形态，E3.2a 应最小硬化为 `connect(credentials, generation)`。persistent credential storage 仍由 platform composition/storage adapter 拥有，transport 只为当前连接使用 credentials。现有 `synchronize(credentials, generation)` 可先保留，等第二种真实 transport 落地后再判断是否值得收敛签名。
+E3.1 审计确认：transport 必须在建立 Raw WebSocket 之前获得足够的 credential context。E3.2a 已将 E2 的 `connect(generation)` 硬化为 `connect(credentials, generation)`。persistent credential storage 仍由 platform composition/storage adapter 拥有，transport 只为当前连接使用 credentials。异步 ticket exchange 由 transport 内部启动，并通过 generation-tagged `onOpen/onError` 回报结果，因此 connect 本身保持 listener-driven `void` contract。现有 `synchronize(credentials, generation)` 先保留，等第二种真实 transport 落地后再判断是否值得收敛签名。
 
 Transport 不负责：
 
@@ -676,7 +676,8 @@ E2.3 Legacy Realtime Boundary Contraction ✅
         ↓
 E3 Native WeChat Thin Client
   ├─ E3.1 transport / ClientSession boundary audit ✅
-  └─ E3.2 transport foundation ← CURRENT
+  ├─ E3.2a pre-connect credential / ticket seam ✅
+  └─ E3.2b Raw WebSocket stable wire ← CURRENT
         ↓
 Reliability Hardening
   └─ Post-commit Effect Outbox
@@ -686,7 +687,7 @@ Cloudflare Production Cutover + Real-device Field Validation
 BotC Production Expansion
 ```
 
-E2 已完成；E3.1 已于 2026-09-27 完成第二客户端边界审计。当前先修 pre-connect credential/ticket seam，再补 Raw WebSocket stable wire contract，之后才实现最小 WeChat transport。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 已完成；E3.1 已完成第二客户端边界审计，E3.2a 已完成 pre-connect credential/ticket seam。当前进入 E3.2b Raw WebSocket stable wire contract + Cloudflare server bridge，之后才实现最小 WeChat transport。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 

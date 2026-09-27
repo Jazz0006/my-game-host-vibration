@@ -8,6 +8,12 @@ import {
 
 type View = { phase: string };
 
+const credentials = {
+  roomId: "room-1",
+  playerId: "p1",
+  resumeToken: "token",
+} as const;
+
 type AckResponse = { error: Error | null; result?: unknown };
 
 class FakeSocket {
@@ -92,7 +98,7 @@ describe("E2.2b2c SocketIoRealtimeTransport", () => {
     const events = listener();
     transport.setListener(events.value);
 
-    transport.connect(7);
+    transport.connect(credentials, 7);
     await flushPromises();
 
     expect(socket.connectCalls).toBe(0);
@@ -103,11 +109,11 @@ describe("E2.2b2c SocketIoRealtimeTransport", () => {
     const socket = new FakeSocket();
     const transport = new SocketIoRealtimeTransport<View>(socket);
     transport.setListener(listener().value);
-    transport.connect(1);
+    transport.connect(credentials, 1);
 
     socket.queueAck("client:sync-state", { ok: true, ...statePayload(4, "night") });
     const result = await transport.synchronize(
-      { roomId: "room-1", playerId: "p1", resumeToken: "token" },
+      credentials,
       1,
     );
 
@@ -119,14 +125,14 @@ describe("E2.2b2c SocketIoRealtimeTransport", () => {
     const socket = new FakeSocket();
     const transport = new SocketIoRealtimeTransport<View>(socket);
     transport.setListener(listener().value);
-    transport.connect(2);
+    transport.connect(credentials, 2);
 
     socket.queueAck("client:sync-state", { ok: false, message: "你当前不在房间中" });
     socket.queueAck("player:resume", { ok: true, roomId: "room-1", playerId: "p1" });
     socket.queueAck("client:sync-state", { ok: true, ...statePayload(8, "day") });
 
     await expect(transport.synchronize(
-      { roomId: "room-1", playerId: "p1", resumeToken: "token" },
+      credentials,
       2,
     )).resolves.toEqual({ generation: 2, ...statePayload(8, "day") });
 
@@ -142,7 +148,7 @@ describe("E2.2b2c SocketIoRealtimeTransport", () => {
     const transport = new SocketIoRealtimeTransport<View>(socket);
     const events = listener();
     transport.setListener(events.value);
-    transport.connect(3);
+    transport.connect(credentials, 3);
 
     socket.serverEmit("client:state", statePayload(9, "night"));
     expect(events.states).toEqual([{ generation: 3, ...statePayload(9, "night") }]);
@@ -163,7 +169,7 @@ describe("E2.2b2c SocketIoRealtimeTransport", () => {
     const socket = new FakeSocket();
     const transport = new SocketIoRealtimeTransport(socket, { commandRetries: 1 });
     transport.setListener(listener().value);
-    transport.connect(1);
+    transport.connect(credentials, 1);
     const command = createClientCommandEnvelope("werewolf.confirmRole", {}, "command-1");
 
     socket.queueAck("client:command", undefined, new Error("ack timeout"));

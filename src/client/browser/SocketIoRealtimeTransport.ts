@@ -163,7 +163,7 @@ implements ClientRealtimeTransport<TStatePayload> {
     this.listener = listener;
   }
 
-  connect(generation: number): void {
+  connect(_credentials: ClientReconnectCredentials, generation: number): void {
     if (this.detached) return;
     this.activeGeneration = generation;
     if (this.socket.connected) {

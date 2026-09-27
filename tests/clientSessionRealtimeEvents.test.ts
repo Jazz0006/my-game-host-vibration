@@ -22,7 +22,7 @@ class FakeRealtimeTransport implements ClientRealtimeTransport<View> {
     this.listener = listener;
   }
 
-  connect(_generation: number): void {}
+  connect(_credentials: ClientReconnectCredentials, _generation: number): void {}
   disconnect(_generation: number): void {}
 
   synchronize(
