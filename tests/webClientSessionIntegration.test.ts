@@ -54,7 +54,9 @@ describe("E2.2 Web ClientSession direct integration", () => {
 
     expect(packageJson.scripts["build:client"]).toBe("tsc -p tsconfig.client.json");
     expect(packageJson.scripts.prestart).toBe("npm run build:client");
-    expect(packageJson.scripts.pretest).toBe("npm run build:client");
+    expect(packageJson.scripts.pretest).toBe(
+      "npm run build:client && npm run build:wechat",
+    );
   });
 
   it("routes host/join/recovery entry through authoritative ClientSession synchronization", () => {

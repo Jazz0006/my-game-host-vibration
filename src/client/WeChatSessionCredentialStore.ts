@@ -13,7 +13,7 @@ export type WeChatSessionCredentialStoreOptions = {
   storageKey?: string;
 };
 
-const DEFAULT_STORAGE_KEY = "gamehost.client.session.v1";
+export const WECHAT_SESSION_CREDENTIAL_STORAGE_KEY = "gamehost.client.session.v1";
 
 export class WeChatSessionCredentialStore {
   private readonly storageKey: string;
@@ -22,7 +22,7 @@ export class WeChatSessionCredentialStore {
     private readonly storage: WeChatStorageLike,
     options: WeChatSessionCredentialStoreOptions = {},
   ) {
-    this.storageKey = options.storageKey?.trim() || DEFAULT_STORAGE_KEY;
+    this.storageKey = options.storageKey?.trim() || WECHAT_SESSION_CREDENTIAL_STORAGE_KEY;
   }
 
   load(): ClientReconnectCredentials | null {

@@ -1,6 +1,8 @@
 node_modules/
 dist/
 public/client-runtime/
+miniprogram/runtime/
+project.private.config.json
 coverage/
 .env
 .env.*

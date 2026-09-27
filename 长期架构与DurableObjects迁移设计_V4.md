@@ -751,7 +751,8 @@ E3 Native WeChat Thin Client
   ├─ E3.4 command ACK / retry PoC ✅
   ├─ E3.5 vibration / audio adapter ✅
   ├─ E3.6 minimal native vertical slice ✅
-  └─ E3.7 Developer Tools + real-device lifecycle validation ← CURRENT
+  ├─ E3.7A Developer Tools shell + native runtime build ✅
+  └─ E3.7B Developer Tools + real-device lifecycle validation ← CURRENT
         ↓
 Reliability Hardening
   └─ Post-commit Effect Outbox
@@ -761,7 +762,7 @@ Cloudflare Production Cutover + Real-device Field Validation
 BotC Production Expansion
 ```
 
-E2 已完成；E3.1–E3.6 已完成第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle，以及 native composition/storage/lifecycle/minimal page vertical slice。当前进入 E3.7：生成最薄的微信开发者工具工程壳并做真实设备 foreground/background 验收；真实设备结果优先于 fake-`wx` contract。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 已完成；E3.1–E3.7A 已完成第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle、native composition，以及真实 Developer Tools 工程壳/构建链。微信 runtime 由 `tsconfig.wechat` 做 bundler-mode typecheck，再由显式 `esbuild` owner 打成生成型 CommonJS bundle；`miniprogram/runtime` 不成为第二份源码。当前只剩 E3.7B 的真实开发者工具/手机 lifecycle 验收；真实设备结果优先于 fake-`wx` contract。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 

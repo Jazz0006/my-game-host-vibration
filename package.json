@@ -4,12 +4,13 @@
   "description": "Android-first in-person Werewolf game host using private vibration prompts",
   "scripts": {
     "build:client": "tsc -p tsconfig.client.json",
+    "build:wechat": "node scripts/prepare-wechat-shell.mjs && tsc -p tsconfig.wechat.json && node scripts/build-wechat-runtime.mjs && node scripts/verify-wechat-shell.mjs",
     "predev": "npm run build:client",
     "dev": "tsx watch src/timedServer.ts",
     "prestart": "npm run build:client",
     "start": "tsx src/timedServer.ts",
     "typecheck": "tsc --noEmit",
-    "pretest": "npm run build:client",
+    "pretest": "npm run build:client && npm run build:wechat",
     "test": "vitest run",
     "check:file-sizes": "node scripts/check-source-file-sizes.mjs",
     "verify:flow": "node scripts/verify-flow.mjs",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.1",
+    "esbuild": "^0.28.1",
     "socket.io-client": "^4.8.3",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2",

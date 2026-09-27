@@ -31,7 +31,8 @@ E3.3   WeChat state sync + reconnect PoC        ✅
 E3.4   WeChat command ACK / retry PoC           ✅
 E3.5   WeChat vibration / audio adapter         ✅
 E3.6   Minimal native WeChat vertical slice     ✅
-E3.7   WeChat Developer Tools + real-device     ← NEXT
+E3.7A  WeChat Developer Tools shell/build        ✅
+E3.7B  WeChat real-device lifecycle validation   ← CURRENT
 R1     Reliability Hardening / Effect Outbox
 Cloudflare production cutover + real-device validation
 BotC production expansion
@@ -76,6 +77,9 @@ npm.cmd run dev
 ```bash
 npm run typecheck
 npm test
+
+# 单独验证微信开发者工具 runtime
+npm run build:wechat
 ```
 
 对于 reconnect、snapshot、command idempotency 和秘密信息边界，优先增加 contract / integration regression tests，而不是只修改实现。
@@ -128,7 +132,7 @@ UI intention
 → shared authoritative Werewolf runtime
 ```
 
-private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.5 已建立微信 ticket/Raw WS、reconnect、same-commandId retry 与 native effects；E3.6 进一步加入 transport-neutral public room projection、Cloudflare start/restart lifecycle、next-actor action alert，以及微信 credential storage/lifecycle/native composition/minimal page-controller。fake-`wx` vertical test 已跑通 lobby → command → effect → background reconnect；下一步进入开发者工具与真机验证。
+private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.5 已建立微信 ticket/Raw WS、reconnect、same-commandId retry 与 native effects；E3.6 进一步加入 transport-neutral public room projection、Cloudflare start/restart lifecycle、next-actor action alert，以及微信 credential storage/lifecycle/native composition/minimal page-controller。fake-`wx` vertical test 已跑通 lobby → command → effect → background reconnect。E3.7A 现已提供可直接导入微信开发者工具的 `miniprogram/` shell，以及 TS7 bundler-mode typecheck + esbuild CommonJS runtime build；自动化 build/verify 已纳入 `npm test`。当前只剩 E3.7B 的真实 Developer Tools / 手机 foreground-background 验收，不能用 fake-`wx` 结果替代。
 
 ## 多玩家模拟器
 

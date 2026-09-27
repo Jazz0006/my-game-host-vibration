@@ -1,0 +1,63 @@
+<view class="page">
+  <view class="card">
+    <view class="title">E3.7 Native Validation</view>
+    <view class="muted">This is a developer shell over the shared ClientSession runtime.</view>
+
+    <text class="label">Worker Base URL</text>
+    <input class="input" value="{{baseUrl}}" bindinput="onBaseUrlInput" placeholder="https://your-worker.workers.dev" />
+
+    <text class="label">Room ID</text>
+    <input class="input" value="{{roomId}}" bindinput="onRoomIdInput" placeholder="1234" />
+
+    <text class="label">Player ID</text>
+    <input class="input" value="{{playerId}}" bindinput="onPlayerIdInput" placeholder="p1" />
+
+    <text class="label">Resume Token</text>
+    <input class="input" password value="{{resumeToken}}" bindinput="onResumeTokenInput" placeholder="existing resume token" />
+
+    <button type="primary" bindtap="onConnectTap">Connect / Replace Session</button>
+    <button bindtap="onClearSessionTap">Clear Stored Session</button>
+  </view>
+
+  <view class="card">
+    <view class="section-title">Connection</view>
+    <view>screen: {{client.screen}}</view>
+    <view>status: {{client.connectionStatus}}</view>
+    <view>room revision: {{client.roomRevision}}</view>
+    <view>player revision: {{client.playerRevision}}</view>
+    <view class="status">{{lastAction}}</view>
+  </view>
+
+  <view class="card" wx:if="{{client.room}}">
+    <view class="section-title">Public room projection</view>
+    <view>room: {{client.room.roomId}}</view>
+    <view>game: {{client.room.gameType}}</view>
+    <view>host: {{client.room.viewer.isHost}}</view>
+    <view>game started: {{client.room.gameStarted}}</view>
+
+    <view class="players">
+      <view wx:for="{{client.room.players}}" wx:key="id">
+        #{{item.seat}} {{item.name}} <text wx:if="{{item.isHost}}">(host)</text>
+      </view>
+    </view>
+
+    <button bindtap="onStartGameTap">Start Werewolf Game</button>
+  </view>
+
+  <view class="card">
+    <view class="section-title">Semantic command</view>
+    <input class="input" value="{{commandType}}" bindinput="onCommandTypeInput" placeholder="werewolf.submitWolfTarget" />
+    <textarea class="textarea" value="{{commandPayload}}" bindinput="onCommandPayloadInput" placeholder='{"actionId":"..."}' />
+    <button bindtap="onSendSemanticCommandTap">Send command</button>
+  </view>
+
+  <view class="card">
+    <view class="section-title">Private PlayerView</view>
+    <text class="json" selectable>{{playerViewJson}}</text>
+  </view>
+
+  <view class="card">
+    <view class="section-title">Public room JSON</view>
+    <text class="json" selectable>{{roomJson}}</text>
+  </view>
+</view>

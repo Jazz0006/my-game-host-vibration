@@ -1,0 +1,14 @@
+{
+  "description": "E3.7 native WeChat validation shell for my-game-host-vibration",
+  "miniprogramRoot": "miniprogram/",
+  "compileType": "miniprogram",
+  "appid": "touristappid",
+  "projectname": "game-host-e3-7-validation",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": false
+  }
+}

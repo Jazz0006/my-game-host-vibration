@@ -19,6 +19,7 @@ import {
   type WeChatSessionCredentialStoreOptions,
   type WeChatStorageLike,
 } from "./WeChatSessionCredentialStore.js";
+export { WECHAT_SESSION_CREDENTIAL_STORAGE_KEY } from "./WeChatSessionCredentialStore.js";
 import {
   attachWeChatSessionLifecycle,
   type WeChatAppLifecycleLike,
