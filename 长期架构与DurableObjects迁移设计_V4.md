@@ -371,8 +371,8 @@ Transport 不负责：
 
 ```text
 SocketIoRealtimeTransport   — 当前 Node Web
-CloudflareRealtimeTransport — Raw WebSocket / DO
-WeChatRealtimeTransport     — 微信 native WebSocket
+Cloudflare Raw WS wire      — Durable Object stable framing
+WeChatRealtimeTransport     — 微信 native WebSocket ✅ minimal adapter
 ```
 
 ---
@@ -644,6 +644,8 @@ WebSocket upgrade
 
 长期 resume credential 不直接放入 WebSocket URL。
 
+E3.2c 已验证微信 adapter 遵守该边界：`resumeToken` 只进入 authenticated ticket HTTP exchange；native WebSocket URL 只携带 one-time ticket。微信 platform capability 通过注入的 `request/connectSocket` contract 提供，不要求 shared runtime 直接引用全局 `wx`。
+
 ---
 
 # 19. 多游戏平台边界
@@ -701,7 +703,8 @@ E3 Native WeChat Thin Client
   ├─ E3.1 transport / ClientSession boundary audit ✅
   ├─ E3.2a pre-connect credential / ticket seam ✅
   ├─ E3.2b Raw WebSocket stable wire ✅
-  └─ E3.2c minimal WeChat transport ← CURRENT
+  ├─ E3.2c minimal WeChat transport ✅
+  └─ E3.3 state sync + reconnect PoC ← CURRENT
         ↓
 Reliability Hardening
   └─ Post-commit Effect Outbox
@@ -711,7 +714,7 @@ Cloudflare Production Cutover + Real-device Field Validation
 BotC Production Expansion
 ```
 
-E2 已完成；E3.1 / E3.2a / E3.2b 已依次完成第二客户端边界、pre-connect credential seam 与 Raw WebSocket stable wire + Cloudflare bridge。当前进入 E3.2c minimal WeChat ClientRealtimeTransport。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 已完成；E3.1 / E3.2a / E3.2b / E3.2c 已依次完成第二客户端边界、pre-connect credential seam、Raw WebSocket stable wire 与最小 WeChat native transport。当前进入 E3.3 authoritative state sync + reconnect PoC，把 ClientSession 与微信 transport 组合验证。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 

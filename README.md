@@ -26,7 +26,8 @@ E2.3   Legacy Realtime Boundary Contraction    ✅
 E3.1   WeChat transport / ClientSession audit   ✅
 E3.2a  Pre-connect credential / ticket seam     ✅
 E3.2b  Raw WebSocket stable wire + CF bridge    ✅
-E3.2c  Minimal WeChat realtime transport        ← NEXT
+E3.2c  Minimal WeChat realtime transport        ✅
+E3.3   WeChat state sync + reconnect PoC        ← NEXT
 R1     Reliability Hardening / Effect Outbox
 Cloudflare production cutover + real-device validation
 BotC production expansion
@@ -123,7 +124,7 @@ UI intention
 → shared authoritative Werewolf runtime
 ```
 
-private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a 已完成 `connect(credentials, generation)` seam；E3.2b 已建立带独立 `wireVersion`、request/ACK correlation、state/event/error frame 的 Cloudflare Raw WebSocket stable wire。下一步实现最小微信 `ClientRealtimeTransport`，直接消费现有 ticket + wire contract。
+private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a 已完成 pre-connect credential seam，E3.2b 已建立 Cloudflare Raw WebSocket stable wire，E3.2c 已实现最小微信 `ClientRealtimeTransport`：ticket exchange、native SocketTask、request correlation、state/event delivery 和 generation guard 都已具备。下一步把它与 `ClientSession` 组合验证 reconnect / authoritative sync。
 
 ## 多玩家模拟器
 
