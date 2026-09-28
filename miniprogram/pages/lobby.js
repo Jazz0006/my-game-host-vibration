@@ -191,7 +191,7 @@ Page({
     const nextReady = !currentPlayer.ready;
     currentPlayer.ready = nextReady;
     if (nextReady && wx.vibrateShort) {
-      wx.vibrateShort({ type: "light" });
+      wx.vibrateShort({ type: "heavy" });
     }
     this.applyLobbyModel(this._lobbyModel, true);
   },

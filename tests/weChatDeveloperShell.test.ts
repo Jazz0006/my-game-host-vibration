@@ -84,6 +84,7 @@ describe("E3.7 WeChat Developer Tools shell", () => {
     expect(lobby).toContain('require("../rounded-table-layout.js")');
     expect(lobby).toContain("applyLobbyModel");
     expect(lobby).toContain("wx.vibrateShort");
+    expect(lobby).toContain('type: "heavy"');
     expect(lobby).not.toContain("/domain/");
     expect(lobby).not.toContain("/games/");
     expect(lobby).not.toContain("room:state");
