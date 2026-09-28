@@ -90,4 +90,28 @@ describe("E3.7B WeChat room bootstrap client", () => {
     await expect(bootstrap.joinRoom("4321")).rejects.toThrow("房间不存在");
     expect(requests).toBe(1);
   });
+
+  it("preserves wx.request fail diagnostics from plain error objects", async () => {
+    const api = {
+      request(options: {
+        url: string;
+        method: "POST";
+        data: unknown;
+        success(response: { statusCode: number; data: unknown }): void;
+        fail(error: unknown): void;
+      }) {
+        options.fail({
+          errMsg: "request:fail url not in domain list",
+          errno: 600009,
+        });
+      },
+    };
+    const bootstrap = new WeChatRoomBootstrapClient(api, {
+      baseUrl: "https://game.example",
+    });
+
+    await expect(bootstrap.createRoom()).rejects.toThrow(
+      "request:fail url not in domain list (errno 600009)",
+    );
+  });
 });

@@ -32,6 +32,7 @@ Page({
   async onCreateRoomTap() {
     if (this._busy) return;
     this._busy = true;
+    let failure = "";
     wx.showLoading({ title: "创建房间…" });
     try {
       const session = await gameClient().createRoom();
@@ -39,11 +40,15 @@ Page({
         url: `/pages/lobby?room=${session.roomId}`,
       });
     } catch (error) {
-      wx.showToast({ title: errorMessage(error), icon: "none" });
+      failure = errorMessage(error);
+      console.error("[wechat] create room failed", error);
     } finally {
       wx.hideLoading();
       this._busy = false;
       this.setData({ hasRecoverableRoom: gameClient().hasStoredSession() });
+    }
+    if (failure) {
+      wx.showToast({ title: failure, icon: "none", duration: 4000 });
     }
   },
 
@@ -58,6 +63,7 @@ Page({
     if (this._busy) return;
 
     this._busy = true;
+    let failure = "";
     wx.showLoading({ title: "加入房间…" });
     try {
       const session = await gameClient().joinRoom(this.data.roomCode);
@@ -65,11 +71,15 @@ Page({
         url: `/pages/lobby?room=${session.roomId}`,
       });
     } catch (error) {
-      wx.showToast({ title: errorMessage(error), icon: "none" });
+      failure = errorMessage(error);
+      console.error("[wechat] join room failed", error);
     } finally {
       wx.hideLoading();
       this._busy = false;
       this.setData({ hasRecoverableRoom: gameClient().hasStoredSession() });
+    }
+    if (failure) {
+      wx.showToast({ title: failure, icon: "none", duration: 4000 });
     }
   },
 

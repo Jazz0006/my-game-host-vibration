@@ -41,6 +41,20 @@ function normalizeRoomCode(value: string): string {
   return roomCode;
 }
 
+function requestFailureError(value: unknown): Error {
+  if (value instanceof Error) return value;
+  const record = asRecord(value);
+  const errMsg =
+    typeof record?.errMsg === "string" && record.errMsg.trim()
+      ? record.errMsg.trim()
+      : "Room bootstrap request failed";
+  const errno =
+    typeof record?.errno === "number" || typeof record?.errno === "string"
+      ? String(record.errno).trim()
+      : "";
+  return new Error(errno ? `${errMsg} (errno ${errno})` : errMsg);
+}
+
 function parseBootstrapResponse(
   response: { statusCode: number; data: unknown },
 ): RoomBootstrapCredentials {
@@ -113,7 +127,7 @@ export class WeChatRoomBootstrapClient {
           }
         },
         fail: error => {
-          reject(error instanceof Error ? error : new Error("Room bootstrap request failed"));
+          reject(requestFailureError(error));
         },
       });
     });
