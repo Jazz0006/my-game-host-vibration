@@ -47,7 +47,7 @@ E3.7 的真实验证需要一个已部署且可通过公网 HTTPS/WSS 访问的 
 - **预览方桌大厅**：使用明确标记的本地 preview data 检查方桌布局、游戏单选、主持位、Ready/震动概念和房间管理页面；这些 preview 操作不写入服务器。
 - **E3.7 Diagnostics**：进入原来的真实 session / reconnect / semantic-command 验证壳。
 
-E3.7B 当前已经把真实 create/join/resume 与 authoritative public room projection 接入产品入口，并把 host `werewolf.startGame` 接到既有 semantic command。仍未接入的 Lobby authority 包括 Ready、游戏选择、reorder、moderator assignment、移交房主与踢人；这些操作继续只允许 preview 演示，不能在页面内伪造服务器状态。
+E3.7B 已完成：真实 create/join/resume 与 authoritative public room projection 已接入产品入口，host `werewolf.startGame` 已接到既有 semantic command，并完成真实手机的双端同步、前后台恢复、飞行模式断网恢复、stored-session 恢复与 heavy vibration capability 验收。仍未接入的 Lobby authority 包括 Ready、游戏选择、reorder、moderator assignment、移交房主与踢人；这些操作继续只允许 preview 演示，不能在页面内伪造服务器状态。
 
 ## 开发者工具验证
 
@@ -84,13 +84,13 @@ E3.7B 当前已经把真实 create/join/resume 与 authoritative public room pro
 
 同时验证：
 
-- action-alert 能触发真机震动；
+- 真机 native heavy vibration capability 可明确感知；server-originated action-alert 的 semantic effect 链路由自动化 contract/integration tests 覆盖；
 - semantic audio 若配置了可访问的音频 source，应保持 best-effort，不得影响 authoritative sync；
-- stale old-socket callback 不得覆盖新 generation；
+- stale old-socket callback 不得覆盖新 generation；该项已有专门自动化测试；
 - 同 commandId retry 不得导致 revision 二次推进。
 
-## E3.7 完成标准
+## E3.7 完成状态
 
-只有在开发者工具和至少一台真机上记录了真实结果后，E3.7 才可以标记 COMPLETE。
+**E3.7A + E3.7B 已于 2026-09-29 COMPLETE。**
 
-fake-`wx` integration test 是自动化 contract evidence，不等于真实设备证据。
+真实设备证据包括：产品 create/join、双端 authoritative push、foreground/background 恢复、飞行模式断网恢复、stored-session 恢复，以及 heavy vibration capability。fake-`wx` integration tests 继续承担 stale-generation、same-commandId retry 与 semantic effect wiring 等自动化 contract evidence；两类证据不互相替代。
