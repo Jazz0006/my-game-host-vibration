@@ -12,7 +12,7 @@ Use this authority order:
 explicit current user instruction
 -> AGENTS.md
 -> 开发计划_V5_客户端运行时与网络韧性实施路线.md
--> 微信客户端大厅与方桌_UI实施基线_2026-09-28.md   // WeChat lobby/table UX only
+-> docs/微信客户端大厅与方桌_UI实施基线_2026-09-28.md   // WeChat lobby/table UX only
 -> 长期架构与DurableObjects迁移设计_V4.md
 -> live code / Git / tests / runtime evidence
 -> README.md operational instructions

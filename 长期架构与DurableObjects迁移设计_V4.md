@@ -603,7 +603,7 @@ WerewolfGameJudge 当前 miniapp 主要是 WebView shell，可作为发布链路
 
 本项目正式路线：
 
-> 微信客户端正式大厅/方桌 UX 以 `微信客户端大厅与方桌_UI实施基线_2026-09-28.md` 为实现标准；该文档只拥有入口页、Lobby、通用方桌、主持位与房间管理 UX，不覆盖本章的 runtime / protocol ownership。
+> 微信客户端正式大厅/方桌 UX 以 `docs/微信客户端大厅与方桌_UI实施基线_2026-09-28.md` 为实现标准；该文档只拥有入口页、Lobby、通用方桌、主持位与房间管理 UX，不覆盖本章的 runtime / protocol ownership。
 
 ```text
 WeChat native thin client
