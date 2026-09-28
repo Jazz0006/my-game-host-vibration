@@ -1,0 +1,68 @@
+<view class="page">
+  <view class="topbar">
+    <view>
+      <view class="eyebrow">ROOM</view>
+      <view class="room-title">房间 {{roomCode || "----"}}</view>
+    </view>
+    <button class="icon-button" bindtap="onSettingsTap">⚙</button>
+  </view>
+
+  <view class="preview-banner" wx:if="{{previewMode}}">
+    UI Preview · 本页暂不写入服务器状态
+  </view>
+
+  <view class="table-stage">
+    <view
+      class="seat {{item.ready ? 'seat-ready' : ''}} {{item.connected ? '' : 'seat-offline'}}"
+      style="{{item.style}}"
+      wx:for="{{seats}}"
+      wx:key="id"
+    >
+      <view class="seat-name">
+        {{item.name}}
+        <text wx:if="{{item.isOwner}}" class="owner-badge">👑</text>
+      </view>
+      <view class="seat-state">{{item.ready ? "✓ 已准备" : "未准备"}}</view>
+    </view>
+
+    <view class="table-center">
+      <view class="moderator-card">
+        <view class="moderator-role">{{moderatorLabel}}</view>
+        <view class="moderator-name">{{moderatorName}}</view>
+      </view>
+
+      <view class="divider"></view>
+
+      <view class="game-list">
+        <view
+          class="game-option {{selectedGame === item.id ? 'game-selected' : ''}}"
+          data-game-id="{{item.id}}"
+          bindtap="onGameTap"
+          wx:for="{{games}}"
+          wx:key="id"
+        >
+          <text class="radio">{{selectedGame === item.id ? "●" : "○"}}</text>
+          <text>{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="status-line">{{statusLine}}</view>
+
+  <view class="host-actions" wx:if="{{isOwner}}">
+    <button class="secondary-button" bindtap="onInviteTap">邀请朋友</button>
+    <button class="primary-button" bindtap="onStartGameTap">开始游戏</button>
+  </view>
+
+  <button
+    class="ready-button {{currentPlayerReady ? 'ready-active' : ''}}"
+    bindtap="onReadyTap"
+  >
+    {{currentPlayerReady ? "✓ 已准备好" : "已准备好"}}
+  </button>
+
+  <view class="hint" wx:if="{{previewMode}}">
+    下一 UI slice 再接：长按拖动排序、拖入/拖出主持位、authoritative commands。
+  </view>
+</view>

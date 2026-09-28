@@ -1,9 +1,12 @@
 {
   "pages": [
-    "pages/index/index"
+    "pages/index/index",
+    "pages/lobby",
+    "pages/settings",
+    "pages/diagnostics"
   ],
   "window": {
-    "navigationBarTitleText": "Game Host E3.7",
+    "navigationBarTitleText": "多游戏主持系统",
     "navigationBarTextStyle": "black",
     "backgroundTextStyle": "light"
   },

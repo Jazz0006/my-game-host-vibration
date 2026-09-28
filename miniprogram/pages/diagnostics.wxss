@@ -1,0 +1,67 @@
+.page {
+  padding: 24rpx;
+}
+
+.card {
+  margin-bottom: 24rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 18rpx rgba(0, 0, 0, 0.05);
+}
+
+.title {
+  font-size: 38rpx;
+  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+
+.muted {
+  color: #6a737d;
+  margin-bottom: 20rpx;
+}
+
+.label {
+  display: block;
+  margin: 18rpx 0 8rpx;
+  color: #57606a;
+}
+
+.input,
+.textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 18rpx;
+  border: 1rpx solid #d0d7de;
+  border-radius: 10rpx;
+  background: #ffffff;
+}
+
+.textarea {
+  min-height: 180rpx;
+  margin-top: 16rpx;
+}
+
+.status {
+  margin-top: 16rpx;
+  color: #0969da;
+  word-break: break-all;
+}
+
+.players {
+  margin: 16rpx 0;
+  line-height: 1.8;
+}
+
+.json {
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: monospace;
+  font-size: 24rpx;
+}

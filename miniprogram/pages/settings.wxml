@@ -1,0 +1,47 @@
+<view class="page">
+  <view class="title">设置</view>
+
+  <view class="tabs">
+    <view class="tab tab-active">房间管理</view>
+  </view>
+
+  <view class="preview-banner" wx:if="{{previewMode}}">
+    UI Preview · 管理操作暂不写入服务器
+  </view>
+
+  <view class="section">
+    <view class="section-title">房间成员</view>
+
+    <view class="member-row" wx:for="{{participants}}" wx:key="id">
+      <view>
+        <view class="member-name">
+          {{item.name}}
+          <text wx:if="{{item.id === ownerId}}" class="owner-label">房主</text>
+        </view>
+        <view class="member-meta">{{item.ready ? "已准备" : "未准备"}}</view>
+      </view>
+
+      <view class="member-actions" wx:if="{{item.id !== ownerId}}">
+        <button
+          size="mini"
+          data-player-id="{{item.id}}"
+          bindtap="onTransferOwnerTap"
+        >
+          移交房主
+        </button>
+        <button
+          size="mini"
+          type="warn"
+          data-player-id="{{item.id}}"
+          bindtap="onKickTap"
+        >
+          移出
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <view class="footnote">
+    Room Owner 与游戏主持人是独立职责；移交房主不会改变说书人/法官 assignment。
+  </view>
+</view>
