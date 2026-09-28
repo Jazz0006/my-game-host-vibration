@@ -19,6 +19,10 @@ import {
   type WeChatSessionCredentialStoreOptions,
   type WeChatStorageLike,
 } from "./WeChatSessionCredentialStore.js";
+import {
+  WeChatRoomBootstrapClient,
+  type RoomBootstrapCredentials,
+} from "./WeChatRoomBootstrapClient.js";
 export { WECHAT_SESSION_CREDENTIAL_STORAGE_KEY } from "./WeChatSessionCredentialStore.js";
 import {
   attachWeChatSessionLifecycle,
@@ -67,8 +71,11 @@ export type WeChatNativeClientOptions = {
 export type WeChatNativeClient<TPlayerView = unknown> = {
   getView(): WeChatNativeClientView<TPlayerView>;
   subscribe(listener: WeChatNativeClientListener<TPlayerView>): () => void;
+  hasStoredSession(): boolean;
   startStoredSession(): boolean;
   startSession(credentials: ClientReconnectCredentials): void;
+  createRoom(name?: string): Promise<RoomBootstrapCredentials>;
+  joinRoom(roomCode: string, name?: string): Promise<RoomBootstrapCredentials>;
   clearStoredSession(): void;
   sendCommand<TPayload>(
     type: string,
@@ -129,6 +136,7 @@ export function createWeChatNativeClient<TPlayerView = unknown>(
   const credentialStoreOptions: WeChatSessionCredentialStoreOptions =
     options.storageKey === undefined ? {} : { storageKey: options.storageKey };
   const credentials = new WeChatSessionCredentialStore(api, credentialStoreOptions);
+  const roomBootstrap = new WeChatRoomBootstrapClient(api, { baseUrl: options.baseUrl });
   const listeners = new Set<WeChatNativeClientListener<TPlayerView>>();
   let commandSequence = 0;
   const commandIdFactory = options.commandIdFactory ??
@@ -183,6 +191,28 @@ export function createWeChatNativeClient<TPlayerView = unknown>(
     };
   }
 
+  function startSession(value: ClientReconnectCredentials): void {
+    if (disposed) throw new Error("WeChat native client is disposed");
+    const normalized = credentials.save(value);
+    session.start(normalized);
+  }
+
+  async function bootstrapSession(
+    operation: () => Promise<RoomBootstrapCredentials>,
+  ): Promise<RoomBootstrapCredentials> {
+    if (disposed) throw new Error("WeChat native client is disposed");
+    if (session.getConnectionState().status !== "Idle") {
+      throw new Error("client session has already started");
+    }
+    const created = await operation();
+    startSession({
+      roomId: created.roomId,
+      playerId: created.playerId,
+      resumeToken: created.resumeToken,
+    });
+    return created;
+  }
+
   return {
     getView,
 
@@ -194,6 +224,10 @@ export function createWeChatNativeClient<TPlayerView = unknown>(
       };
     },
 
+    hasStoredSession() {
+      return !disposed && credentials.load() !== null;
+    },
+
     startStoredSession() {
       if (disposed || session.getConnectionState().status !== "Idle") return false;
       const stored = credentials.load();
@@ -202,10 +236,14 @@ export function createWeChatNativeClient<TPlayerView = unknown>(
       return true;
     },
 
-    startSession(value) {
-      if (disposed) throw new Error("WeChat native client is disposed");
-      const normalized = credentials.save(value);
-      session.start(normalized);
+    startSession,
+
+    createRoom(name) {
+      return bootstrapSession(() => roomBootstrap.createRoom(name));
+    },
+
+    joinRoom(roomCode, name) {
+      return bootstrapSession(() => roomBootstrap.joinRoom(roomCode, name));
     },
 
     clearStoredSession() {

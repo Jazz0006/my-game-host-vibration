@@ -132,7 +132,7 @@ UI intention
 → shared authoritative Werewolf runtime
 ```
 
-private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.5 已建立微信 ticket/Raw WS、reconnect、same-commandId retry 与 native effects；E3.6 进一步加入 transport-neutral public room projection、Cloudflare start/restart lifecycle、next-actor action alert，以及微信 credential storage/lifecycle/native composition/minimal page-controller。fake-`wx` vertical test 已跑通 lobby → command → effect → background reconnect。E3.7A 现已提供可直接导入微信开发者工具的 `miniprogram/` shell，以及 TS7 bundler-mode typecheck + esbuild CommonJS runtime build；自动化 build/verify 已纳入 `npm test`。当前只剩 E3.7B 的真实 Developer Tools / 手机 foreground-background 验收，不能用 fake-`wx` 结果替代。
+private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.5 已建立微信 ticket/Raw WS、reconnect、same-commandId retry 与 native effects；E3.6 进一步加入 transport-neutral public room projection、Cloudflare start/restart lifecycle、next-actor action alert，以及微信 credential storage/lifecycle/native composition/minimal page-controller。fake-`wx` vertical test 已跑通 lobby → command → effect → background reconnect。E3.7A 现已提供可直接导入微信开发者工具的 `miniprogram/` shell，以及 TS7 bundler-mode typecheck + esbuild CommonJS runtime build；E3.7B implementation checkpoint 已补齐 Cloudflare create/join bootstrap、微信 credentials 自动保存/恢复、产品 Lobby authoritative projection 与 host startGame，并把内部 snapshot persistence endpoint 从公网 Worker surface 移除。当前 E3.7B 仍需真实 Developer Tools / 手机 foreground-background 验收，不能用 fake-`wx` 结果替代；Ready、游戏选择、主持位、排序与房间管理仍属于后续 authoritative lobby-command slices。
 
 ## 多玩家模拟器
 

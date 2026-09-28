@@ -14,6 +14,52 @@ function toParticipantMap(participants) {
   return result;
 }
 
+function authoritativeLobbyModel(room) {
+  const players = Array.isArray(room.players)
+    ? [...room.players].sort((left, right) => left.seat - right.seat)
+    : [];
+  const owner = players.find(player => player.isHost);
+  return {
+    roomCode: room.roomId || "",
+    participants: players.map(player => ({
+      id: player.id,
+      name: player.name,
+      isOwner: Boolean(player.isHost),
+      ready: false,
+    })),
+    playerOrder: players.map(player => player.id),
+    currentPlayerId: room.viewer && room.viewer.playerId ? room.viewer.playerId : "",
+    ownerId: owner ? owner.id : "",
+    selectedGame: room.gameType || "werewolf",
+    moderatorAssignment: { type: "automatic" },
+    gameStarted: Boolean(room.gameStarted),
+  };
+}
+
+function connectionStatusLine(view) {
+  if (view.error) return view.error;
+  switch (view.connectionStatus) {
+    case "Connecting":
+    case "Syncing":
+      return "正在同步房间状态…";
+    case "Reconnecting":
+      return "正在恢复连接并重新同步…";
+    case "Disconnected":
+      return "连接已断开，回到前台后会自动恢复。";
+    case "Failed":
+      return "连接失败，请返回后重试。";
+    default:
+      return "等待 authoritative room projection。";
+  }
+}
+
+function errorMessage(error) {
+  if (error && typeof error.message === "string" && error.message.trim()) {
+    return error.message.trim();
+  }
+  return "操作失败，请重试";
+}
+
 Page({
   data: {
     previewMode: false,
@@ -28,21 +74,43 @@ Page({
     currentPlayerId: "",
     currentPlayerReady: false,
     isOwner: false,
+    gameStarted: false,
     statusLine: "等待 authoritative room projection。",
   },
 
   onLoad(options) {
     const previewMode = options && options.preview === "1";
-    if (!previewMode) {
-      this.setData({
-        previewMode: false,
-        roomCode: options && options.room ? String(options.room) : "",
-      });
+    if (previewMode) {
+      const model = createPreviewLobby(options && options.room);
+      this.applyLobbyModel(model, true);
       return;
     }
 
-    const model = createPreviewLobby(options && options.room);
-    this.applyLobbyModel(model, true);
+    this.setData({
+      previewMode: false,
+      roomCode: options && options.room ? String(options.room) : "",
+    });
+
+    const app = getApp();
+    this._client = app.getGameClient();
+    this._detachClient = this._client.subscribe(view => {
+      if (view.room) {
+        this.applyLobbyModel(authoritativeLobbyModel(view.room), false);
+        return;
+      }
+      this.setData({ statusLine: connectionStatusLine(view) });
+    });
+
+    if (this._client.getView().connectionStatus === "Idle") {
+      this._client.startStoredSession();
+    }
+  },
+
+  onUnload() {
+    if (this._detachClient) {
+      this._detachClient();
+      this._detachClient = null;
+    }
   },
 
   applyLobbyModel(model, previewMode) {
@@ -75,17 +143,28 @@ Page({
       currentPlayerId: model.currentPlayerId || "",
       currentPlayerReady: Boolean(currentPlayer && currentPlayer.ready),
       isOwner: model.ownerId === model.currentPlayerId,
+      gameStarted: Boolean(model.gameStarted),
       statusLine: previewMode
         ? "UI Preview：当前使用本地展示数据，不是服务器 authoritative state。"
-        : "已连接 authoritative room projection。",
+        : model.gameStarted
+          ? "服务器已开始游戏，authoritative PlayerView 已切换到游戏状态。"
+          : "已连接 authoritative room projection。",
     });
   },
 
   onGameTap(event) {
-    if (!this.data.previewMode || !this.data.isOwner) return;
+    if (!this.data.isOwner) return;
     const gameId = event.currentTarget.dataset.gameId;
     const game = PREVIEW_GAMES.find(item => item.id === gameId);
     if (!game || !this._lobbyModel) return;
+
+    if (!this.data.previewMode) {
+      wx.showToast({
+        title: "游戏选择将在 lobby command slice 接入",
+        icon: "none",
+      });
+      return;
+    }
 
     this._lobbyModel.selectedGame = game.id;
     this.setData({
@@ -95,7 +174,15 @@ Page({
   },
 
   onReadyTap() {
-    if (!this.data.previewMode || !this._lobbyModel) return;
+    if (!this._lobbyModel) return;
+    if (!this.data.previewMode) {
+      wx.showToast({
+        title: "准备状态将在 lobby command slice 接入",
+        icon: "none",
+      });
+      return;
+    }
+
     const currentPlayer = this._lobbyModel.participants.find(
       participant => participant.id === this._lobbyModel.currentPlayerId,
     );
@@ -117,15 +204,30 @@ Page({
 
   onInviteTap() {
     wx.showToast({
-      title: this.data.previewMode ? "分享接线稍后补上" : "邀请入口待接线",
+      title: this.data.previewMode ? "分享接线稍后补上" : `房间号：${this.data.roomCode}`,
       icon: "none",
     });
   },
 
-  onStartGameTap() {
-    wx.showToast({
-      title: "Setup 入口将在游戏模块接线后启用",
-      icon: "none",
-    });
+  async onStartGameTap() {
+    if (!this.data.isOwner || this.data.gameStarted) return;
+
+    if (this.data.previewMode) {
+      wx.showToast({
+        title: "UI Preview 不会启动服务器游戏",
+        icon: "none",
+      });
+      return;
+    }
+
+    wx.showLoading({ title: "开始游戏…" });
+    try {
+      await this._client.sendCommand("werewolf.startGame", {});
+      wx.showToast({ title: "游戏已开始", icon: "success" });
+    } catch (error) {
+      wx.showToast({ title: errorMessage(error), icon: "none" });
+    } finally {
+      wx.hideLoading();
+    }
   },
 });

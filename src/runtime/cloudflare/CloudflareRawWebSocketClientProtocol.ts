@@ -7,7 +7,6 @@ import type { ClientCommandEnvelope } from "../../protocol/client/ClientProtocol
 import {
   createClientRawWebSocketEventFrame,
   createClientRawWebSocketFailureResponse,
-  createClientRawWebSocketStateFrame,
   createClientRawWebSocketSuccessResponse,
   encodeClientRawWebSocketFrame,
   type ClientRawWebSocketRequest,
@@ -24,6 +23,7 @@ import {
   createCloudflareRoomStateEnvelope,
   executeCloudflareClientProtocolCommand,
 } from "./CloudflareClientProtocolAdapter.js";
+import { pushCloudflareAuthoritativeStates } from "./CloudflareAuthoritativeStateDelivery.js";
 import {
   CloudflareRoomRealtime,
   type HibernationWebSocketLike,
@@ -134,7 +134,9 @@ export class CloudflareRawWebSocketClientProtocol {
             replayed: execution.replayed,
           }),
         ));
-        if (!execution.replayed) this.pushAuthoritativeStates(execution.snapshot);
+        if (!execution.replayed) {
+          pushCloudflareAuthoritativeStates(this.realtime, execution.snapshot);
+        }
       } catch (error) {
         this.sendFailure(
           webSocket,
@@ -172,7 +174,7 @@ export class CloudflareRawWebSocketClientProtocol {
         }),
       ));
       if (!execution.replayed) {
-        this.pushAuthoritativeStates(execution.snapshot);
+        pushCloudflareAuthoritativeStates(this.realtime, execution.snapshot);
         if (execution.outcome.kind === "afterNightAction") {
           this.pushActionAlertEffect(execution.snapshot);
         }
@@ -220,24 +222,4 @@ export class CloudflareRawWebSocketClientProtocol {
     }
   }
 
-  private pushAuthoritativeStates(snapshot: ClientSnapshot): void {
-    for (const member of snapshot.membership) {
-      try {
-        const roomFrame = createClientRawWebSocketStateFrame(
-          snapshot.revision,
-          createCloudflareRoomStateEnvelope(snapshot, member.id),
-        );
-        const playerFrame = createClientRawWebSocketStateFrame(
-          snapshot.revision,
-          createCloudflarePlayerStateEnvelope(snapshot, member.id),
-        );
-        this.realtime.sendToPlayer(member.id, encodeClientRawWebSocketFrame(roomFrame));
-        this.realtime.sendToPlayer(member.id, encodeClientRawWebSocketFrame(playerFrame));
-      } catch {
-        // Authoritative pushes are recoverable via explicit sync. A delivery
-        // failure after a committed command must not turn a successful ACK into
-        // a contradictory request failure.
-      }
-    }
-  }
 }

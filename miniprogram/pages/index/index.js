@@ -1,7 +1,25 @@
+function gameClient() {
+  const app = getApp();
+  return app.getGameClient();
+}
+
+function errorMessage(error) {
+  if (error && typeof error.message === "string" && error.message.trim()) {
+    return error.message.trim();
+  }
+  return "操作失败，请重试";
+}
+
 Page({
   data: {
     roomCode: "",
     hasRecoverableRoom: false,
+  },
+
+  onShow() {
+    this.setData({
+      hasRecoverableRoom: gameClient().hasStoredSession(),
+    });
   },
 
   onRoomCodeInput(event) {
@@ -11,14 +29,25 @@ Page({
     this.setData({ roomCode });
   },
 
-  onCreateRoomTap() {
-    wx.showToast({
-      title: "创建房间将在 authority 接线后启用",
-      icon: "none",
-    });
+  async onCreateRoomTap() {
+    if (this._busy) return;
+    this._busy = true;
+    wx.showLoading({ title: "创建房间…" });
+    try {
+      const session = await gameClient().createRoom();
+      wx.navigateTo({
+        url: `/pages/lobby?room=${session.roomId}`,
+      });
+    } catch (error) {
+      wx.showToast({ title: errorMessage(error), icon: "none" });
+    } finally {
+      wx.hideLoading();
+      this._busy = false;
+      this.setData({ hasRecoverableRoom: gameClient().hasStoredSession() });
+    }
   },
 
-  onJoinRoomTap() {
+  async onJoinRoomTap() {
     if (!/^\d{4}$/.test(this.data.roomCode)) {
       wx.showToast({
         title: "请输入 4 位房间号",
@@ -26,17 +55,40 @@ Page({
       });
       return;
     }
+    if (this._busy) return;
 
-    wx.showToast({
-      title: "加入房间将在 authority 接线后启用",
-      icon: "none",
-    });
+    this._busy = true;
+    wx.showLoading({ title: "加入房间…" });
+    try {
+      const session = await gameClient().joinRoom(this.data.roomCode);
+      wx.navigateTo({
+        url: `/pages/lobby?room=${session.roomId}`,
+      });
+    } catch (error) {
+      wx.showToast({ title: errorMessage(error), icon: "none" });
+    } finally {
+      wx.hideLoading();
+      this._busy = false;
+      this.setData({ hasRecoverableRoom: gameClient().hasStoredSession() });
+    }
   },
 
   onContinueRoomTap() {
-    wx.showToast({
-      title: "恢复入口将在 session 接线后启用",
-      icon: "none",
+    const client = gameClient();
+    const view = client.getView();
+    const started =
+      view.connectionStatus === "Idle"
+        ? client.startStoredSession()
+        : true;
+
+    if (!started) {
+      this.setData({ hasRecoverableRoom: false });
+      wx.showToast({ title: "没有可恢复的房间", icon: "none" });
+      return;
+    }
+
+    wx.navigateTo({
+      url: "/pages/lobby",
     });
   },
 

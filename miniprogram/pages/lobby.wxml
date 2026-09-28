@@ -13,7 +13,7 @@
 
   <view class="table-stage">
     <view
-      class="seat {{item.ready ? 'seat-ready' : ''}} {{item.connected ? '' : 'seat-offline'}}"
+      class="seat {{item.ready ? 'seat-ready' : ''}} {{item.connected === false ? 'seat-offline' : ''}}"
       style="{{item.style}}"
       wx:for="{{seats}}"
       wx:key="id"
@@ -50,7 +50,7 @@
 
   <view class="status-line">{{statusLine}}</view>
 
-  <view class="host-actions" wx:if="{{isOwner}}">
+  <view class="host-actions" wx:if="{{isOwner && !gameStarted}}">
     <button class="secondary-button" bindtap="onInviteTap">邀请朋友</button>
     <button class="primary-button" bindtap="onStartGameTap">开始游戏</button>
   </view>
