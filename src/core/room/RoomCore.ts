@@ -4,12 +4,23 @@ const MAX_PLAYER_NAME_LENGTH = 20;
 
 type NowProvider = () => number;
 
-function normalizePlayerName(name: string): string {
+export function normalizeRoomPlayerName(name: string): string {
   return name.trim().slice(0, MAX_PLAYER_NAME_LENGTH);
 }
 
 function comparablePlayerName(name: string): string {
-  return normalizePlayerName(name).toLocaleLowerCase();
+  return normalizeRoomPlayerName(name).toLocaleLowerCase();
+}
+
+export function roomPlayerNameExists(
+  players: ReadonlyArray<Pick<RoomPlayer, "id" | "name">>,
+  name: string,
+  exceptPlayerId?: string,
+): boolean {
+  const normalized = comparablePlayerName(name);
+  return players.some(player =>
+    player.id !== exceptPlayerId && comparablePlayerName(player.name) === normalized
+  );
 }
 
 export class RoomCore<
@@ -36,10 +47,7 @@ export class RoomCore<
   }
 
   hasPlayerName(name: string, exceptPlayerId?: string): boolean {
-    const normalized = comparablePlayerName(name);
-    return this.state.players.some(player =>
-      player.id !== exceptPlayerId && comparablePlayerName(player.name) === normalized
-    );
+    return roomPlayerNameExists(this.state.players, name, exceptPlayerId);
   }
 
   addPlayer(player: Omit<TPlayer, "seat">): TPlayer {
@@ -47,7 +55,7 @@ export class RoomCore<
       throw new Error("player already exists in room");
     }
 
-    const normalizedName = normalizePlayerName(player.name);
+    const normalizedName = normalizeRoomPlayerName(player.name);
     if (!normalizedName) throw new Error("player name cannot be empty");
     if (this.hasPlayerName(normalizedName)) {
       throw new Error("player name already exists in room");
@@ -65,7 +73,7 @@ export class RoomCore<
 
   renamePlayer(playerId: string, name: string): TPlayer {
     const player = this.requirePlayer(playerId);
-    const normalizedName = normalizePlayerName(name);
+    const normalizedName = normalizeRoomPlayerName(name);
     if (!normalizedName) throw new Error("player name cannot be empty");
     if (this.hasPlayerName(normalizedName, playerId)) {
       throw new Error("player name already exists in room");

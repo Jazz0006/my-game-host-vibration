@@ -1,5 +1,13 @@
 import { SessionTokenService } from "../../core/session/SessionTokenService.js";
-import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
+import {
+  DEFAULT_GAME_CONFIG,
+  type GameConfig,
+  type GameState,
+} from "../../games/werewolf/WerewolfDomainFacade.js";
+import {
+  RoomBootstrapError,
+  RoomBootstrapService,
+} from "../shared/RoomBootstrapService.js";
 import {
   ClientRawWebSocketWireError,
   createClientRawWebSocketProtocolErrorFrame,
@@ -10,6 +18,10 @@ import {
   CloudflareRoomSnapshotRepository,
   type DurableObjectStorageLike,
 } from "./CloudflareRoomSnapshotRepository.js";
+import {
+  pushCloudflareAuthoritativeStates,
+  type CloudflareClientSnapshot,
+} from "./CloudflareAuthoritativeStateDelivery.js";
 import {
   CloudflareRoomRealtime,
   type DurableObjectHibernationStateLike,
@@ -74,13 +86,23 @@ function jsonMessage(type: string, payload: Record<string, unknown> = {}): strin
  * require an in-memory session registry to be rebuilt.
  */
 export class GameRoomDurableObject {
-  private readonly snapshots: CloudflareRoomSnapshotRepository;
+  private readonly snapshots: CloudflareRoomSnapshotRepository<CloudflareClientSnapshot>;
   private readonly crypto = new CloudflareSessionTokenCryptoProvider();
   private readonly sessionTokens = new SessionTokenService(this.crypto);
+  private readonly bootstrap: RoomBootstrapService<GameState, GameConfig>;
   private readonly webSocketTickets: CloudflareWebSocketTicketRepository;
 
   constructor(private readonly state: DurableObjectStateLike) {
-    this.snapshots = new CloudflareRoomSnapshotRepository(state.storage);
+    this.snapshots = new CloudflareRoomSnapshotRepository<CloudflareClientSnapshot>(state.storage);
+    this.bootstrap = new RoomBootstrapService(this.sessionTokens, {
+      gameType: "werewolf",
+      maxPlayers: 12,
+      createInitialGameConfig: () => ({
+        ...DEFAULT_GAME_CONFIG,
+        roleDeck: [...DEFAULT_GAME_CONFIG.roleDeck],
+      }),
+      createPlayerId: () => this.crypto.randomToken(16),
+    });
     this.webSocketTickets = new CloudflareWebSocketTicketRepository(state.storage, this.crypto);
 
     const realtimeState = hibernationState(state);
@@ -107,7 +129,7 @@ export class GameRoomDurableObject {
     }
 
     if (url.pathname === "/snapshot" && request.method === "PUT") {
-      const snapshot = await request.json() as RoomSnapshot;
+      const snapshot = await request.json() as CloudflareClientSnapshot;
       await this.snapshots.save(snapshot);
       return Response.json({ ok: true, revision: snapshot.revision });
     }
@@ -115,6 +137,14 @@ export class GameRoomDurableObject {
     if (url.pathname === "/snapshot" && request.method === "DELETE") {
       const deleted = await this.snapshots.clear();
       return Response.json({ ok: true, deleted });
+    }
+
+    if (url.pathname === "/bootstrap-create" && request.method === "POST") {
+      return this.createRoomSession(request);
+    }
+
+    if (url.pathname === "/bootstrap-join" && request.method === "POST") {
+      return this.joinRoomSession(request);
     }
 
     if (url.pathname === "/websocket-ticket" && request.method === "POST") {
@@ -202,6 +232,92 @@ export class GameRoomDurableObject {
 
   webSocketError(webSocket: HibernationWebSocketLike, _error: unknown): void {
     webSocket.close(1011, "websocket error");
+  }
+
+  private async createRoomSession(request: Request): Promise<Response> {
+    let body: { roomId?: unknown; name?: unknown };
+    try {
+      body = await request.json() as { roomId?: unknown; name?: unknown };
+    } catch {
+      return Response.json(
+        { ok: false, code: "invalid_request", message: "invalid request body" },
+        { status: 400 },
+      );
+    }
+
+    if (typeof body.roomId !== "string" || !/^\d{4}$/u.test(body.roomId)) {
+      return Response.json(
+        { ok: false, code: "invalid_room_code", message: "roomId must be exactly 4 digits" },
+        { status: 400 },
+      );
+    }
+    if (body.name !== undefined && typeof body.name !== "string") {
+      return Response.json(
+        { ok: false, code: "invalid_name", message: "name must be a string" },
+        { status: 400 },
+      );
+    }
+    if (await this.snapshots.load()) {
+      return Response.json(
+        { ok: false, code: "room_already_exists", message: "房间号已被占用" },
+        { status: 409 },
+      );
+    }
+
+    const created = await this.bootstrap.create(body.roomId, body.name);
+    await this.snapshots.save(created.snapshot as CloudflareClientSnapshot);
+    return Response.json({ ok: true, ...created.session }, { status: 201 });
+  }
+
+  private async joinRoomSession(request: Request): Promise<Response> {
+    let body: { name?: unknown };
+    try {
+      body = await request.json() as { name?: unknown };
+    } catch {
+      return Response.json(
+        { ok: false, code: "invalid_request", message: "invalid request body" },
+        { status: 400 },
+      );
+    }
+    if (body.name !== undefined && typeof body.name !== "string") {
+      return Response.json(
+        { ok: false, code: "invalid_name", message: "name must be a string" },
+        { status: 400 },
+      );
+    }
+
+    const snapshot = await this.snapshots.load();
+    if (!snapshot) {
+      return Response.json(
+        { ok: false, code: "room_not_found", message: "房间不存在" },
+        { status: 404 },
+      );
+    }
+
+    try {
+      const joined = await this.bootstrap.join(snapshot, body.name);
+      const nextSnapshot = joined.snapshot as CloudflareClientSnapshot;
+      await this.snapshots.save(nextSnapshot);
+      const realtimeState = hibernationState(this.state);
+      if (realtimeState) {
+        pushCloudflareAuthoritativeStates(
+          new CloudflareRoomRealtime(realtimeState),
+          nextSnapshot,
+        );
+      }
+      return Response.json({ ok: true, ...joined.session });
+    } catch (error) {
+      if (error instanceof RoomBootstrapError) {
+        return Response.json(
+          { ok: false, code: error.code, message: error.message },
+          { status: 409 },
+        );
+      }
+      return Response.json(
+        { ok: false, code: "join_failed", message: "加入房间失败" },
+        { status: 500 },
+      );
+    }
   }
 
   private async issueWebSocketTicket(request: Request): Promise<Response> {

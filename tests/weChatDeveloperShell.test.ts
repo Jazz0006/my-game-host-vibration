@@ -21,7 +21,12 @@ describe("E3.7 WeChat Developer Tools shell", () => {
     });
 
     const app = json("miniprogram/app.json");
-    expect(app.pages).toEqual(["pages/index/index"]);
+    expect(app.pages).toEqual([
+      "pages/index/index",
+      "pages/lobby",
+      "pages/settings",
+      "pages/diagnostics",
+    ]);
   });
 
   it("builds the existing TypeScript client runtime as generated CommonJS modules", () => {
@@ -48,22 +53,51 @@ describe("E3.7 WeChat Developer Tools shell", () => {
     expect(ignore).toContain("project.private.config.json");
   });
 
-  it("keeps the native page as a thin validation shell over the E3.6 composition", () => {
-    const page = text("miniprogram/pages/index/index.js");
-    expect(page).toContain('require("../../runtime/client/WeChatNativeClient.js")');
-    expect(page).toContain('require("../../runtime/client/WeChatMinimalPageController.js")');
+  it("keeps E3.7 diagnostics as a thin validation shell over the E3.6 composition", () => {
+    const page = text("miniprogram/pages/diagnostics.js");
+    expect(page).toContain('require("../runtime/client/WeChatNativeClient.js")');
+    expect(page).toContain('require("../runtime/client/WeChatMinimalPageController.js")');
     expect(page).not.toContain("/domain/");
     expect(page).not.toContain("/games/");
     expect(page).not.toContain("ClientRawWebSocketProtocol");
     expect(page).not.toContain("SocketTask");
     expect(page).not.toContain("room:state");
 
-    const markup = text("miniprogram/pages/index/index.wxml");
+    const markup = text("miniprogram/pages/diagnostics.wxml");
     expect(markup).toContain("Worker Base URL");
     expect(markup).toContain("Room ID");
     expect(markup).toContain("Player ID");
     expect(markup).toContain("Resume Token");
     expect(markup).toContain("Semantic command");
+  });
+
+  it("adds a projection-only product UI foundation without moving game authority into WeChat", () => {
+    const entry = text("miniprogram/pages/index/index.wxml");
+    expect(entry).toContain("创建房间");
+    expect(entry).toContain("4 位房间号");
+    expect(entry).toContain("预览方桌大厅");
+    expect(entry).toContain("E3.7 Diagnostics");
+
+    const lobby = text("miniprogram/pages/lobby.js");
+    const lobbyMarkup = text("miniprogram/pages/lobby.wxml");
+    const previewState = text("miniprogram/lobby-preview-state.js");
+    expect(lobby).toContain('require("../rounded-table-layout.js")');
+    expect(lobby).toContain("applyLobbyModel");
+    expect(lobby).toContain("wx.vibrateShort");
+    expect(lobby).toContain('type: "heavy"');
+    expect(lobby).not.toContain("/domain/");
+    expect(lobby).not.toContain("/games/");
+    expect(lobby).not.toContain("room:state");
+    expect(lobbyMarkup).toContain("moderatorLabel");
+    expect(previewState).toContain("狼人杀");
+    expect(previewState).toContain("血染钟楼");
+    expect(lobbyMarkup).toContain("已准备好");
+    expect(lobbyMarkup).toContain("开始游戏");
+
+    const settings = text("miniprogram/pages/settings.wxml");
+    expect(settings).toContain("房间管理");
+    expect(settings).toContain("移交房主");
+    expect(settings).toContain("移出");
   });
 
   it("documents the real-device preconditions instead of claiming fake-wx coverage is device evidence", () => {

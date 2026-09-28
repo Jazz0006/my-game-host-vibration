@@ -1,207 +1,117 @@
-const {
-  createWeChatNativeClientFromGlobal,
-  WECHAT_SESSION_CREDENTIAL_STORAGE_KEY,
-} = require("../../runtime/client/WeChatNativeClient.js");
-const {
-  WeChatMinimalPageController,
-} = require("../../runtime/client/WeChatMinimalPageController.js");
-
-const BASE_URL_STORAGE_KEY = "gamehost.dev.workerBaseUrl.v1";
-
-function emptyClientView() {
-  return {
-    screen: "resume-required",
-    connectionStatus: "Idle",
-    room: null,
-    roomRevision: null,
-    playerView: null,
-    playerRevision: null,
-  };
+function gameClient() {
+  const app = getApp();
+  return app.getGameClient();
 }
 
-function normalizedBaseUrl(value) {
-  return String(value || "").trim().replace(/\/+$/, "");
-}
-
-function pretty(value) {
-  if (value === null || value === undefined) return "";
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
+function errorMessage(error) {
+  if (error && typeof error.message === "string" && error.message.trim()) {
+    return error.message.trim();
   }
+  return "操作失败，请重试";
 }
 
 Page({
   data: {
-    baseUrl: "",
-    roomId: "",
-    playerId: "",
-    resumeToken: "",
-    commandType: "werewolf.startGame",
-    commandPayload: "{}",
-    client: emptyClientView(),
-    roomJson: "",
-    playerViewJson: "",
-    lastAction: "Configure a Worker Base URL and existing room credentials.",
+    roomCode: "",
+    hasRecoverableRoom: false,
   },
 
-  onLoad() {
-    const baseUrl = normalizedBaseUrl(wx.getStorageSync(BASE_URL_STORAGE_KEY));
-    this.setData({ baseUrl });
-    if (baseUrl) this.mountClient(baseUrl, true);
-  },
-
-  onUnload() {
-    this.unmountClient();
-  },
-
-  onBaseUrlInput(event) {
-    this.setData({ baseUrl: event.detail.value });
-  },
-
-  onRoomIdInput(event) {
-    this.setData({ roomId: event.detail.value });
-  },
-
-  onPlayerIdInput(event) {
-    this.setData({ playerId: event.detail.value });
-  },
-
-  onResumeTokenInput(event) {
-    this.setData({ resumeToken: event.detail.value });
-  },
-
-  onCommandTypeInput(event) {
-    this.setData({ commandType: event.detail.value });
-  },
-
-  onCommandPayloadInput(event) {
-    this.setData({ commandPayload: event.detail.value });
-  },
-
-  onConnectTap() {
-    const baseUrl = normalizedBaseUrl(this.data.baseUrl);
-    const roomId = String(this.data.roomId || "").trim();
-    const playerId = String(this.data.playerId || "").trim();
-    const resumeToken = String(this.data.resumeToken || "").trim();
-
-    if (!/^https:\/\//i.test(baseUrl)) {
-      this.setData({ lastAction: "Worker Base URL must use HTTPS for real-device validation." });
-      return;
-    }
-    if (!roomId || !playerId || !resumeToken) {
-      this.setData({ lastAction: "Room ID, Player ID and Resume Token are required." });
-      return;
-    }
-
-    wx.setStorageSync(BASE_URL_STORAGE_KEY, baseUrl);
-    this.unmountClient();
-
-    try {
-      const mounted = this.createClient(baseUrl);
-      mounted.client.startSession({ roomId, playerId, resumeToken });
-      mounted.controller.onLoad();
-      this.setData({ lastAction: "Session started. Waiting for ticket / WebSocket / sync." });
-    } catch (error) {
-      this.setData({ lastAction: error && error.message ? error.message : String(error) });
-    }
-  },
-
-  onClearSessionTap() {
-    if (this._client) {
-      this._client.clearStoredSession();
-    } else {
-      wx.removeStorageSync(WECHAT_SESSION_CREDENTIAL_STORAGE_KEY);
-    }
-    this.unmountClient();
+  onShow() {
     this.setData({
-      client: emptyClientView(),
-      roomJson: "",
-      playerViewJson: "",
-      roomId: "",
-      playerId: "",
-      resumeToken: "",
-      lastAction: "Stored session credentials cleared.",
+      hasRecoverableRoom: gameClient().hasStoredSession(),
     });
   },
 
-  onStartGameTap() {
-    this.sendCommand("werewolf.startGame", {});
+  onRoomCodeInput(event) {
+    const roomCode = String(event.detail.value || "")
+      .replace(/\D/g, "")
+      .slice(0, 4);
+    this.setData({ roomCode });
   },
 
-  onSendSemanticCommandTap() {
-    const type = String(this.data.commandType || "").trim();
-    if (!type) {
-      this.setData({ lastAction: "Semantic command type is required." });
-      return;
-    }
-
-    let payload;
+  async onCreateRoomTap() {
+    if (this._busy) return;
+    this._busy = true;
+    let failure = "";
+    wx.showLoading({ title: "创建房间…" });
     try {
-      payload = JSON.parse(String(this.data.commandPayload || "{}"));
+      const session = await gameClient().createRoom();
+      wx.navigateTo({
+        url: `/pages/lobby?room=${session.roomId}`,
+      });
     } catch (error) {
-      this.setData({
-        lastAction: "Command payload must be valid JSON: " +
-          (error && error.message ? error.message : String(error)),
+      failure = errorMessage(error);
+      console.error("[wechat] create room failed", error);
+    } finally {
+      wx.hideLoading();
+      this._busy = false;
+      this.setData({ hasRecoverableRoom: gameClient().hasStoredSession() });
+    }
+    if (failure) {
+      wx.showToast({ title: failure, icon: "none", duration: 4000 });
+    }
+  },
+
+  async onJoinRoomTap() {
+    if (!/^\d{4}$/.test(this.data.roomCode)) {
+      wx.showToast({
+        title: "请输入 4 位房间号",
+        icon: "none",
       });
       return;
     }
+    if (this._busy) return;
 
-    this.sendCommand(type, payload);
+    this._busy = true;
+    let failure = "";
+    wx.showLoading({ title: "加入房间…" });
+    try {
+      const session = await gameClient().joinRoom(this.data.roomCode);
+      wx.navigateTo({
+        url: `/pages/lobby?room=${session.roomId}`,
+      });
+    } catch (error) {
+      failure = errorMessage(error);
+      console.error("[wechat] join room failed", error);
+    } finally {
+      wx.hideLoading();
+      this._busy = false;
+      this.setData({ hasRecoverableRoom: gameClient().hasStoredSession() });
+    }
+    if (failure) {
+      wx.showToast({ title: failure, icon: "none", duration: 4000 });
+    }
   },
 
-  mountClient(baseUrl, resumeStoredSession) {
-    this.unmountClient();
-    const mounted = this.createClient(baseUrl);
-    const resumed = resumeStoredSession ? mounted.controller.onLoad() : false;
-    this.setData({
-      lastAction: resumed
-        ? "Stored credentials found. Waiting for reconnect / sync."
-        : "No stored session credentials. Enter credentials below.",
-    });
-  },
+  onContinueRoomTap() {
+    const client = gameClient();
+    const view = client.getView();
+    const started =
+      view.connectionStatus === "Idle"
+        ? client.startStoredSession()
+        : true;
 
-  createClient(baseUrl) {
-    const client = createWeChatNativeClientFromGlobal({ baseUrl });
-    const pageBridge = {
-      setData: ({ client: view }) => {
-        this.setData({
-          client: view,
-          roomJson: pretty(view.room),
-          playerViewJson: pretty(view.playerView),
-        });
-      },
-    };
-    const controller = new WeChatMinimalPageController(client, pageBridge);
-    this._client = client;
-    this._controller = controller;
-    return { client, controller };
-  },
-
-  unmountClient() {
-    if (this._controller) this._controller.onUnload();
-    if (this._client) this._client.dispose();
-    this._controller = null;
-    this._client = null;
-  },
-
-  sendCommand(type, payload) {
-    if (!this._controller) {
-      this.setData({ lastAction: "No active native client session." });
+    if (!started) {
+      this.setData({ hasRecoverableRoom: false });
+      wx.showToast({ title: "没有可恢复的房间", icon: "none" });
       return;
     }
 
-    this._controller.sendCommand(type, payload).then(
-      result => {
-        this.setData({ lastAction: "Command ACK: " + pretty(result) });
-      },
-      error => {
-        this.setData({
-          lastAction: "Command failed: " +
-            (error && error.message ? error.message : String(error)),
-        });
-      },
-    );
+    wx.navigateTo({
+      url: "/pages/lobby",
+    });
+  },
+
+  onPreviewLobbyTap() {
+    const room = /^\d{4}$/.test(this.data.roomCode) ? this.data.roomCode : "6284";
+    wx.navigateTo({
+      url: `/pages/lobby?preview=1&room=${room}`,
+    });
+  },
+
+  onOpenDiagnosticsTap() {
+    wx.navigateTo({
+      url: "/pages/diagnostics",
+    });
   },
 });

@@ -357,4 +357,54 @@ describe("E3.6 minimal native WeChat vertical slice", () => {
 
     client.dispose();
   });
+
+  it("bootstraps a room, persists credentials, then starts the same ClientSession owner", async () => {
+    const wx = new FakeWx();
+    const client = createWeChatNativeClient<PlayerView>(wx, {
+      baseUrl: "https://game.example",
+    });
+
+    expect(client.hasStoredSession()).toBe(false);
+    const pending = client.createRoom("Host");
+    const bootstrap = wx.ticketRequests[0];
+    expect(bootstrap).toMatchObject({
+      url: "https://game.example/rooms",
+      data: { name: "Host" },
+    });
+    bootstrap!.success({
+      statusCode: 201,
+      data: {
+        ok: true,
+        roomId: "4321",
+        playerId: "p1",
+        resumeToken: "resume-secret",
+        name: "Host",
+        seat: 1,
+        isHost: true,
+        revision: 0,
+      },
+    });
+
+    await expect(pending).resolves.toMatchObject({
+      roomId: "4321",
+      playerId: "p1",
+      isHost: true,
+    });
+    expect(client.hasStoredSession()).toBe(true);
+    expect(wx.storage.get("gamehost.client.session.v1")).toEqual({
+      roomId: "4321",
+      playerId: "p1",
+      resumeToken: "resume-secret",
+    });
+    expect(wx.ticketRequests[1]).toMatchObject({
+      url: "https://game.example/rooms/4321/websocket-ticket",
+      data: {
+        playerId: "p1",
+        resumeToken: "resume-secret",
+      },
+    });
+    expect(client.getView().connectionStatus).toBe("Connecting");
+
+    client.dispose();
+  });
 });

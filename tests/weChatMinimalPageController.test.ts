@@ -22,7 +22,26 @@ class ClientFake implements WeChatNativeClient<PlayerView> {
   };
   listener: WeChatNativeClientListener<PlayerView> | null = null;
   startStoredCalls = 0;
+  readonly hasStoredSession = vi.fn(() => true);
   readonly startSession = vi.fn();
+  readonly createRoom = vi.fn(async () => ({
+    roomId: "1234",
+    playerId: "p1",
+    resumeToken: "resume",
+    name: "Host",
+    seat: 1,
+    isHost: true,
+    revision: 0,
+  }));
+  readonly joinRoom = vi.fn(async () => ({
+    roomId: "1234",
+    playerId: "p2",
+    resumeToken: "resume-2",
+    name: "Guest",
+    seat: 2,
+    isHost: false,
+    revision: 1,
+  }));
   readonly clearStoredSession = vi.fn();
   readonly sendCommand = vi.fn(async () => ({ ok: true }));
   readonly dispose = vi.fn();

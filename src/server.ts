@@ -38,6 +38,7 @@ import {
   submitPrompt,
 } from "./domain/testPrompt.js";
 import { NodeSessionTokenCryptoProvider } from "./runtime/node/NodeSessionTokenCryptoProvider.js";
+import { requestedRoomPlayerName } from "./runtime/shared/roomPlayerNaming.js";
 import {
   roomCore,
   roomGameView,
@@ -83,29 +84,13 @@ function publicPlayer(player: Player) {
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 12;
-const PLAYER_NUMBER_LABELS = [
-  "一", "二", "三", "四", "五", "六",
-  "七", "八", "九", "十", "十一", "十二",
-];
 
 function playerNameExists(room: Room, name: string, exceptPlayerId?: string): boolean {
   return roomCore(room).hasPlayerName(name, exceptPlayerId);
 }
 
-function nextDefaultPlayerName(room?: Room): string {
-  for (let index = 0; index < MAX_PLAYERS; index += 1) {
-    const number = PLAYER_NUMBER_LABELS[index] ?? String(index + 1);
-    const candidate = `新玩家${number}号`;
-    if (!room || !playerNameExists(room, candidate)) return candidate;
-  }
-  return `新玩家${Date.now().toString().slice(-4)}号`;
-}
-
 function requestedPlayerName(room: Room | undefined, value?: string): string {
-  const requested = value?.trim().slice(0, 20);
-  if (!requested) return nextDefaultPlayerName(room);
-  if (room && playerNameExists(room, requested)) return nextDefaultPlayerName(room);
-  return requested;
+  return requestedRoomPlayerName(room?.players ?? [], value);
 }
 
 function removePlayer(room: Room, playerId: string): Player | undefined {

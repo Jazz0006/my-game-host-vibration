@@ -691,6 +691,8 @@ WebSocket upgrade
 
 E3.2c 已验证微信 adapter 遵守该边界：`resumeToken` 只进入 authenticated ticket HTTP exchange；native WebSocket URL 只携带 one-time ticket。微信 platform capability 通过注入的 `request/connectSocket` contract 提供，不要求 shared runtime 直接引用全局 `wx`。
 
+E3.7B 进一步补齐首次身份 bootstrap：`POST /rooms` / `POST /rooms/:roomCode/join` 只负责创建 authoritative membership 并把一次性的 plaintext `resumeToken` 交给对应客户端；Durable Object snapshot 只保存 token hash。微信 `WeChatRoomBootstrapClient` 是 HTTP adapter，成功后把 credentials 交给同一个 `WeChatNativeClient -> ClientSession` runtime。内部 snapshot persistence endpoint 不属于 public Worker API，不能作为客户端读写房间状态的旁路。
+
 ---
 
 # 19. 多游戏平台边界

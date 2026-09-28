@@ -1,4 +1,9 @@
 {
   "desc": "E3.7 developer validation shell",
-  "rules": []
+  "rules": [
+    {
+      "action": "allow",
+      "page": "*"
+    }
+  ]
 }

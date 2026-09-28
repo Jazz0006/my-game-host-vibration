@@ -1,67 +1,121 @@
 .page {
-  padding: 24rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 72rpx 36rpx 48rpx;
+  background: #f3f6f4;
+  color: #17201b;
 }
 
-.card {
-  margin-bottom: 24rpx;
-  padding: 24rpx;
-  border-radius: 16rpx;
-  background: #ffffff;
-  box-shadow: 0 4rpx 18rpx rgba(0, 0, 0, 0.05);
+.hero {
+  padding: 58rpx 20rpx 50rpx;
+  text-align: center;
+}
+
+.brand-mark {
+  width: 96rpx;
+  height: 96rpx;
+  margin: 0 auto 24rpx;
+  border-radius: 30rpx;
+  background: #284f36;
+  color: #ffffff;
+  font-size: 44rpx;
+  font-weight: 700;
+  line-height: 96rpx;
 }
 
 .title {
-  font-size: 38rpx;
-  font-weight: 700;
-  margin-bottom: 8rpx;
+  font-size: 46rpx;
+  font-weight: 800;
+  letter-spacing: 1rpx;
 }
 
-.section-title {
-  font-size: 30rpx;
-  font-weight: 600;
-  margin-bottom: 16rpx;
+.subtitle {
+  margin-top: 14rpx;
+  color: #78847c;
+  font-size: 25rpx;
 }
 
-.muted {
-  color: #6a737d;
-  margin-bottom: 20rpx;
-}
-
-.label {
-  display: block;
-  margin: 18rpx 0 8rpx;
-  color: #57606a;
-}
-
-.input,
-.textarea {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 18rpx;
-  border: 1rpx solid #d0d7de;
-  border-radius: 10rpx;
+.main-card,
+.developer-card {
+  padding: 30rpx;
+  border-radius: 30rpx;
   background: #ffffff;
+  box-shadow: 0 10rpx 36rpx rgba(36, 58, 43, 0.08);
 }
 
-.textarea {
-  min-height: 180rpx;
-  margin-top: 16rpx;
+.create-button,
+.join-button {
+  background: #284f36;
+  color: #ffffff;
+  border-radius: 20rpx;
 }
 
-.status {
-  margin-top: 16rpx;
-  color: #0969da;
-  word-break: break-all;
+.create-button {
+  margin-bottom: 32rpx;
 }
 
-.players {
-  margin: 16rpx 0;
-  line-height: 1.8;
+.join-label {
+  margin-bottom: 12rpx;
+  color: #637068;
+  font-size: 22rpx;
+  font-weight: 600;
 }
 
-.json {
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-family: monospace;
+.join-row {
+  display: flex;
+  gap: 14rpx;
+}
+
+.room-input {
+  flex: 1;
+  box-sizing: border-box;
+  height: 88rpx;
+  padding: 0 24rpx;
+  border: 2rpx solid #d9e0db;
+  border-radius: 20rpx;
+  background: #fbfcfb;
+  font-size: 28rpx;
+  letter-spacing: 4rpx;
+}
+
+.join-button {
+  width: 170rpx;
+  margin: 0;
+}
+
+.continue-button {
+  margin-top: 24rpx;
+  border-radius: 20rpx;
+  background: #eef3ef;
+  color: #284f36;
+}
+
+.developer-card {
+  margin-top: 28rpx;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.developer-title {
   font-size: 24rpx;
+  font-weight: 700;
+}
+
+.developer-copy {
+  margin: 10rpx 0 18rpx;
+  color: #7b857f;
+  font-size: 20rpx;
+  line-height: 1.55;
+}
+
+.preview-button,
+.diagnostics-button {
+  border-radius: 18rpx;
+  background: #eef3ef;
+  color: #294b35;
+}
+
+.diagnostics-button {
+  margin-top: 12rpx;
+  background: #f4f4f4;
+  color: #5d6560;
 }
