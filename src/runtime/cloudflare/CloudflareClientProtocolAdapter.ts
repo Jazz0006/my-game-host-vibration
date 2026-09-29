@@ -7,7 +7,7 @@ import {
 } from "../../protocol/client/ClientProtocol.js";
 import type { WerewolfClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
 import { mapWerewolfClientCommand } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
-import { createClientRoomProjection } from "../shared/clientRoomProjection.js";
+import { createWerewolfClientRoomProjection } from "../shared/werewolfClientRoomProjection.js";
 import { werewolfPlayerGameView } from "../shared/werewolfRoomView.js";
 import type { CloudflareWerewolfCommandRuntime } from "./CloudflareWerewolfCommandRuntime.js";
 
@@ -44,10 +44,15 @@ export function createCloudflarePlayerStateEnvelope(
 export function createCloudflareRoomStateEnvelope(
   snapshot: RoomSnapshot<GameState, GameConfig, unknown, unknown, unknown>,
   playerId: string,
+  isPlayerConnected: (playerId: string) => boolean,
 ) {
   const restored = restoreRoomSnapshot(snapshot);
   return createRoomStateEnvelope(
     restored.room.id,
-    createClientRoomProjection(restored.room, playerId),
+    createWerewolfClientRoomProjection(
+      restored.room,
+      playerId,
+      { isPlayerConnected },
+    ),
   );
 }

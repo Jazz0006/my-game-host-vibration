@@ -21,6 +21,11 @@ import {
   DEFAULT_GAME_CONFIG,
   GameRuleError,
 } from "./games/werewolf/WerewolfDomainFacade.js";
+import {
+  WEREWOLF_MAX_PLAYERS,
+  WEREWOLF_MIN_PLAYERS,
+  isWerewolfPlayerCountSupported,
+} from "./games/werewolf/WerewolfLobbyPolicy.js";
 import { werewolfRoleCatalog } from "./games/werewolf/roles/registry.js";
 import {
   runHostCommand,
@@ -82,9 +87,6 @@ function publicPlayer(player: Player) {
   };
 }
 
-const MIN_PLAYERS = 5;
-const MAX_PLAYERS = 12;
-
 function playerNameExists(room: Room, name: string, exceptPlayerId?: string): boolean {
   return roomCore(room).hasPlayerName(name, exceptPlayerId);
 }
@@ -107,7 +109,7 @@ function roomView(room: Room, viewer: Player) {
     viewer: { playerId: viewer.id, isHost: viewer.isHost },
     players: room.players.map(publicPlayer),
     defaultRoleDeck: !room.game
-      ? (room.players.length >= MIN_PLAYERS
+      ? (isWerewolfPlayerCountSupported(room.players.length)
           ? configFromPlayerCount(room.players.length).roleDeck
           : room.gameConfig.roleDeck)
       : undefined,
@@ -118,16 +120,16 @@ function roomView(room: Room, viewer: Player) {
       ? {
           ...gameView,
           canStart: false,
-          minPlayers: MIN_PLAYERS,
-          maxPlayers: MAX_PLAYERS,
+          minPlayers: WEREWOLF_MIN_PLAYERS,
+          maxPlayers: WEREWOLF_MAX_PLAYERS,
         }
       : {
           phase: "lobby",
           canStart:
-            room.players.length >= MIN_PLAYERS &&
+            isWerewolfPlayerCountSupported(room.players.length) &&
             room.players.every(player => player.connected),
-          minPlayers: MIN_PLAYERS,
-          maxPlayers: MAX_PLAYERS,
+          minPlayers: WEREWOLF_MIN_PLAYERS,
+          maxPlayers: WEREWOLF_MAX_PLAYERS,
           confirmedRoles: 0,
           completedNightSteps: 0,
           dayNumber: 0,
@@ -298,8 +300,11 @@ export function createGameServer() {
         }
         if (!room) return ack({ ok: false, message: "房间不存在" });
         if (room.game) return ack({ ok: false, message: "游戏已经开始，不能再加入" });
-        if (room.players.length >= MAX_PLAYERS) {
-          return ack({ ok: false, message: `房间最多${MAX_PLAYERS}人` });
+        if (room.players.length >= WEREWOLF_MAX_PLAYERS) {
+          return ack({
+            ok: false,
+            message: `房间最多${WEREWOLF_MAX_PLAYERS}人`,
+          });
         }
 
         const name = requestedPlayerName(room, data.name);

@@ -109,7 +109,11 @@ export class CloudflareRawWebSocketClientProtocol {
     const result = {
       revision: snapshot.revision,
       envelope: createCloudflarePlayerStateEnvelope(snapshot, playerId),
-      roomEnvelope: createCloudflareRoomStateEnvelope(snapshot, playerId),
+      roomEnvelope: createCloudflareRoomStateEnvelope(
+        snapshot,
+        playerId,
+        candidatePlayerId => this.realtime.isPlayerConnected(candidatePlayerId),
+      ),
     };
     webSocket.send(encodeClientRawWebSocketFrame(
       createClientRawWebSocketSuccessResponse(requestId, result),

@@ -1,6 +1,10 @@
 import type { WerewolfClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
 import { mapWerewolfClientCommand } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
-import { createPlayerStateEnvelope } from "../../protocol/client/ClientProtocol.js";
+import {
+  createPlayerStateEnvelope,
+  createRoomStateEnvelope,
+} from "../../protocol/client/ClientProtocol.js";
+import { createWerewolfClientRoomProjection } from "../shared/werewolfClientRoomProjection.js";
 import type { WerewolfCommandEnvironment } from "../shared/werewolfRoomCommand.js";
 import { werewolfPlayerGameView } from "../shared/werewolfRoomView.js";
 import type { RuntimeRoom } from "./roomBridge.js";
@@ -39,6 +43,25 @@ export function executeNodeClientProtocolCommand(
     mapped.commandId,
     mapped.command,
     environment,
+  );
+}
+
+export function createNodeRoomStateEnvelope(
+  room: RuntimeRoom,
+  playerId: string,
+) {
+  return createRoomStateEnvelope(
+    room.id,
+    createWerewolfClientRoomProjection(
+      room,
+      playerId,
+      {
+        isPlayerConnected: candidatePlayerId => {
+          const player = room.players.find(item => item.id === candidatePlayerId);
+          return Boolean(player?.connected && player.socketId);
+        },
+      },
+    ),
   );
 }
 
