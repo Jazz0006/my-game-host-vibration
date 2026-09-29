@@ -44,7 +44,7 @@ Current product priorities:
 5. reconnect, app switching, screen lock, and network changes are normal lifecycle events;
 6. the system owns authoritative game flow and secret information;
 7. the host is primarily a recovery controller, not a hidden-information super-user;
-8. Werewolf is the current production game, and Blood on the Clocktower is now the next production-game direction once the remaining shared infrastructure admission work is complete.
+8. Werewolf is the current production game. W3D3 + MG0 shared-infrastructure admission work is complete; Blood on the Clocktower / Trouble Brewing is now the active next production-game mainline.
 9. The WeChat product direction is two game-specific thin-client shells — working names `骏骏桌游-狼人` and `骏骏桌游-血染` — over one shared client/runtime/backend platform. Do not duplicate reconnect, identity, transport, room, recovery, persistence, or Cloudflare authority code per mini program.
 10. A room's `gameType` is fixed at room creation by the client product; the lobby no longer owns cross-game switching.
 
@@ -69,7 +69,7 @@ games/werewolf
 
 games/botc
   -> authoritative BotC rules/state, setup/night sequencing, views, and BotC-specific interaction semantics
-  -> add only when the BotC production slice begins; do not prebuild a large generic rules DSL
+  -> B0 production entry is now active; add only concrete Trouble Brewing needs and do not prebuild a large generic rules DSL
 
 GameCatalog / game admission seam
   -> selects the concrete GameModule from room.gameType

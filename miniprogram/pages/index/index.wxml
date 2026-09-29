@@ -1,7 +1,7 @@
 <view class="page">
   <view class="hero">
     <view class="brand-mark">桌</view>
-    <view class="title">多游戏主持系统</view>
+    <view class="title">{{productName}}</view>
     <view class="subtitle">一起玩桌游，更轻松</view>
   </view>
 

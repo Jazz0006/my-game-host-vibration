@@ -40,8 +40,9 @@ MG0A   GameCatalog / fixed game admission           ✅
 MG0B1  Game-neutral lobby/realtime projection       ✅
 MG0B2  Game command dispatch seam                    ✅
 MG0C   Room Owner / Game Moderator authority split  ✅
-MG0D   Game-specific WeChat product shells          ← NEXT
-BotC   Trouble Brewing production expansion       ← IMMEDIATELY AFTER MG0
+MG0D   Game-specific WeChat product shells          ✅
+MG0    Second-game admission hardening              COMPLETE ✅
+BotC   Trouble Brewing production expansion         ← NEXT
 W3E+   Production Web Cloudflare cutover           deferred / not a BotC prerequisite
 R1     Reliability Hardening / Effect Outbox       risk-driven
 ```
@@ -170,7 +171,7 @@ http://localhost:3000/dev/lab
 
 ## 长期产品边界
 
-- 狼人杀已验证当前平台基础；W3D3、MG0A、MG0B、MG0C 已完成，当前进入 MG0D；完成 MG0 后立即进入 Blood on the Clocktower / Trouble Brewing production expansion；
+- 狼人杀已验证当前平台基础；W3D3 与 MG0A–MG0D 已完成，MG0 second-game admission hardening 整体 COMPLETE；当前正式进入 Blood on the Clocktower / Trouble Brewing production expansion；
 - 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；
 - 讨论、发言和社交推理仍在线下完成；
 - 断线、熄屏、切 App 和网络切换视为正常生命周期；
