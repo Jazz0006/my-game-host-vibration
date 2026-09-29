@@ -178,20 +178,27 @@ export class TestRoomClient<TPlayerView = unknown> {
     if (current !== null && current >= revision) return;
 
     await new Promise<void>((resolve, reject) => {
+      let unsubscribe: (() => void) | null = null;
+      let settled = false;
+
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        unsubscribe?.();
+        resolve();
+      };
+
       const timeout = setTimeout(() => {
-        unsubscribe();
+        if (settled) return;
+        settled = true;
+        unsubscribe?.();
         reject(new Error(
           `${this.options.label} timed out waiting for ${scope} revision ${revision}\n${this.formatTrace()}`,
         ));
       }, timeoutMs);
 
-      const finish = (): void => {
-        clearTimeout(timeout);
-        unsubscribe();
-        resolve();
-      };
-
-      const unsubscribe = scope === "room"
+      unsubscribe = scope === "room"
         ? session.subscribeRoomState(snapshot => {
             if (snapshot.revision !== null && snapshot.revision >= revision) {
               finish();
@@ -201,6 +208,8 @@ export class TestRoomClient<TPlayerView = unknown> {
             const next = snapshot.authoritativeState.revision;
             if (next !== null && next >= revision) finish();
           });
+
+      if (settled) unsubscribe();
     });
   }
 
@@ -234,28 +243,37 @@ export class TestRoomClient<TPlayerView = unknown> {
     }
 
     return new Promise<void>((resolve, reject) => {
+      let unsubscribe: (() => void) | null = null;
+      let settled = false;
+
+      const finish = (error?: Error): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        unsubscribe?.();
+        if (error) reject(error);
+        else resolve();
+      };
+
       const timeout = setTimeout(() => {
-        unsubscribe();
-        reject(new Error(
+        finish(new Error(
           `${this.options.label} timed out waiting for synchronization\n${this.formatTrace()}`,
         ));
       }, timeoutMs);
 
-      const unsubscribe = session.subscribe(snapshot => {
+      unsubscribe = session.subscribe(snapshot => {
         if (snapshot.connection.status === "Connected") {
-          clearTimeout(timeout);
-          unsubscribe();
-          resolve();
+          finish();
           return;
         }
         if (snapshot.connection.status === "Failed") {
-          clearTimeout(timeout);
-          unsubscribe();
-          reject(new Error(
+          finish(new Error(
             `${this.options.label} failed to synchronize\n${this.formatTrace()}`,
           ));
         }
       });
+
+      if (settled) unsubscribe();
     });
   }
 
