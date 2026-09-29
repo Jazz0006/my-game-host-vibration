@@ -19,6 +19,7 @@ export type BrowserRoomBootstrapFetchLike = (
 
 export type BrowserRoomBootstrapClientOptions = {
   baseUrl: string;
+  gameType?: string;
   fetch?: BrowserRoomBootstrapFetchLike;
 };
 
@@ -45,6 +46,7 @@ export class BrowserRoomBootstrapClient {
       (url, data) => this.post(url, data),
       {
         baseUrl: options.baseUrl,
+        gameType: options.gameType ?? "werewolf",
         transportLabel: "Browser room bootstrap",
       },
     );

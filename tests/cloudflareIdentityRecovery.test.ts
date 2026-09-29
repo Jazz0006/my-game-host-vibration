@@ -41,6 +41,7 @@ async function createTwoPlayers(storage: MemoryStorage) {
   const first = room(storage);
   const created = await post(first, "bootstrap-create", {
     roomId: "4321",
+    gameType: "werewolf",
     name: "Host",
   });
   const host = await created.json() as {
@@ -48,7 +49,10 @@ async function createTwoPlayers(storage: MemoryStorage) {
     resumeToken: string;
   };
 
-  const joined = await post(first, "bootstrap-join", { name: "Guest" });
+  const joined = await post(first, "bootstrap-join", {
+    gameType: "werewolf",
+    name: "Guest",
+  });
   const guest = await joined.json() as {
     playerId: string;
     resumeToken: string;

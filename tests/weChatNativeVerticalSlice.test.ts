@@ -369,13 +369,14 @@ describe("E3.6 minimal native WeChat vertical slice", () => {
     const bootstrap = wx.ticketRequests[0];
     expect(bootstrap).toMatchObject({
       url: "https://game.example/rooms",
-      data: { name: "Host" },
+      data: { gameType: "werewolf", name: "Host" },
     });
     bootstrap!.success({
       statusCode: 201,
       data: {
         ok: true,
         roomId: "4321",
+        gameType: "werewolf",
         playerId: "p1",
         resumeToken: "resume-secret",
         name: "Host",

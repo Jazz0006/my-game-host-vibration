@@ -36,7 +36,8 @@ E3.7B  WeChat real-device lifecycle validation   ✅
 W3D1   Cloudflare recovery command parity         ✅
 W3D2   Cloudflare interaction-timeout parity      ✅
 W3D3   Game-neutral identity recovery               ✅
-MG0    Second-game admission hardening              ← NEXT
+MG0A   GameCatalog / fixed game admission           ✅
+MG0B   Game-neutral runtime dispatch/projection      ← NEXT
 BotC   Trouble Brewing production expansion       ← IMMEDIATELY AFTER MG0
 W3E+   Production Web Cloudflare cutover           deferred / not a BotC prerequisite
 R1     Reliability Hardening / Effect Outbox       risk-driven
@@ -138,7 +139,7 @@ UI intention
 → shared authoritative Werewolf runtime
 ```
 
-private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.5 已建立微信 ticket/Raw WS、reconnect、same-commandId retry 与 native effects；E3.6 进一步加入 transport-neutral public room projection、Cloudflare start/restart lifecycle、next-actor action alert，以及微信 credential storage/lifecycle/native composition/minimal page-controller。fake-`wx` vertical test 已跑通 lobby → command → effect → background reconnect。E3.7A 已提供可直接导入微信开发者工具的 `miniprogram/` shell，以及 TS7 bundler-mode typecheck + esbuild CommonJS runtime build；E3.7B 已在真实 Developer Tools + 手机上完成 production create/join、双端 authoritative push、foreground/background、飞行模式断网恢复、stored-session 恢复与 heavy vibration capability 验收。W3D3 已将一次性 identity-recovery grant、失败尝试限制和 resume credential rotation 收敛到 game-neutral shared owner，并在 Cloudflare DO storage 中持久化；恢复后旧 resume token 以及用旧 credential 签发但尚未消费的 WebSocket ticket 都不能继续接管会话。stale-generation fencing 继续由专门自动化测试覆盖。Ready、主持位、排序与房间管理仍属于后续 authoritative lobby-command slices。2026-09-29 产品方向调整后，微信不再在同一小程序 Lobby 中切换游戏；`骏骏桌游-狼人` 与 `骏骏桌游-血染` 作为两个 game-specific 薄壳共享同一 ClientSession / transport / reconnect / backend，房间在创建时固定 gameType。
+private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.5 已建立微信 ticket/Raw WS、reconnect、same-commandId retry 与 native effects；E3.6 进一步加入 transport-neutral public room projection、Cloudflare start/restart lifecycle、next-actor action alert，以及微信 credential storage/lifecycle/native composition/minimal page-controller。fake-`wx` vertical test 已跑通 lobby → command → effect → background reconnect。E3.7A 已提供可直接导入微信开发者工具的 `miniprogram/` shell，以及 TS7 bundler-mode typecheck + esbuild CommonJS runtime build；E3.7B 已在真实 Developer Tools + 手机上完成 production create/join、双端 authoritative push、foreground/background、飞行模式断网恢复、stored-session 恢复与 heavy vibration capability 验收。W3D3 已将一次性 identity-recovery grant、失败尝试限制和 resume credential rotation 收敛到 game-neutral shared owner，并在 Cloudflare DO storage 中持久化；恢复后旧 resume token 以及用旧 credential 签发但尚未消费的 WebSocket ticket 都不能继续接管会话。MG0A 已加入 `werewolf | botc` GameCatalog admission seam；create/join 均由客户端产品固定 gameType，错误游戏客户端不能加入另一类房间，且 BotC gameplay runtime 尚未实现时会 fail closed，而不会误落入 Werewolf runtime。stale-generation fencing 继续由专门自动化测试覆盖。Ready、主持位、排序与房间管理仍属于后续 authoritative lobby-command slices。2026-09-29 产品方向调整后，微信不再在同一小程序 Lobby 中切换游戏；`骏骏桌游-狼人` 与 `骏骏桌游-血染` 作为两个 game-specific 薄壳共享同一 ClientSession / transport / reconnect / backend，房间在创建时固定 gameType。
 
 ## 多玩家模拟器
 
@@ -166,7 +167,7 @@ http://localhost:3000/dev/lab
 
 ## 长期产品边界
 
-- 狼人杀已验证当前平台基础；W3D3 已完成，完成 MG0 后立即进入 Blood on the Clocktower / Trouble Brewing production expansion；
+- 狼人杀已验证当前平台基础；W3D3 与 MG0A 已完成，当前进入 MG0B；完成 MG0 后立即进入 Blood on the Clocktower / Trouble Brewing production expansion；
 - 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；
 - 讨论、发言和社交推理仍在线下完成；
 - 断线、熄屏、切 App 和网络切换视为正常生命周期；

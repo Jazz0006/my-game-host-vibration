@@ -17,6 +17,7 @@ describe("W3A BrowserRoomBootstrapClient", () => {
           return {
             ok: true,
             roomId: "4321",
+            gameType: "werewolf",
             playerId: sequence === 1 ? "p1" : "p2",
             resumeToken: sequence === 1 ? "resume-host" : "resume-guest",
             name: sequence === 1 ? "Host" : "Guest",
@@ -49,11 +50,11 @@ describe("W3A BrowserRoomBootstrapClient", () => {
     expect(calls).toEqual([
       {
         url: "https://game.example/rooms",
-        body: { name: "Host" },
+        body: { gameType: "werewolf", name: "Host" },
       },
       {
         url: "https://game.example/rooms/4321/join",
-        body: { name: "Guest" },
+        body: { gameType: "werewolf", name: "Guest" },
       },
     ]);
     expect(calls.some(call =>
@@ -95,5 +96,32 @@ describe("W3A BrowserRoomBootstrapClient", () => {
       },
     });
     await expect(offline.createRoom()).rejects.toThrow("offline");
+  });
+
+  it("rejects a bootstrap response from a different game product", async () => {
+    const bootstrap = new BrowserRoomBootstrapClient({
+      baseUrl: "https://game.example",
+      gameType: "botc",
+      fetch: async () => ({
+        status: 201,
+        async json() {
+          return {
+            ok: true,
+            roomId: "4321",
+            gameType: "werewolf",
+            playerId: "p1",
+            resumeToken: "resume-host",
+            name: "Host",
+            seat: 1,
+            isHost: true,
+            revision: 0,
+          };
+        },
+      }),
+    });
+
+    await expect(bootstrap.createRoom()).rejects.toThrow(
+      "room gameType does not match this client product",
+    );
   });
 });

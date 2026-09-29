@@ -73,7 +73,7 @@ describe("E3.7B Cloudflare room bootstrap", () => {
     const created = await room.fetch(new Request("https://room.internal/bootstrap-create", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ roomId: "4321" }),
+      body: JSON.stringify({ roomId: "4321", gameType: "werewolf" }),
     }));
 
     expect(created.status).toBe(201);
@@ -101,7 +101,7 @@ describe("E3.7B Cloudflare room bootstrap", () => {
     const duplicate = await room.fetch(new Request("https://room.internal/bootstrap-create", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ roomId: "4321" }),
+      body: JSON.stringify({ roomId: "4321", gameType: "werewolf" }),
     }));
     expect(duplicate.status).toBe(409);
     await expect(duplicate.json()).resolves.toMatchObject({
@@ -117,7 +117,7 @@ describe("E3.7B Cloudflare room bootstrap", () => {
     const created = await room.fetch(new Request("https://room.internal/bootstrap-create", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ roomId: "4321", name: "Host" }),
+      body: JSON.stringify({ roomId: "4321", gameType: "werewolf", name: "Host" }),
     }));
     const host = await created.json() as { playerId: string };
 
@@ -127,7 +127,7 @@ describe("E3.7B Cloudflare room bootstrap", () => {
     const joined = await room.fetch(new Request("https://room.internal/bootstrap-join", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Guest" }),
+      body: JSON.stringify({ gameType: "werewolf", name: "Guest" }),
     }));
 
     expect(joined.status).toBe(200);
@@ -169,6 +169,7 @@ describe("E3.7B Cloudflare room bootstrap", () => {
             return Response.json({
               ok: true,
               roomId: name,
+              gameType: "werewolf",
               playerId: "p2",
               resumeToken: "resume-2",
               name: "Guest",
@@ -192,7 +193,7 @@ describe("E3.7B Cloudflare room bootstrap", () => {
       new Request("https://example.test/rooms/4321/join", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: "Guest" }),
+        body: JSON.stringify({ gameType: "werewolf", name: "Guest" }),
       }),
       { GAME_ROOMS: namespace },
     );
@@ -214,6 +215,7 @@ describe("E3.7B Cloudflare room bootstrap", () => {
             return Response.json({
               ok: true,
               roomId: name,
+              gameType: "werewolf",
               playerId: "p1",
               resumeToken: "resume-1",
               name: "Host",
@@ -230,7 +232,7 @@ describe("E3.7B Cloudflare room bootstrap", () => {
       new Request("https://example.test/rooms", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: "Host" }),
+        body: JSON.stringify({ gameType: "werewolf", name: "Host" }),
       }),
       { GAME_ROOMS: namespace },
     );
@@ -241,6 +243,7 @@ describe("E3.7B Cloudflare room bootstrap", () => {
     expect(requests[0]?.path).toBe("/bootstrap-create");
     expect(requests[0]?.body).toEqual({
       roomId: requests[0]?.name,
+      gameType: "werewolf",
       name: "Host",
     });
   });

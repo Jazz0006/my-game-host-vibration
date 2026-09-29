@@ -26,6 +26,7 @@ class ClientFake implements WeChatNativeClient<PlayerView> {
   readonly startSession = vi.fn();
   readonly createRoom = vi.fn(async () => ({
     roomId: "1234",
+    gameType: "werewolf",
     playerId: "p1",
     resumeToken: "resume",
     name: "Host",
@@ -35,6 +36,7 @@ class ClientFake implements WeChatNativeClient<PlayerView> {
   }));
   readonly joinRoom = vi.fn(async () => ({
     roomId: "1234",
+    gameType: "werewolf",
     playerId: "p2",
     resumeToken: "resume-2",
     name: "Guest",

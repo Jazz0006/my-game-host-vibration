@@ -1,3 +1,4 @@
+import { isGameType } from "../../games/GameCatalog.js";
 import { GameRoomDurableObject } from "./GameRoomDurableObject.js";
 import {
   resolveRoomStub,
@@ -51,14 +52,20 @@ async function roomRequest(request: Request, resource: string): Promise<Request>
   });
 }
 
-async function readCreateBody(request: Request): Promise<{ name?: unknown } | null> {
+async function readCreateBody(request: Request): Promise<{
+  gameType?: unknown;
+  name?: unknown;
+} | null> {
   const text = await request.text();
   if (!text.trim()) return {};
   try {
     const value = JSON.parse(text) as unknown;
     if (!value || typeof value !== "object" || Array.isArray(value)) return null;
     const record = value as Record<string, unknown>;
-    return record.name === undefined ? {} : { name: record.name };
+    return {
+      gameType: record.gameType,
+      ...(record.name === undefined ? {} : { name: record.name }),
+    };
   } catch {
     return null;
   }
@@ -72,6 +79,12 @@ async function createRoom(request: Request, env: CloudflareEnv): Promise<Respons
       { status: 400 },
     );
   }
+  if (!isGameType(body.gameType)) {
+    return Response.json(
+      { ok: false, code: "invalid_game_type", message: "unsupported gameType" },
+      { status: 400 },
+    );
+  }
 
   for (let attempt = 0; attempt < CREATE_ROOM_ATTEMPTS; attempt += 1) {
     const roomCode = randomRoomCode();
@@ -81,6 +94,7 @@ async function createRoom(request: Request, env: CloudflareEnv): Promise<Respons
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         roomId: roomCode,
+        gameType: body.gameType,
         ...(body.name === undefined ? {} : { name: body.name }),
       }),
     });

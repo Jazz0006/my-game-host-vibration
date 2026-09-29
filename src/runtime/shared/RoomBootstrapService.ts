@@ -11,6 +11,7 @@ import { requestedRoomPlayerName } from "./roomPlayerNaming.js";
 
 export type RoomBootstrapSession = {
   roomId: string;
+  gameType: string;
   playerId: string;
   resumeToken: string;
   name: string;
@@ -73,6 +74,7 @@ export class RoomBootstrapService<TGameState, TGameConfig> {
       snapshot,
       session: {
         roomId,
+        gameType: this.options.gameType,
         playerId: player.id,
         resumeToken: token.token,
         name: player.name,
@@ -122,6 +124,7 @@ export class RoomBootstrapService<TGameState, TGameConfig> {
       snapshot: nextSnapshot,
       session: {
         roomId: room.id,
+        gameType: room.gameType,
         playerId: player.id,
         resumeToken: token.token,
         name: player.name,

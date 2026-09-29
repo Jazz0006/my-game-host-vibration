@@ -1,5 +1,6 @@
 export type RoomBootstrapCredentials = {
   roomId: string;
+  gameType: string;
   playerId: string;
   resumeToken: string;
   name: string;
@@ -56,6 +57,7 @@ export function parseRoomBootstrapResponse(
     response.statusCode >= 300 ||
     record?.ok !== true ||
     typeof record.roomId !== "string" ||
+    typeof record.gameType !== "string" ||
     typeof record.playerId !== "string" ||
     typeof record.resumeToken !== "string" ||
     typeof record.name !== "string" ||
@@ -70,6 +72,7 @@ export function parseRoomBootstrapResponse(
 
   return {
     roomId: record.roomId,
+    gameType: record.gameType,
     playerId: record.playerId,
     resumeToken: record.resumeToken,
     name: record.name,
@@ -86,21 +89,27 @@ export function parseRoomBootstrapResponse(
  */
 export class RoomBootstrapClientCore {
   private readonly baseUrl: string;
+  private readonly gameType: string;
 
   constructor(
     private readonly post: RoomBootstrapPost,
-    options: { baseUrl: string; transportLabel?: string },
+    options: { baseUrl: string; gameType: string; transportLabel?: string },
   ) {
     this.baseUrl = normalizeRoomBootstrapBaseUrl(
       options.baseUrl,
       options.transportLabel,
     );
+    this.gameType = options.gameType.trim();
+    if (!this.gameType) throw new Error("Room bootstrap gameType is required");
   }
 
   createRoom(name?: string): Promise<RoomBootstrapCredentials> {
     return this.postAndParse(
       `${this.baseUrl}/rooms`,
-      name?.trim() ? { name: name.trim() } : {},
+      {
+        gameType: this.gameType,
+        ...(name?.trim() ? { name: name.trim() } : {}),
+      },
     );
   }
 
@@ -117,7 +126,10 @@ export class RoomBootstrapClientCore {
 
     return this.postAndParse(
       `${this.baseUrl}/rooms/${encodeURIComponent(normalized)}/join`,
-      name?.trim() ? { name: name.trim() } : {},
+      {
+        gameType: this.gameType,
+        ...(name?.trim() ? { name: name.trim() } : {}),
+      },
     );
   }
 
@@ -125,6 +137,10 @@ export class RoomBootstrapClientCore {
     url: string,
     data: unknown,
   ): Promise<RoomBootstrapCredentials> {
-    return parseRoomBootstrapResponse(await this.post(url, data));
+    const credentials = parseRoomBootstrapResponse(await this.post(url, data));
+    if (credentials.gameType !== this.gameType) {
+      throw new Error("room gameType does not match this client product");
+    }
+    return credentials;
   }
 }
