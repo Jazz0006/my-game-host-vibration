@@ -28,6 +28,15 @@ B0 BotC / Trouble Brewing production entry
   └─ B0C+ information / storyteller intelligence
 ```
 
+## Parallel engineering route
+
+- `docs/多人自动化与真机测试战略_2026-09-30.md`
+  - platform-level multiplayer test strategy;
+  - virtual `TestRoomClient` / multi-client convergence / reconnect / idempotency / privacy plan;
+  - two-real-device + N-virtual-player smoke route and milestone full-table acceptance;
+  - implementation starts with T0 contract/seam audit;
+  - this route is parallel to B0B and does **not** replace the V5 mainline NEXT.
+
 ## Historical / superseded documents
 
 These are retained for decision history only and must not override current authority:
