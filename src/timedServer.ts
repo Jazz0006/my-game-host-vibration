@@ -24,7 +24,7 @@ import {
 } from "./runtime/node/SocketIoClientEffectDelivery.js";
 import {
   runHostCommand,
-  runHostLifecycleMutationIdempotent,
+  runHostRecoveryCommandIdempotent,
 } from "./runtime/node/werewolfCommandFacade.js";
 import { createGameServer } from "./server.js";
 
@@ -209,21 +209,22 @@ export function createTimedGameServer(): TimedServer {
 
         const { room } = membership;
         try {
-          const { replayed } = await runHostLifecycleMutationIdempotent(
+          const { replayed } = await runHostRecoveryCommandIdempotent(
             room,
+            membership.player.id,
             commandId,
-            () => {
-              if (!room.game) {
-                throw new GameRuleError("游戏尚未开始");
-              }
-              delete room.game;
-              delete room.activePrompt;
-              room.updatedAt = Date.now();
-              return { kind: "broadcast" };
+            { type: "recovery.abortToLobby" },
+            {
+              isPlayerConnected(playerId) {
+                const player = room.players.find(item => item.id === playerId);
+                return Boolean(player?.connected && player.socketId);
+              },
+              now: Date.now,
             },
           );
 
           if (!replayed) {
+            delete room.activePrompt;
             clearRoomInteractionTimeout(room);
             delivery.broadcastRoom(room);
           }

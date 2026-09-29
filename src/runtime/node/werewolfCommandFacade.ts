@@ -1,9 +1,15 @@
 import { RoomCommandRuntime } from "../../core/room/RoomCommandRuntime.js";
 import type { WerewolfCommand } from "../../games/werewolf/WerewolfGameModule.js";
+import type { RoomRecoveryCommand } from "../../protocol/client/ClientRecoveryProtocol.js";
+import {
+  assertRoomRecoveryAuthority,
+  executeRoomRecoveryCommand,
+  type RoomRecoveryCommandOutcome,
+  type RoomRecoveryDependencies,
+} from "../shared/roomRecoveryCommand.js";
 import type { WerewolfCommandEnvironment } from "../shared/werewolfRoomCommand.js";
 import {
   executeWerewolfCommand,
-  type HostRecoveryCommandOutcome,
   type RuntimeCommandOutcome,
   type RuntimeRoom,
   type WerewolfCommandOutcome,
@@ -74,19 +80,33 @@ export function runHostCommandIdempotent(
 }
 
 /**
- * C4 recovery entry point for host-triggered delivery effects that must be
- * retry-safe but must not enter WerewolfCommand or mutate game state.
+ * W3D1 recovery entry point. Recovery semantics are owned by runtime/shared;
+ * Node keeps only retry scoping and capability dependencies here.
  */
 export function runHostRecoveryCommandIdempotent(
   room: RuntimeRoom,
+  authenticatedPlayerId: string,
   commandId: string,
-  delivery: () => HostRecoveryCommandOutcome,
-): Promise<{ outcome: HostRecoveryCommandOutcome; replayed: boolean }> {
+  command: RoomRecoveryCommand,
+  dependencies: RoomRecoveryDependencies,
+): Promise<{ outcome: RoomRecoveryCommandOutcome; replayed: boolean }> {
+  // Re-check authority before receipt replay for the same reason as Cloudflare:
+  // commandId dedupe must never become an authorization bypass.
+  assertRoomRecoveryAuthority(room, authenticatedPlayerId, command);
   return roomCommands.execute(
     room,
     HOST_COMMAND_SCOPE,
     commandId,
-    delivery,
+    () =>
+      executeRoomRecoveryCommand(
+        room,
+        authenticatedPlayerId,
+        command,
+        dependencies,
+      ),
+    command.type === "recovery.abortToLobby"
+      ? { resetReceiptHistory: true }
+      : undefined,
   );
 }
 

@@ -718,19 +718,22 @@ export function createGameServer() {
 
         const { room } = membership;
         try {
-          await runHostRecoveryCommandIdempotent(room, commandId, () => {
-            const actors = onlineActingPlayers(room);
-            if (actors.length === 0) {
-              throw new GameRuleError("当前没有在线的行动玩家需要提醒");
-            }
-
+          const execution = await runHostRecoveryCommandIdempotent(
+            room,
+            membership.player.id,
+            commandId,
+            { type: "recovery.resendCurrentAction" },
+            {
+              isPlayerConnected(playerId) {
+                const player = room.players.find(item => item.id === playerId);
+                return Boolean(player?.connected && player.socketId);
+              },
+              now: Date.now,
+            },
+          );
+          if (!execution.replayed) {
             emitActionAlertEffects(io, room, { resumed: true });
-
-            return {
-              kind: "hostRecoveryReminder",
-              actorPlayerIds: actors.map(actor => actor.id),
-            };
-          });
+          }
           ack({ ok: true });
         } catch (error) {
           ruleError(ack, error);

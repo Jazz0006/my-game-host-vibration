@@ -71,35 +71,41 @@ describe("C4.1 host recovery runtime", () => {
     const currentRoom = room();
     prepareActiveInteraction(currentRoom);
     const gameBefore = JSON.stringify(currentRoom.game);
-    let deliveries = 0;
-
-    const deliver = () => {
-      deliveries += 1;
-      return {
-        kind: "hostRecoveryReminder" as const,
-        actorPlayerIds: onlineActingPlayers(currentRoom).map(player => player.id),
-      };
+    const hostPlayerId = currentRoom.players.find(player => player.isHost)!.id;
+    const dependencies = {
+      isPlayerConnected(playerId: string) {
+        const player = currentRoom.players.find(item => item.id === playerId);
+        return Boolean(player?.connected && player.socketId);
+      },
+      now: () => 99,
     };
 
     const first = await runHostRecoveryCommandIdempotent(
       currentRoom,
+      hostPlayerId,
       "cmd-resend-current-action",
-      deliver,
+      { type: "recovery.resendCurrentAction" },
+      dependencies,
     );
 
     expect(first.replayed).toBe(false);
-    expect(first.outcome.kind).toBe("hostRecoveryReminder");
-    expect(deliveries).toBe(1);
+    expect(first.outcome).toMatchObject({
+      kind: "hostRecoveryReminder",
+      actorPlayerIds: onlineActingPlayers(currentRoom).map(player => player.id),
+      actionId: currentRoom.game?.actionId,
+      phase: currentRoom.game?.phase,
+    });
     expect(JSON.stringify(currentRoom.game)).toBe(gameBefore);
 
     const retry = await runHostRecoveryCommandIdempotent(
       currentRoom,
+      hostPlayerId,
       "cmd-resend-current-action",
-      deliver,
+      { type: "recovery.resendCurrentAction" },
+      dependencies,
     );
 
     expect(retry).toEqual({ outcome: first.outcome, replayed: true });
-    expect(deliveries).toBe(1);
     expect(JSON.stringify(currentRoom.game)).toBe(gameBefore);
     expect(currentRoom.commandReceipts).toEqual([
       {
@@ -112,24 +118,26 @@ describe("C4.1 host recovery runtime", () => {
   it("treats a new commandId as a deliberate second reminder", async () => {
     const currentRoom = room();
     prepareActiveInteraction(currentRoom);
-    let deliveries = 0;
+    const hostPlayerId = currentRoom.players.find(player => player.isHost)!.id;
+    const dependencies = {
+      isPlayerConnected(playerId: string) {
+        const player = currentRoom.players.find(item => item.id === playerId);
+        return Boolean(player?.connected && player.socketId);
+      },
+      now: () => 99,
+    };
 
     for (const commandId of ["cmd-remind-1", "cmd-remind-2"]) {
       const result = await runHostRecoveryCommandIdempotent(
         currentRoom,
+        hostPlayerId,
         commandId,
-        () => {
-          deliveries += 1;
-          return {
-            kind: "hostRecoveryReminder",
-            actorPlayerIds: onlineActingPlayers(currentRoom).map(player => player.id),
-          };
-        },
+        { type: "recovery.resendCurrentAction" },
+        dependencies,
       );
       expect(result.replayed).toBe(false);
     }
 
-    expect(deliveries).toBe(2);
     expect(currentRoom.commandReceipts).toHaveLength(2);
   });
 });

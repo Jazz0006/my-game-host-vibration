@@ -493,6 +493,176 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
     expect(await new CloudflareRoomSnapshotRepository(storage).load()).toBeUndefined();
   });
 
+  it("replays a Cloudflare recovery reminder without delivering the transient alert twice", async () => {
+    const storage = new MemoryStorage();
+    await new CloudflareRoomSnapshotRepository(storage).save(wolfActionSnapshot());
+    const hibernation = new FakeHibernationState();
+    const realtime = new CloudflareRoomRealtime(hibernation);
+    const host = new FakeWebSocket();
+    const nonHost = new FakeWebSocket();
+    realtime.acceptPlayerSocket(host, "p1");
+    realtime.acceptPlayerSocket(nonHost, "p2");
+
+    const room = new GameRoomDurableObject(stateLike(storage, hibernation));
+    const command = createClientCommandEnvelope(
+      "recovery.resendCurrentAction",
+      {},
+      "recovery-reminder-1",
+    );
+
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("recovery-request-1", command)),
+    );
+
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "recovery-request-1",
+      ok: true,
+      result: {
+        revision: 21,
+        replayed: false,
+        outcome: {
+          kind: "hostRecoveryReminder",
+          actorPlayerIds: ["p1"],
+          actionId: "wolf-action",
+          phase: "night_werewolf",
+        },
+      },
+    }));
+    const firstAlerts = parsedFrames(host).filter(frame =>
+      frame.kind === "event" &&
+      (frame.envelope as { type?: string } | undefined)?.type === "client.effect.vibrate"
+    );
+    expect(firstAlerts).toHaveLength(1);
+    expect(firstAlerts[0]).toMatchObject({
+      envelope: {
+        type: "client.effect.vibrate",
+        payload: {
+          pattern: [300, 150, 300],
+          reason: "action-alert",
+          context: {
+            actionId: "wolf-action",
+            phase: "night_werewolf",
+            resumed: true,
+          },
+        },
+      },
+    });
+
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("recovery-request-2", command)),
+    );
+
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "recovery-request-2",
+      ok: true,
+      result: {
+        revision: 21,
+        replayed: true,
+        outcome: expect.objectContaining({ kind: "hostRecoveryReminder" }),
+      },
+    }));
+    const replayAlerts = parsedFrames(host).filter(frame =>
+      frame.kind === "event" &&
+      (frame.envelope as { type?: string } | undefined)?.type === "client.effect.vibrate"
+    );
+    expect(replayAlerts).toHaveLength(1);
+
+    await room.webSocketMessage(
+      nonHost,
+      JSON.stringify(createClientRawWebSocketCommandRequest("recovery-request-3", command)),
+    );
+    expect(parsedFrames(nonHost)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "recovery-request-3",
+      ok: false,
+      error: expect.objectContaining({
+        code: "command_failed",
+        message: "只有房主可以重新提醒当前行动",
+      }),
+    }));
+    expect((await new CloudflareRoomSnapshotRepository(storage).load())?.revision).toBe(21);
+  });
+
+  it("aborts a Cloudflare game to lobby while preserving membership and replaying safely", async () => {
+    const storage = new MemoryStorage();
+    const active = {
+      ...wolfActionSnapshot(),
+      ruleState: { marker: "old-game-rule-state" },
+    };
+    await new CloudflareRoomSnapshotRepository(storage).save(active);
+    const hibernation = new FakeHibernationState();
+    const realtime = new CloudflareRoomRealtime(hibernation);
+    const host = new FakeWebSocket();
+    const player = new FakeWebSocket();
+    realtime.acceptPlayerSocket(host, "p1");
+    realtime.acceptPlayerSocket(player, "p2");
+
+    const room = new GameRoomDurableObject(stateLike(storage, hibernation));
+    const command = createClientCommandEnvelope(
+      "recovery.abortToLobby",
+      {},
+      "abort-to-lobby-1",
+    );
+
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("abort-request-1", command)),
+    );
+
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "abort-request-1",
+      ok: true,
+      result: {
+        revision: 21,
+        replayed: false,
+        outcome: { kind: "abortedToLobby" },
+      },
+    }));
+    expect(parsedFrames(player)).toContainEqual(expect.objectContaining({
+      kind: "state",
+      revision: 21,
+      envelope: expect.objectContaining({
+        scope: "player",
+        playerId: "p2",
+        payload: { phase: "lobby", mode: "lobby" },
+      }),
+    }));
+
+    const persisted = await new CloudflareRoomSnapshotRepository(storage).load();
+    expect(persisted?.revision).toBe(21);
+    expect(persisted?.game).toBeUndefined();
+    expect(persisted?.pendingInteraction).toBeUndefined();
+    expect(persisted?.ruleState).toBeUndefined();
+    expect(persisted?.membership.map(member => member.id)).toEqual([
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+    ]);
+
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("abort-request-2", command)),
+    );
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "abort-request-2",
+      ok: true,
+      result: {
+        revision: 21,
+        replayed: true,
+        outcome: { kind: "abortedToLobby" },
+      },
+    }));
+    expect((await new CloudflareRoomSnapshotRepository(storage).load())?.revision).toBe(21);
+  });
+
   it("delivers the canonical action-alert effect to the next night actor after a committed action", async () => {
     const storage = new MemoryStorage();
     await new CloudflareRoomSnapshotRepository(storage).save(wolfActionSnapshot());

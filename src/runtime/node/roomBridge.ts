@@ -13,6 +13,7 @@ import {
   recoverTimedOutWerewolfInteraction as recoverTimedOutWerewolfGameInteraction,
   type WerewolfTimeoutRecoveryResult,
 } from "../../games/werewolf/WerewolfTimeoutRecovery.js";
+import type { RoomRecoveryCommandOutcome } from "../shared/roomRecoveryCommand.js";
 import {
   executeWerewolfRoomCommand,
   type WerewolfCommandEnvironment,
@@ -32,12 +33,9 @@ export type RuntimePlayer = RoomPlayer & {
   connected: boolean;
 };
 
-export type HostRecoveryCommandOutcome = {
-  kind: "hostRecoveryReminder";
-  actorPlayerIds: string[];
-};
-
-export type RuntimeCommandOutcome = WerewolfCommandOutcome | HostRecoveryCommandOutcome;
+export type RuntimeCommandOutcome =
+  | WerewolfCommandOutcome
+  | RoomRecoveryCommandOutcome;
 
 export type RuntimeRoom = RoomState<GameState, GameConfig, RuntimePlayer> & {
   activePrompt?: TestPrompt;

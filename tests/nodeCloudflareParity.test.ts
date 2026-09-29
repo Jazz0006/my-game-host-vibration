@@ -99,7 +99,12 @@ function startingSnapshot(): RoomSnapshot<
       commandReceipts: [
         {
           commandId: "host:old-recovery",
-          result: { kind: "hostRecoveryReminder", actorPlayerIds: ["p2"] },
+          result: {
+            kind: "hostRecoveryReminder",
+            actorPlayerIds: ["p2"],
+            actionId: "old-action",
+            phase: "role_reveal",
+          },
         },
       ],
     },
