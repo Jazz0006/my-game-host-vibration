@@ -15,7 +15,7 @@ describe("MG0A GameCatalog admission seam", () => {
     expect(isGameType(undefined)).toBe(false);
   });
 
-  it("keeps Werewolf runtime ownership concrete while BotC is admission-only before B0", () => {
+  it("registers concrete game modules and initial config for both product games", () => {
     const werewolf = gameAdmission("werewolf");
     const botc = gameAdmission("botc");
 
@@ -25,11 +25,13 @@ describe("MG0A GameCatalog admission seam", () => {
       playerCount: expect.any(Number),
       roleDeck: expect.any(Array),
     });
-    expect(gameModuleFor("werewolf")).toBeDefined();
+    expect(gameModuleFor("werewolf")?.type).toBe("werewolf");
 
     expect(botc.gameType).toBe("botc");
-    expect(botc.maxPlayers).toBeGreaterThan(0);
-    expect(botc.createInitialGameConfig()).toEqual({});
-    expect(gameModuleFor("botc")).toBeUndefined();
+    expect(botc.maxPlayers).toBe(15);
+    expect(botc.createInitialGameConfig()).toEqual({
+      scriptId: "trouble-brewing",
+    });
+    expect(gameModuleFor("botc")?.type).toBe("botc");
   });
 });

@@ -72,7 +72,7 @@ describe("MG0 game admission and shared lobby runtime", () => {
       membership: unknown[];
     };
     expect(snapshot.metadata.gameType).toBe("botc");
-    expect(snapshot.gameConfig).toEqual({});
+    expect(snapshot.gameConfig).toEqual({ scriptId: "trouble-brewing" });
     expect(snapshot).not.toHaveProperty("game");
     expect(snapshot.membership).toHaveLength(1);
 

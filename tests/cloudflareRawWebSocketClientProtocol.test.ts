@@ -142,7 +142,7 @@ function botcLobbySnapshot() {
       createdAt: 30,
       updatedAt: 40,
       gameModerator: { mode: "automatic" },
-      gameConfig: {},
+      gameConfig: { scriptId: "trouble-brewing" },
     },
     { revision: 4 },
   );

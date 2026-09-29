@@ -312,15 +312,19 @@ export function createClientRawWebSocketFailureResponse(
   };
 }
 
-export function createClientRawWebSocketStateFrame<TPayload>(
+export function createClientRawWebSocketStateFrame<
+  TEnvelope extends ClientStateEnvelope,
+>(
   revision: number,
-  envelope: ClientStateEnvelope<TPayload>,
-): ClientRawWebSocketStateFrame<TPayload> {
+  envelope: TEnvelope,
+): ClientRawWebSocketStateFrame<TEnvelope["payload"]> {
   return {
     wireVersion: CLIENT_RAW_WEBSOCKET_WIRE_VERSION,
     kind: "state",
     revision: assertRevision(revision),
-    envelope: parseStateEnvelope(envelope) as ClientStateEnvelope<TPayload>,
+    envelope: parseStateEnvelope(envelope) as ClientStateEnvelope<
+      TEnvelope["payload"]
+    >,
   };
 }
 
