@@ -163,6 +163,36 @@ describe("architecture boundaries", () => {
     }
   });
 
+  it("keeps the shared Cloudflare Raw WebSocket bridge free of concrete game runtimes", () => {
+    const sharedProtocol = "src/runtime/cloudflare/CloudflareRawWebSocketClientProtocol.ts";
+    const imports = importsOf(sharedProtocol);
+
+    expect(imports).toContain("./CloudflareGameCommandRuntimeRegistry.js");
+    for (const forbidden of [
+      /(?:^|\/)games\/werewolf(?:\/|$)/u,
+      /(?:^|\/)protocol\/client\/werewolf(?:\/|$)/u,
+      /CloudflareWerewolf/u,
+      /CloudflareInteractionTimeoutRuntime/u,
+      /CloudflareRoomRecoveryRuntime/u,
+    ]) {
+      for (const imported of imports) {
+        expect(
+          forbidden.test(imported),
+          `${sharedProtocol} must dispatch concrete game behavior through the game runtime registry, not ${imported}`,
+        ).toBe(false);
+        forbidden.lastIndex = 0;
+      }
+    }
+
+    const werewolfHandler = source(
+      "src/runtime/cloudflare/CloudflareWerewolfGameCommandHandler.ts",
+    );
+    expect(werewolfHandler).toContain("CloudflareWerewolfCommandRuntime");
+    expect(werewolfHandler).toContain("CloudflareWerewolfLifecycleRuntime");
+    expect(werewolfHandler).toContain("CloudflareInteractionTimeoutRuntime");
+    expect(werewolfHandler).toContain("CloudflareRoomRecoveryRuntime");
+  });
+
   it("keeps concrete Werewolf mutations behind the GameModule/runtime bridge boundary", () => {
     const server = source("src/server.ts");
     const domainGameImport = server.match(/import\s*\{([\s\S]*?)\}\s*from\s*["']\.\/domain\/game\.js["']/u)?.[1] ?? "";
