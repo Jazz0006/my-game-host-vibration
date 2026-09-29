@@ -24,6 +24,13 @@ import {
 } from "./CloudflareAuthoritativeStateDelivery.js";
 import { cloudflareSessionReplacedFrame } from "./CloudflareClientEventDelivery.js";
 import {
+  emitCloudflareActionAlertToPlayers,
+  emitCloudflareInteractionTimeoutActive,
+  emitCloudflareInteractionTimeoutError,
+  emitCloudflareInteractionTimeoutInactive,
+} from "./CloudflareInteractionTimeoutDelivery.js";
+import { CloudflareInteractionTimeoutRuntime } from "./CloudflareInteractionTimeoutRuntime.js";
+import {
   CloudflareRoomRealtime,
   type DurableObjectHibernationStateLike,
   type HibernationWebSocketLike,
@@ -92,6 +99,7 @@ export class GameRoomDurableObject {
   private readonly sessionTokens = new SessionTokenService(this.crypto);
   private readonly bootstrap: RoomBootstrapService<GameState, GameConfig>;
   private readonly webSocketTickets: CloudflareWebSocketTicketRepository;
+  private readonly interactionTimeouts: CloudflareInteractionTimeoutRuntime;
 
   constructor(private readonly state: DurableObjectStateLike) {
     this.snapshots = new CloudflareRoomSnapshotRepository<CloudflareClientSnapshot>(state.storage);
@@ -105,6 +113,7 @@ export class GameRoomDurableObject {
       createPlayerId: () => this.crypto.randomToken(16),
     });
     this.webSocketTickets = new CloudflareWebSocketTicketRepository(state.storage, this.crypto);
+    this.interactionTimeouts = new CloudflareInteractionTimeoutRuntime(state.storage);
 
     const realtimeState = hibernationState(state);
     const Pair = autoResponsePairConstructor();
@@ -137,6 +146,7 @@ export class GameRoomDurableObject {
 
     if (url.pathname === "/snapshot" && request.method === "DELETE") {
       const deleted = await this.snapshots.clear();
+      await this.interactionTimeouts.clearAll();
       return Response.json({ ok: true, deleted });
     }
 
@@ -222,6 +232,96 @@ export class GameRoomDurableObject {
     }
   }
 
+  async alarm(): Promise<void> {
+    const execution = await this.interactionTimeouts.handleAlarm();
+    const realtimeState = hibernationState(this.state);
+    if (!realtimeState || execution.kind === "none") return;
+
+    const realtime = new CloudflareRoomRealtime(realtimeState);
+    switch (execution.kind) {
+      case "warning": {
+        const snapshot = await this.snapshots.load();
+        emitCloudflareActionAlertToPlayers(
+          realtime,
+          execution.state.actorPlayerIds,
+          {
+            actionId: execution.state.actionId,
+            ...(snapshot?.game?.phase === undefined
+              ? {}
+              : { phase: snapshot.game.phase }),
+            timeoutWarning: true,
+          },
+        );
+        emitCloudflareInteractionTimeoutActive(
+          realtime,
+          execution.state,
+          true,
+        );
+        return;
+      }
+
+      case "recovered":
+        emitCloudflareInteractionTimeoutInactive(
+          realtime,
+          execution.previous,
+        );
+        pushCloudflareAuthoritativeStates(
+          realtime,
+          execution.snapshot,
+        );
+        if (execution.next.created && execution.next.active) {
+          emitCloudflareInteractionTimeoutActive(
+            realtime,
+            execution.next.active,
+          );
+          emitCloudflareActionAlertToPlayers(
+            realtime,
+            execution.next.active.actorPlayerIds,
+            {
+              actionId: execution.next.active.actionId,
+              ...(execution.snapshot.game?.phase === undefined
+                ? {}
+                : { phase: execution.snapshot.game.phase }),
+            },
+          );
+        }
+        return;
+
+      case "error":
+        emitCloudflareInteractionTimeoutInactive(
+          realtime,
+          execution.previous,
+        );
+        emitCloudflareInteractionTimeoutError(
+          realtime,
+          execution.previous,
+          execution.message,
+        );
+        return;
+
+      case "reconciled":
+        if (
+          execution.transition.cleared &&
+          execution.transition.previous
+        ) {
+          emitCloudflareInteractionTimeoutInactive(
+            realtime,
+            execution.transition.previous,
+          );
+        }
+        if (
+          execution.transition.created &&
+          execution.transition.active
+        ) {
+          emitCloudflareInteractionTimeoutActive(
+            realtime,
+            execution.transition.active,
+          );
+        }
+        return;
+    }
+  }
+
   webSocketClose(
     webSocket: HibernationWebSocketLike,
     code: number,
@@ -266,6 +366,9 @@ export class GameRoomDurableObject {
     }
 
     const created = await this.bootstrap.create(body.roomId, body.name);
+    // A reused Durable Object room code must never inherit timeout config,
+    // receipts, or alarms from a previously cleared room incarnation.
+    await this.interactionTimeouts.clearAll();
     await this.snapshots.save(created.snapshot as CloudflareClientSnapshot);
     return Response.json({ ok: true, ...created.session }, { status: 201 });
   }

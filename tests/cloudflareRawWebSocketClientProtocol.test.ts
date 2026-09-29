@@ -6,6 +6,7 @@ import {
   createClientRawWebSocketCommandRequest,
   createClientRawWebSocketSyncRequest,
 } from "../src/protocol/client/ClientRawWebSocketProtocol.js";
+import { CloudflareInteractionTimeoutRepository } from "../src/runtime/cloudflare/CloudflareInteractionTimeoutRepository.js";
 import {
   CloudflareRoomRealtime,
   type DurableObjectHibernationStateLike,
@@ -16,6 +17,7 @@ import { GameRoomDurableObject } from "../src/runtime/cloudflare/GameRoomDurable
 
 class MemoryStorage {
   readonly values = new Map<string, unknown>();
+  alarmAt: number | null = null;
 
   async get<T>(key: string): Promise<T | undefined> {
     const value = this.values.get(key);
@@ -28,6 +30,18 @@ class MemoryStorage {
 
   async delete(key: string): Promise<boolean> {
     return this.values.delete(key);
+  }
+
+  async getAlarm(): Promise<number | null> {
+    return this.alarmAt;
+  }
+
+  async setAlarm(scheduledTimeMs: number): Promise<void> {
+    this.alarmAt = scheduledTimeMs;
+  }
+
+  async deleteAlarm(): Promise<void> {
+    this.alarmAt = null;
   }
 }
 
@@ -454,6 +468,21 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
   it("clears Cloudflare room authority only after delivering the stable room-closed event", async () => {
     const storage = new MemoryStorage();
     await new CloudflareRoomSnapshotRepository(storage).save(fivePlayerLobbySnapshot());
+    await new CloudflareInteractionTimeoutRepository(storage).save({
+      timeoutSeconds: 15,
+      active: {
+        roomId: "1234",
+        actionId: "stale-action",
+        actorPlayerIds: ["p2"],
+        startedAt: 1,
+        warningAt: 2,
+        deadlineAt: 3,
+        warningSent: false,
+        extensionCount: 0,
+      },
+      receipts: [],
+    });
+    storage.alarmAt = 2;
     const hibernation = new FakeHibernationState();
     const realtime = new CloudflareRoomRealtime(hibernation);
     const host = new FakeWebSocket();
@@ -491,6 +520,74 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
       expect(socket.closed).toEqual({ code: 4005, reason: "room closed" });
     }
     expect(await new CloudflareRoomSnapshotRepository(storage).load()).toBeUndefined();
+    expect(await new CloudflareInteractionTimeoutRepository(storage).load()).toEqual({
+      timeoutSeconds: 30,
+      receipts: [],
+    });
+    expect(storage.alarmAt).toBeNull();
+  });
+
+  it("serves interaction timeout configuration through the Raw WebSocket command contract", async () => {
+    const storage = new MemoryStorage();
+    await new CloudflareRoomSnapshotRepository(storage).save(lobbySnapshot());
+    const hibernation = new FakeHibernationState();
+    const realtime = new CloudflareRoomRealtime(hibernation);
+    const host = new FakeWebSocket();
+    realtime.acceptPlayerSocket(host, "p1");
+
+    const room = new GameRoomDurableObject(stateLike(storage, hibernation));
+    const setCommand = createClientCommandEnvelope(
+      "interactionTimeout.setConfig",
+      { timeoutSeconds: 15 },
+      "timeout-config-raw-1",
+    );
+
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("timeout-set-1", setCommand)),
+    );
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "timeout-set-1",
+      ok: true,
+      result: {
+        replayed: false,
+        timeoutSeconds: 15,
+      },
+    }));
+
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("timeout-set-2", setCommand)),
+    );
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "timeout-set-2",
+      ok: true,
+      result: {
+        replayed: true,
+        timeoutSeconds: 15,
+      },
+    }));
+
+    const getCommand = createClientCommandEnvelope(
+      "interactionTimeout.getConfig",
+      {},
+      "timeout-config-get-1",
+    );
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("timeout-get-1", getCommand)),
+    );
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "timeout-get-1",
+      ok: true,
+      result: {
+        replayed: false,
+        timeoutSeconds: 15,
+      },
+    }));
   });
 
   it("replays a Cloudflare recovery reminder without delivering the transient alert twice", async () => {
@@ -661,6 +758,82 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
       },
     }));
     expect((await new CloudflareRoomSnapshotRepository(storage).load())?.revision).toBe(21);
+  });
+
+  it("delivers a persisted Cloudflare timeout warning once across repeated alarm delivery", async () => {
+    const storage = new MemoryStorage();
+    await new CloudflareRoomSnapshotRepository(storage).save(wolfActionSnapshot());
+    const now = Date.now();
+    const warningAt = now - 1_000;
+    const deadlineAt = now + 60_000;
+    await new CloudflareInteractionTimeoutRepository(storage).save({
+      timeoutSeconds: 30,
+      active: {
+        roomId: "1234",
+        actionId: "wolf-action",
+        actorPlayerIds: ["p1"],
+        startedAt: now - 20_000,
+        warningAt,
+        deadlineAt,
+        warningSent: false,
+        extensionCount: 0,
+      },
+      receipts: [],
+    });
+    storage.alarmAt = warningAt;
+
+    const hibernation = new FakeHibernationState();
+    const realtime = new CloudflareRoomRealtime(hibernation);
+    const wolf = new FakeWebSocket();
+    realtime.acceptPlayerSocket(wolf, "p1");
+
+    const room = new GameRoomDurableObject(stateLike(storage, hibernation));
+    await room.alarm();
+
+    const warningFrames = parsedFrames(wolf).filter(frame =>
+      frame.kind === "event"
+    );
+    expect(warningFrames).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        envelope: {
+          protocolVersion: 1,
+          kind: "event",
+          type: "client.effect.vibrate",
+          payload: {
+            pattern: [300, 150, 300],
+            reason: "action-alert",
+            context: {
+              actionId: "wolf-action",
+              phase: "night_werewolf",
+              timeoutWarning: true,
+            },
+          },
+        },
+      }),
+      expect.objectContaining({
+        envelope: {
+          protocolVersion: 1,
+          kind: "event",
+          type: "interaction.timeout-state",
+          payload: {
+            roomId: "1234",
+            active: true,
+            actionId: "wolf-action",
+            deadlineAt,
+            warningAt,
+            warning: true,
+            canExtend: true,
+            extensionCount: 0,
+          },
+        },
+      }),
+    ]));
+    expect(storage.alarmAt).toBe(deadlineAt);
+
+    const deliveredCount = wolf.sent.length;
+    await room.alarm();
+    expect(wolf.sent).toHaveLength(deliveredCount);
+    expect(storage.alarmAt).toBe(deadlineAt);
   });
 
   it("delivers the canonical action-alert effect to the next night actor after a committed action", async () => {

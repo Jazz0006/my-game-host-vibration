@@ -4,6 +4,9 @@ export type DurableObjectStorageLike = {
   get<T = unknown>(key: string): Promise<T | undefined>;
   put<T = unknown>(key: string, value: T): Promise<void>;
   delete(key: string): Promise<boolean>;
+  getAlarm?(): Promise<number | null>;
+  setAlarm?(scheduledTimeMs: number): Promise<void>;
+  deleteAlarm?(): Promise<void>;
 };
 
 const SNAPSHOT_KEY = "room:snapshot:v1";
