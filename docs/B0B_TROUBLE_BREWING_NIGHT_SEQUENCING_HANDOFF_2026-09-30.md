@@ -2,19 +2,19 @@
 
 ## Canonical checkpoint
 
-Branch:
+Current implementation branch:
 
 ```text
-agent/b0b-botc-first-night-sequencing
+agent/b0b2-botc-other-night-sequencing
 ```
 
-Fresh live `main` at B0B entry:
+Fresh live `main` at B0B2 entry:
 
 ```text
-e852ec91fc601eff90d996eb859b50296a8bf1c6
+2095c8b6beb42e95fc7a21ae5473d061dc9af379
 ```
 
-B0A merged through PR #100. Mutable Git / PR / CI facts must still be rechecked live before any write.
+B0A merged through PR #100. B0B1 merged through PR #102. Mutable Git / PR / CI facts must still be rechecked live before any write.
 
 Standing merge authorization remains active: accepted-scope PRs may be merged automatically once exact-head, required checks, mergeability, unresolved-thread, and final-diff gates pass.
 
@@ -39,12 +39,31 @@ Reference:
 https://wiki.bloodontheclocktower.com/Glossary
 ```
 
+B0B2 eligibility/trigger ownership is also constrained by official character/rules text:
+
+- dead players normally lose their ability immediately;
+- Ravenkeeper is an explicit death-trigger exception and wakes when they die at night;
+- Undertaker wakes only when a player was executed and died that day;
+- Scarlet Woman changes character immediately when a qualifying Demon death occurs, so this is not an ordinary recurring night action;
+- ability text / immediate timing takes precedence over using the night sheet as a fake static execution engine.
+
+References:
+
+```text
+https://wiki.bloodontheclocktower.com/Abilities
+https://wiki.bloodontheclocktower.com/Ravenkeeper
+https://wiki.bloodontheclocktower.com/Undertaker
+https://wiki.bloodontheclocktower.com/Scarlet_Woman
+```
+
 ## B0B decomposition
 
 ```text
 B0B first-night / night sequencing
-  ├─ B0B1 canonical order + first-night progression ✅ LOCAL GREEN
-  ├─ B0B2 later-night dynamic eligibility / progression ← NEXT AFTER B0B1 MERGE
+  ├─ B0B1 canonical order + first-night progression ✅ MERGED
+  ├─ B0B2 later-night dynamic eligibility / progression ← CURRENT
+  │   ├─ B0B2A recurring / conditional eligibility planner ✅ LOCAL GREEN
+  │   └─ B0B2B immediate trigger / role-transition sequencing ← NEXT AFTER MERGE
   └─ B0B3 runtime command/interaction wiring if still required after B0B2
 ```
 
@@ -109,14 +128,52 @@ npm test
 
 The full test command also passed the Web client build and both WeChat product-shell build/verification steps.
 
-## B0B2 next scope
+## B0B2A implemented scope
 
-After B0B1 is merged from a clean fresh `main`:
+Production:
 
-1. model the minimal state needed to determine later-night eligibility without creating a generic rules DSL;
-2. consume the canonical other-night order already established by B0B1;
-3. handle living/dead eligibility plus conditional slots such as Scarlet Woman, Ravenkeeper, and Undertaker;
-4. preserve poisoned/drunk wake behavior while leaving information truth/misinformation to B0C;
-5. keep Room Owner distinct from Game Moderator/Storyteller;
-6. add focused tests, then full `typecheck + npm test`;
-7. merge automatically when normal gates pass.
+```text
+src/games/botc/TroubleBrewingNightSequence.ts
+```
+
+Tests:
+
+```text
+tests/botcOtherNightEligibility.test.ts
+```
+
+B0B2A adds a live other-night eligibility projection over authoritative facts rather than freezing a complete night plan:
+
+- ordinary recurring roles wake only while alive;
+- Ravenkeeper wakes only when that player died tonight, despite now being dead;
+- Undertaker wakes only when a player was executed and died today;
+- Drunk follows the same conditions for the Townsfolk they were shown;
+- Scarlet Woman is intentionally excluded from ordinary recurring eligibility because a qualifying Demon death immediately changes the player's character;
+- callers can re-evaluate eligibility after authoritative state changes, leaving room for B0B2B interrupt/role-transition semantics.
+
+Local validation:
+
+```text
+npm run typecheck
+  PASS
+
+npm test
+  PASS
+  123 test files
+  507 tests
+```
+
+The full test command also passed the Web client build and both WeChat product-shell build/verification steps.
+
+## B0B2B next scope
+
+After B0B2A is merged from fresh live `main`:
+
+1. model the minimum concrete Trouble Brewing role-transition facts needed by sequencing;
+2. support immediate Demon-death transitions without turning the night sheet into a generic rules DSL;
+3. cover Scarlet Woman becoming Imp after a qualifying Demon death;
+4. preserve the Imp self-kill rule that a newly created Imp does not attack again that same night;
+5. ensure death-trigger steps such as Ravenkeeper can enter the remaining night flow after earlier actions change state;
+6. keep information payloads, poisoning truth/misinformation, registration decisions and Storyteller recommendations outside sequencing;
+7. add focused tests, then full `typecheck + npm test`;
+8. merge automatically when normal gates pass.

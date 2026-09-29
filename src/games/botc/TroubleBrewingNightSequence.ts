@@ -128,6 +128,72 @@ export function createTroubleBrewingFirstNightSequence(
   return steps;
 }
 
+export type TroubleBrewingOtherNightFacts = {
+  assignments: readonly BotcNightAssignment[];
+  deadPlayerIds: readonly string[];
+  diedTonightPlayerIds: readonly string[];
+  executedAndDiedTodayPlayerId?: string;
+};
+
+function otherNightActor(
+  facts: TroubleBrewingOtherNightFacts,
+  roleId: TroubleBrewingRoleId,
+): BotcNightStep | undefined {
+  const step = actorForRole(facts.assignments, roleId);
+  if (!step || step.kind !== "role") return undefined;
+
+  const actorPlayerId = step.actorPlayerIds[0];
+  if (!actorPlayerId) return undefined;
+
+  switch (roleId) {
+    case "ravenkeeper":
+      // The Ravenkeeper is the explicit Trouble Brewing exception to the normal
+      // dead-players-have-no-ability rule: dying at night triggers the wake.
+      return facts.diedTonightPlayerIds.includes(actorPlayerId)
+        ? step
+        : undefined;
+
+    case "undertaker":
+      return !facts.deadPlayerIds.includes(actorPlayerId) &&
+        facts.executedAndDiedTodayPlayerId !== undefined
+        ? step
+        : undefined;
+
+    case "scarlet_woman":
+      // Scarlet Woman is not a recurring night action. Her ability changes
+      // character immediately when a qualifying Demon death occurs; the
+      // resulting character-change notification belongs to B0B2B trigger /
+      // role-transition sequencing rather than ordinary eligibility.
+      return undefined;
+
+    default:
+      return facts.deadPlayerIds.includes(actorPlayerId)
+        ? undefined
+        : step;
+  }
+}
+
+/**
+ * Projects currently eligible ordinary Trouble Brewing other-night steps.
+ *
+ * This is deliberately a live eligibility projection, not a frozen plan.
+ * Callers may re-evaluate it after authoritative state changes during the
+ * night. Immediate character-change/interrupt triggers are kept out of this
+ * function so the night sheet never becomes a fake generic rules engine.
+ */
+export function createTroubleBrewingOtherNightSequence(
+  facts: TroubleBrewingOtherNightFacts,
+): BotcNightStep[] {
+  const steps: BotcNightStep[] = [];
+
+  for (const roleId of TROUBLE_BREWING_OTHER_NIGHT_ROLE_ORDER) {
+    const step = otherNightActor(facts, roleId);
+    if (step) steps.push(step);
+  }
+
+  return steps;
+}
+
 export function troubleBrewingNightRoleOrder(
   nightKind: BotcNightKind,
 ): readonly TroubleBrewingRoleId[] {
