@@ -22,6 +22,7 @@ import {
   pushCloudflareAuthoritativeStates,
   type CloudflareClientSnapshot,
 } from "./CloudflareAuthoritativeStateDelivery.js";
+import { cloudflareSessionReplacedFrame } from "./CloudflareClientEventDelivery.js";
 import {
   CloudflareRoomRealtime,
   type DurableObjectHibernationStateLike,
@@ -380,7 +381,14 @@ export class GameRoomDurableObject {
     const pair = new Pair();
     const client = pair[0];
     const server = pair[1];
-    new CloudflareRoomRealtime(realtimeState).acceptPlayerSocket(server, ticketRecord.playerId);
+    new CloudflareRoomRealtime(realtimeState).acceptPlayerSocket(
+      server,
+      ticketRecord.playerId,
+      cloudflareSessionReplacedFrame(
+        snapshot.metadata.roomId,
+        ticketRecord.playerId,
+      ),
+    );
 
     return new Response(null, {
       status: 101,

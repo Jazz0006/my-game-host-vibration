@@ -15,8 +15,10 @@ import {
 } from "../src/domain/game.js";
 import type { WerewolfCommand } from "../src/games/werewolf/WerewolfGameModule.js";
 import { getActiveWerewolfInteraction } from "../src/games/werewolf/WerewolfNightPlanner.js";
+import { createCloudflareRoomStateEnvelope } from "../src/runtime/cloudflare/CloudflareClientProtocolAdapter.js";
 import { CloudflareRoomSnapshotRepository } from "../src/runtime/cloudflare/CloudflareRoomSnapshotRepository.js";
 import { CloudflareWerewolfCommandRuntime } from "../src/runtime/cloudflare/CloudflareWerewolfCommandRuntime.js";
+import { createNodeRoomStateEnvelope } from "../src/runtime/node/NodeClientProtocolAdapter.js";
 import {
   type RuntimeCommandOutcome,
   type RuntimeRoom,
@@ -138,6 +140,38 @@ function projectNodeSnapshot(
 }
 
 describe("D5 Node / Cloudflare parity", () => {
+  it("projects the same Werewolf public/host room state from the same authority state", () => {
+    const snapshot = startingSnapshot();
+    const connected = new Set(["p1", "p5"]);
+    const nodeRoom = nodeRoomFromSnapshot(snapshot);
+    for (const player of nodeRoom.players) {
+      player.connected = connected.has(player.id);
+      player.socketId = player.connected ? `socket-${player.id}` : null;
+    }
+
+    const nodeEnvelope = createNodeRoomStateEnvelope(nodeRoom, "p1");
+    const cloudflareEnvelope = createCloudflareRoomStateEnvelope(
+      snapshot,
+      "p1",
+      playerId => connected.has(playerId),
+    );
+
+    expect(cloudflareEnvelope).toEqual(nodeEnvelope);
+    expect(cloudflareEnvelope.payload.players).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "p1", connected: true }),
+        expect.objectContaining({ id: "p2", connected: false }),
+        expect.objectContaining({ id: "p5", connected: true }),
+      ]),
+    );
+    expect(cloudflareEnvelope.payload.game).toMatchObject({
+      phase: snapshot.game?.phase,
+      minPlayers: 5,
+      maxPlayers: 12,
+      canStart: false,
+    });
+  });
+
   it("produces the same authoritative result from the same snapshot and command", async () => {
     const snapshot = startingSnapshot();
     const command: WerewolfCommand = {

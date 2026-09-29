@@ -16,6 +16,11 @@ import {
 } from "../../games/werewolf/WerewolfDomainFacade.js";
 import { werewolfGameModule } from "../../games/werewolf/WerewolfGameModule.js";
 import {
+  WEREWOLF_MAX_PLAYERS,
+  WEREWOLF_MIN_PLAYERS,
+  isWerewolfPlayerCountSupported,
+} from "../../games/werewolf/WerewolfLobbyPolicy.js";
+import {
   getActiveWerewolfInteraction,
   type WerewolfInteraction,
 } from "../../games/werewolf/WerewolfNightPlanner.js";
@@ -56,8 +61,6 @@ export type CloudflareWerewolfLifecycleDependencies = {
 };
 
 const HOST_SCOPE = "host";
-const MIN_PLAYERS = 5;
-const MAX_PLAYERS = 12;
 
 function defaultEnvironment(): WerewolfCommandEnvironment {
   return {
@@ -146,8 +149,10 @@ export class CloudflareWerewolfLifecycleRuntime {
   ): LifecycleOutcome {
     if (envelope.type === "werewolf.startGame") {
       if (room.game) throw new GameRuleError("游戏已经开始");
-      if (room.players.length < MIN_PLAYERS || room.players.length > MAX_PLAYERS) {
-        throw new GameRuleError(`需要${MIN_PLAYERS}到${MAX_PLAYERS}名玩家才能开始`);
+      if (!isWerewolfPlayerCountSupported(room.players.length)) {
+        throw new GameRuleError(
+          `需要${WEREWOLF_MIN_PLAYERS}到${WEREWOLF_MAX_PLAYERS}名玩家才能开始`,
+        );
       }
       if (room.players.some(player => !this.dependencies.isPlayerConnected(player.id))) {
         throw new GameRuleError("所有玩家在线后才能开始");

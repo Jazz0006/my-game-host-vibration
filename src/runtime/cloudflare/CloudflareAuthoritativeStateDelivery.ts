@@ -27,7 +27,11 @@ export function pushCloudflareAuthoritativeStates(
     try {
       const roomFrame = createClientRawWebSocketStateFrame(
         snapshot.revision,
-        createCloudflareRoomStateEnvelope(snapshot, member.id),
+        createCloudflareRoomStateEnvelope(
+          snapshot,
+          member.id,
+          playerId => realtime.isPlayerConnected(playerId),
+        ),
       );
       const playerFrame = createClientRawWebSocketStateFrame(
         snapshot.revision,

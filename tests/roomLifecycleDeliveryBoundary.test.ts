@@ -20,7 +20,7 @@ describe("E2.3e3 room lifecycle delivery boundary", () => {
     expect(delivery).toContain('socket.emit("client:event", createClientRoomRemovedEvent(roomId))');
     expect(delivery).toContain('io.to(roomId).emit("client:event", createClientRoomClosedEvent(roomId))');
     expect(server).toContain("emitClientRoomRemoved(targetSocket, membership.room.id)");
-    expect(server).toContain("emitClientRoomClosed(io, roomId)");
+    expect(server).toContain("emitClientRoomClosed(io, outcome.roomId)");
   });
 
   it("retires raw room lifecycle Socket.IO events from server, Web, and inventory", () => {

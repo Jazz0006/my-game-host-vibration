@@ -34,6 +34,7 @@ class MemoryStorage {
 class FakeWebSocket implements HibernationWebSocketLike {
   readyState = 1;
   readonly sent: string[] = [];
+  closed?: { code?: number; reason?: string };
   attachment: unknown;
 
   send(message: string | ArrayBuffer): void {
@@ -41,8 +42,12 @@ class FakeWebSocket implements HibernationWebSocketLike {
     this.sent.push(message);
   }
 
-  close(): void {
+  close(code?: number, reason?: string): void {
     this.readyState = 3;
+    this.closed = {
+      ...(code === undefined ? {} : { code }),
+      ...(reason === undefined ? {} : { reason }),
+    };
   }
 
   serializeAttachment(value: unknown): void {
@@ -375,6 +380,117 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
     const persisted = await new CloudflareRoomSnapshotRepository(storage).load();
     expect(persisted?.revision).toBe(4);
     expect((persisted?.game as { phase?: string } | undefined)?.phase).toBe("role_reveal");
+  });
+
+  it("executes idempotent Cloudflare room removal and delivers the stable removed lifecycle event", async () => {
+    const storage = new MemoryStorage();
+    await new CloudflareRoomSnapshotRepository(storage).save(fivePlayerLobbySnapshot());
+    const hibernation = new FakeHibernationState();
+    const realtime = new CloudflareRoomRealtime(hibernation);
+    const sockets = new Map<string, FakeWebSocket>();
+    for (const playerId of ["p1", "p2", "p3", "p4", "p5"]) {
+      const playerSocket = new FakeWebSocket();
+      sockets.set(playerId, playerSocket);
+      realtime.acceptPlayerSocket(playerSocket, playerId);
+    }
+    const host = sockets.get("p1")!;
+    const removed = sockets.get("p2")!;
+    const room = new GameRoomDurableObject(stateLike(storage, hibernation));
+    const command = createClientCommandEnvelope(
+      "room.removePlayer",
+      { targetPlayerId: "p2" },
+      "remove-p2",
+    );
+
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("remove-request-1", command)),
+    );
+
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "remove-request-1",
+      ok: true,
+      result: {
+        revision: 4,
+        replayed: false,
+        outcome: { kind: "removedPlayer", playerId: "p2" },
+      },
+    }));
+    expect(parsedFrames(removed)).toContainEqual(expect.objectContaining({
+      kind: "event",
+      envelope: {
+        protocolVersion: 1,
+        kind: "event",
+        type: "room.removed",
+        payload: { roomId: "1234", reason: "removed" },
+      },
+    }));
+    expect(removed.closed).toEqual({ code: 4004, reason: "removed from room" });
+
+    const persisted = await new CloudflareRoomSnapshotRepository(storage).load();
+    expect(persisted?.revision).toBe(4);
+    expect(persisted?.membership.map(player => player.id)).not.toContain("p2");
+
+    const removedFrameCount = removed.sent.length;
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("remove-request-2", command)),
+    );
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "remove-request-2",
+      ok: true,
+      result: {
+        revision: 4,
+        replayed: true,
+        outcome: { kind: "removedPlayer", playerId: "p2" },
+      },
+    }));
+    expect(removed.sent).toHaveLength(removedFrameCount);
+    expect((await new CloudflareRoomSnapshotRepository(storage).load())?.revision).toBe(4);
+  });
+
+  it("clears Cloudflare room authority only after delivering the stable room-closed event", async () => {
+    const storage = new MemoryStorage();
+    await new CloudflareRoomSnapshotRepository(storage).save(fivePlayerLobbySnapshot());
+    const hibernation = new FakeHibernationState();
+    const realtime = new CloudflareRoomRealtime(hibernation);
+    const host = new FakeWebSocket();
+    const player = new FakeWebSocket();
+    realtime.acceptPlayerSocket(host, "p1");
+    realtime.acceptPlayerSocket(player, "p2");
+
+    const room = new GameRoomDurableObject(stateLike(storage, hibernation));
+    const command = createClientCommandEnvelope("room.close", {}, "close-room-1");
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("close-request-1", command)),
+    );
+
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "close-request-1",
+      ok: true,
+      result: {
+        revision: 4,
+        replayed: false,
+        outcome: { kind: "closedRoom", roomId: "1234" },
+      },
+    }));
+    for (const socket of [host, player]) {
+      expect(parsedFrames(socket)).toContainEqual(expect.objectContaining({
+        kind: "event",
+        envelope: {
+          protocolVersion: 1,
+          kind: "event",
+          type: "room.closed",
+          payload: { roomId: "1234", reason: "host_closed" },
+        },
+      }));
+      expect(socket.closed).toEqual({ code: 4005, reason: "room closed" });
+    }
+    expect(await new CloudflareRoomSnapshotRepository(storage).load()).toBeUndefined();
   });
 
   it("delivers the canonical action-alert effect to the next night actor after a committed action", async () => {

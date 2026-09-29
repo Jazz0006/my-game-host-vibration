@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createRoomSnapshot } from "../src/core/room/RoomSnapshot.js";
 import type { SessionTokenCryptoProvider } from "../src/core/security/SessionTokenCryptoProvider.js";
 import { CloudflareRoomSnapshotRepository } from "../src/runtime/cloudflare/CloudflareRoomSnapshotRepository.js";
+import { cloudflareSessionReplacedFrame } from "../src/runtime/cloudflare/CloudflareClientEventDelivery.js";
 import {
   CloudflareRoomRealtime,
   playerWebSocketTag,
@@ -161,9 +162,26 @@ describe("D4 Cloudflare Hibernation WebSocket", () => {
     const newSocket = new FakeWebSocket();
 
     realtime.acceptPlayerSocket(oldSocket, "p1");
-    realtime.acceptPlayerSocket(newSocket, "p1");
+    realtime.acceptPlayerSocket(
+      newSocket,
+      "p1",
+      cloudflareSessionReplacedFrame("1234", "p1"),
+    );
 
-    expect(oldSocket.sent).toEqual([JSON.stringify({ type: "session:replaced" })]);
+    expect(oldSocket.sent.map(frame =>
+      typeof frame === "string" ? JSON.parse(frame) : frame
+    )).toEqual([
+      expect.objectContaining({
+        wireVersion: 1,
+        kind: "event",
+        envelope: {
+          protocolVersion: 1,
+          kind: "event",
+          type: "session.replaced",
+          payload: { roomId: "1234", playerId: "p1" },
+        },
+      }),
+    ]);
     expect(oldSocket.closed).toEqual({ code: 4001, reason: "session replaced" });
     expect(state.getWebSockets(playerWebSocketTag("p1"))).toEqual([newSocket]);
   });

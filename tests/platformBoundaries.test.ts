@@ -103,4 +103,25 @@ describe("platform boundaries", () => {
     expect(weChatTransportSource).not.toContain("ClientRawWebSocketProtocol");
     expect(browserTransportSource).not.toContain("ClientRawWebSocketProtocol");
   });
+
+  it("keeps room-bootstrap semantics shared while platform HTTP stays in adapters", () => {
+    const coreSource = source("src/client/runtime/RoomBootstrapClientCore.ts");
+    const weChatSource = source("src/client/WeChatRoomBootstrapClient.ts");
+    const browserSource = source("src/client/browser/BrowserRoomBootstrapClient.ts");
+
+    expectNoNodeRuntimeImports("src/client/runtime/RoomBootstrapClientCore.ts");
+    expect(coreSource).not.toMatch(/\bwx\b/u);
+    expect(coreSource).not.toMatch(/\bfetch\b/u);
+    expect(coreSource).not.toMatch(/\bwindow\b/u);
+    expect(coreSource).not.toMatch(/from\s+["'][^"']*(?:domain|games|runtime\/(?:node|cloudflare))\//u);
+
+    expect(weChatSource).toContain(
+      'from "./runtime/RoomBootstrapClientCore.js"',
+    );
+    expect(browserSource).toContain(
+      'from "../runtime/RoomBootstrapClientCore.js"',
+    );
+    expect(weChatSource).toContain("this.api.request");
+    expect(browserSource).toContain("this.fetchImpl");
+  });
 });

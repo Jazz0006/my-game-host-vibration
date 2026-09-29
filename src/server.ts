@@ -21,6 +21,11 @@ import {
   DEFAULT_GAME_CONFIG,
   GameRuleError,
 } from "./games/werewolf/WerewolfDomainFacade.js";
+import {
+  WEREWOLF_MAX_PLAYERS,
+  WEREWOLF_MIN_PLAYERS,
+  isWerewolfPlayerCountSupported,
+} from "./games/werewolf/WerewolfLobbyPolicy.js";
 import { werewolfRoleCatalog } from "./games/werewolf/roles/registry.js";
 import {
   runHostCommand,
@@ -38,6 +43,10 @@ import {
   submitPrompt,
 } from "./domain/testPrompt.js";
 import { NodeSessionTokenCryptoProvider } from "./runtime/node/NodeSessionTokenCryptoProvider.js";
+import {
+  executeRoomManagementMutation,
+  type RoomManagementCommandOutcome,
+} from "./runtime/shared/roomManagementCommand.js";
 import { requestedRoomPlayerName } from "./runtime/shared/roomPlayerNaming.js";
 import {
   roomCore,
@@ -82,21 +91,30 @@ function publicPlayer(player: Player) {
   };
 }
 
-const MIN_PLAYERS = 5;
-const MAX_PLAYERS = 12;
-
-function playerNameExists(room: Room, name: string, exceptPlayerId?: string): boolean {
-  return roomCore(room).hasPlayerName(name, exceptPlayerId);
-}
-
 function requestedPlayerName(room: Room | undefined, value?: string): string {
   return requestedRoomPlayerName(room?.players ?? [], value);
 }
 
-function removePlayer(room: Room, playerId: string): Player | undefined {
-  const removed = roomCore(room).removePlayer(playerId);
-  if (removed && room.activePrompt?.targetPlayerId === playerId) delete room.activePrompt;
-  return removed;
+function nodeRoomManagement(
+  room: Room,
+  actorPlayerId: string,
+  command: Parameters<typeof executeRoomManagementMutation>[2],
+): RoomManagementCommandOutcome {
+  return executeRoomManagementMutation(
+    room,
+    actorPlayerId,
+    command,
+    {
+      isPlayerConnected(playerId) {
+        const player = room.players.find(item => item.id === playerId);
+        return Boolean(player?.connected && player.socketId);
+      },
+    },
+  );
+}
+
+function clearRemovedTestPrompt(room: Room, playerId: string): void {
+  if (room.activePrompt?.targetPlayerId === playerId) delete room.activePrompt;
 }
 
 function roomView(room: Room, viewer: Player) {
@@ -107,7 +125,7 @@ function roomView(room: Room, viewer: Player) {
     viewer: { playerId: viewer.id, isHost: viewer.isHost },
     players: room.players.map(publicPlayer),
     defaultRoleDeck: !room.game
-      ? (room.players.length >= MIN_PLAYERS
+      ? (isWerewolfPlayerCountSupported(room.players.length)
           ? configFromPlayerCount(room.players.length).roleDeck
           : room.gameConfig.roleDeck)
       : undefined,
@@ -118,16 +136,16 @@ function roomView(room: Room, viewer: Player) {
       ? {
           ...gameView,
           canStart: false,
-          minPlayers: MIN_PLAYERS,
-          maxPlayers: MAX_PLAYERS,
+          minPlayers: WEREWOLF_MIN_PLAYERS,
+          maxPlayers: WEREWOLF_MAX_PLAYERS,
         }
       : {
           phase: "lobby",
           canStart:
-            room.players.length >= MIN_PLAYERS &&
+            isWerewolfPlayerCountSupported(room.players.length) &&
             room.players.every(player => player.connected),
-          minPlayers: MIN_PLAYERS,
-          maxPlayers: MAX_PLAYERS,
+          minPlayers: WEREWOLF_MIN_PLAYERS,
+          maxPlayers: WEREWOLF_MAX_PLAYERS,
           confirmedRoles: 0,
           completedNightSteps: 0,
           dayNumber: 0,
@@ -219,6 +237,16 @@ function ruleError(ack: BasicAck, error: unknown): void {
   });
 }
 
+function roomManagementError(ack: BasicAck, error: unknown): void {
+  ack({
+    ok: false,
+    message:
+      error instanceof Error && error.message
+        ? error.message
+        : "操作失败，请重试",
+  });
+}
+
 function requiredCommandId(data: { commandId?: string }, ack: BasicAck): string | null {
   const commandId = data.commandId?.trim();
   if (commandId) return commandId;
@@ -298,8 +326,11 @@ export function createGameServer() {
         }
         if (!room) return ack({ ok: false, message: "房间不存在" });
         if (room.game) return ack({ ok: false, message: "游戏已经开始，不能再加入" });
-        if (room.players.length >= MAX_PLAYERS) {
-          return ack({ ok: false, message: `房间最多${MAX_PLAYERS}人` });
+        if (room.players.length >= WEREWOLF_MAX_PLAYERS) {
+          return ack({
+            ok: false,
+            message: `房间最多${WEREWOLF_MAX_PLAYERS}人`,
+          });
         }
 
         const name = requestedPlayerName(room, data.name);
@@ -478,20 +509,22 @@ export function createGameServer() {
       "host:move-player-seat",
       (data: { targetPlayerId?: string; insertIndex?: number }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
-        if (!membership?.player.isHost) return ack({ ok: false, message: "只有房主可以调整座位" });
-        if (membership.room.game) return ack({ ok: false, message: "游戏开始后不能调整座位" });
-        const { room } = membership;
-        const originalIndex = room.players.findIndex(player => player.id === data.targetPlayerId);
-        if (originalIndex < 0) return ack({ ok: false, message: "玩家不存在" });
-        if (
-          !Number.isInteger(data.insertIndex) ||
-          data.insertIndex! < 0 ||
-          data.insertIndex! > room.players.length
-        ) return ack({ ok: false, message: "目标座位无效" });
-
-        roomCore(room).movePlayerSeat(data.targetPlayerId!, data.insertIndex!);
-        broadcastRoom(io, room);
-        ack({ ok: true });
+        if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
+        try {
+          nodeRoomManagement(
+            membership.room,
+            membership.player.id,
+            {
+              type: "room.movePlayerSeat",
+              targetPlayerId: data.targetPlayerId ?? "",
+              insertIndex: data.insertIndex ?? -1,
+            },
+          );
+          broadcastRoom(io, membership.room);
+          ack({ ok: true });
+        } catch (error) {
+          roomManagementError(ack, error);
+        }
       },
     );
 
@@ -503,15 +536,26 @@ export function createGameServer() {
       ) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
-        const name = data.name?.trim();
-        if (!name) return ack({ ok: false, message: "名字不能为空" });
-        if (name.length > 20) return ack({ ok: false, message: "名字最多20个字符" });
-        if (playerNameExists(membership.room, name, membership.player.id)) {
-          return ack({ ok: false, message: "这个名字已被房间里的其他玩家使用" });
+        try {
+          const outcome = nodeRoomManagement(
+            membership.room,
+            membership.player.id,
+            { type: "room.updateName", name: data.name ?? "" },
+          );
+          if (outcome.kind !== "updatedName") {
+            throw new Error("unexpected room-management outcome");
+          }
+          broadcastRoom(io, membership.room);
+          ack({ ok: true, name: outcome.name });
+        } catch (error) {
+          ack({
+            ok: false,
+            message:
+              error instanceof Error && error.message
+                ? error.message
+                : "操作失败，请重试",
+          });
         }
-        const renamed = roomCore(membership.room).renamePlayer(membership.player.id, name);
-        broadcastRoom(io, membership.room);
-        ack({ ok: true, name: renamed.name });
       },
     );
 
@@ -519,32 +563,42 @@ export function createGameServer() {
       "host:remove-player",
       (data: { targetPlayerId?: string }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
-        if (!membership?.player.isHost) {
-          return ack({ ok: false, message: "只有房主可以移除玩家" });
+        if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
+        const target = membership.room.players.find(
+          player => player.id === data.targetPlayerId,
+        );
+        const targetSocket = target?.socketId
+          ? io.sockets.sockets.get(target.socketId)
+          : undefined;
+        try {
+          const outcome = nodeRoomManagement(
+            membership.room,
+            membership.player.id,
+            {
+              type: "room.removePlayer",
+              targetPlayerId: data.targetPlayerId ?? "",
+            },
+          );
+          if (outcome.kind !== "removedPlayer") {
+            throw new Error("unexpected room-management outcome");
+          }
+          invalidateIdentityRecoveryGrant(membership.room, outcome.playerId);
+          clearRemovedTestPrompt(membership.room, outcome.playerId);
+          if (targetSocket) {
+            emitClientRoomRemoved(targetSocket, membership.room.id);
+          }
+          if (process.env.NODE_ENV !== "production") {
+            io.emit("dev:player-removed", {
+              roomId: membership.room.id,
+              playerId: outcome.playerId,
+            });
+          }
+          if (targetSocket) void targetSocket.leave(membership.room.id);
+          broadcastRoom(io, membership.room);
+          ack({ ok: true });
+        } catch (error) {
+          roomManagementError(ack, error);
         }
-        if (membership.room.game) {
-          return ack({ ok: false, message: "游戏开始后不能移除玩家" });
-        }
-        const target = membership.room.players.find(player => player.id === data.targetPlayerId);
-        if (!target || target.isHost) {
-          return ack({ ok: false, message: "请选择一名其他玩家" });
-        }
-
-        const targetSocket = target.socketId ? io.sockets.sockets.get(target.socketId) : undefined;
-        invalidateIdentityRecoveryGrant(membership.room, target.id);
-        removePlayer(membership.room, target.id);
-        if (targetSocket) {
-          emitClientRoomRemoved(targetSocket, membership.room.id);
-        }
-        if (process.env.NODE_ENV !== "production") {
-          io.emit("dev:player-removed", {
-            roomId: membership.room.id,
-            playerId: target.id,
-          });
-        }
-        if (targetSocket) void targetSocket.leave(membership.room.id);
-        broadcastRoom(io, membership.room);
-        ack({ ok: true });
       },
     );
 
@@ -552,20 +606,21 @@ export function createGameServer() {
       "host:transfer-host",
       (data: { targetPlayerId?: string }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
-        if (!membership?.player.isHost) {
-          return ack({ ok: false, message: "只有房主可以转让房主" });
+        if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
+        try {
+          nodeRoomManagement(
+            membership.room,
+            membership.player.id,
+            {
+              type: "room.transferHost",
+              targetPlayerId: data.targetPlayerId ?? "",
+            },
+          );
+          broadcastRoom(io, membership.room);
+          ack({ ok: true });
+        } catch (error) {
+          roomManagementError(ack, error);
         }
-        const target = membership.room.players.find(player => player.id === data.targetPlayerId);
-        if (!target || target.id === membership.player.id) {
-          return ack({ ok: false, message: "请选择一名其他玩家" });
-        }
-        if (!target.connected || !target.socketId) {
-          return ack({ ok: false, message: "只能将房主转让给在线玩家" });
-        }
-
-        roomCore(membership.room).transferHost(target.id);
-        broadcastRoom(io, membership.room);
-        ack({ ok: true });
       },
     );
 
@@ -573,57 +628,78 @@ export function createGameServer() {
       "host:leave-and-transfer",
       (data: { targetPlayerId?: string }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
-        if (!membership?.player.isHost) {
-          return ack({ ok: false, message: "只有房主可以转让后退出" });
+        if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
+        try {
+          const outcome = nodeRoomManagement(
+            membership.room,
+            membership.player.id,
+            {
+              type: "room.leaveAndTransfer",
+              targetPlayerId: data.targetPlayerId ?? "",
+            },
+          );
+          if (outcome.kind !== "leftAndTransferred") {
+            throw new Error("unexpected room-management outcome");
+          }
+          invalidateIdentityRecoveryGrant(
+            membership.room,
+            outcome.leavingPlayerId,
+          );
+          clearRemovedTestPrompt(membership.room, outcome.leavingPlayerId);
+          void socket.leave(membership.room.id);
+          broadcastRoom(io, membership.room);
+          ack({ ok: true });
+        } catch (error) {
+          roomManagementError(ack, error);
         }
-        if (membership.room.game) {
-          return ack({ ok: false, message: "游戏开始后不能单独退出；如需中断游戏，请关闭房间" });
-        }
-        const target = membership.room.players.find(player => player.id === data.targetPlayerId);
-        if (!target || target.id === membership.player.id) {
-          return ack({ ok: false, message: "请选择一名其他玩家" });
-        }
-        if (!target.connected || !target.socketId) {
-          return ack({ ok: false, message: "只能将房主转让给在线玩家" });
-        }
-
-        const core = roomCore(membership.room);
-        core.transferHost(target.id);
-        removePlayer(membership.room, membership.player.id);
-        void socket.leave(membership.room.id);
-        broadcastRoom(io, membership.room);
-        ack({ ok: true });
       },
     );
 
     socket.on("host:close-room", (_data: unknown, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
-      if (!membership?.player.isHost) {
-        return ack({ ok: false, message: "只有房主可以关闭房间" });
+      if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
+      try {
+        const outcome = nodeRoomManagement(
+          membership.room,
+          membership.player.id,
+          { type: "room.close" },
+        );
+        if (outcome.kind !== "closedRoom") {
+          throw new Error("unexpected room-management outcome");
+        }
+        rooms.delete(outcome.roomId);
+        emitClientRoomClosed(io, outcome.roomId);
+        io.in(outcome.roomId).socketsLeave(outcome.roomId);
+        ack({ ok: true });
+      } catch (error) {
+        roomManagementError(ack, error);
       }
-      const roomId = membership.room.id;
-      rooms.delete(roomId);
-      emitClientRoomClosed(io, roomId);
-      io.in(roomId).socketsLeave(roomId);
-      ack({ ok: true });
     });
 
     socket.on("player:leave-room", (_data: unknown, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
-      if (membership.room.game) {
-        return ack({ ok: false, message: "游戏开始后不能退出房间" });
+      try {
+        const outcome = nodeRoomManagement(
+          membership.room,
+          membership.player.id,
+          { type: "room.leave" },
+        );
+        if (outcome.kind !== "leftRoom") {
+          throw new Error("unexpected room-management outcome");
+        }
+        invalidateIdentityRecoveryGrant(
+          membership.room,
+          outcome.leavingPlayerId,
+        );
+        clearRemovedTestPrompt(membership.room, outcome.leavingPlayerId);
+        void socket.leave(membership.room.id);
+        if (outcome.roomEmpty) rooms.delete(membership.room.id);
+        else broadcastRoom(io, membership.room);
+        ack({ ok: true });
+      } catch (error) {
+        roomManagementError(ack, error);
       }
-      if (membership.player.isHost && membership.room.players.length > 1) {
-        return ack({ ok: false, message: "请先指定新的房主，再退出房间" });
-      }
-
-      invalidateIdentityRecoveryGrant(membership.room, membership.player.id);
-      removePlayer(membership.room, membership.player.id);
-      void socket.leave(membership.room.id);
-      if (membership.room.players.length === 0) rooms.delete(membership.room.id);
-      else broadcastRoom(io, membership.room);
-      ack({ ok: true });
     });
 
     socket.on(
