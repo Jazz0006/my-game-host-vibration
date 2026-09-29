@@ -96,8 +96,19 @@ class RoomRuntime {
   }
 }
 
+function serverFrameKind(data: string | ArrayBuffer): string | undefined {
+  if (typeof data !== "string") return undefined;
+  try {
+    const parsed = JSON.parse(data) as { kind?: unknown };
+    return typeof parsed.kind === "string" ? parsed.kind : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 class BrowserSocket implements BrowserWebSocketLike {
   readonly sent: string[] = [];
+  readonly received: Array<string | ArrayBuffer> = [];
   private readonly openListeners: Array<() => void> = [];
   private readonly closeListeners: Array<(event: { reason?: string }) => void> = [];
   private readonly errorListeners: Array<(event: unknown) => void> = [];
@@ -106,6 +117,7 @@ class BrowserSocket implements BrowserWebSocketLike {
   > = [];
   private server: ServerSocket | null = null;
   private closed = false;
+  private responsesToDrop = 0;
 
   addEventListener(type: "open", listener: () => void): void;
   addEventListener(
@@ -159,9 +171,29 @@ class BrowserSocket implements BrowserWebSocketLike {
     this.emitClose(reason);
   }
 
+  dropNextResponse(): void {
+    this.responsesToDrop += 1;
+  }
+
   receiveFromServer(data: string | ArrayBuffer): void {
     if (this.closed) return;
-    for (const listener of this.messageListeners) listener({ data });
+    this.received.push(data);
+    if (this.responsesToDrop > 0 && serverFrameKind(data) === "response") {
+      this.responsesToDrop -= 1;
+      return;
+    }
+    this.emitMessage(data);
+  }
+
+  injectServerFrame(data: string | ArrayBuffer): void {
+    if (this.closed) throw new Error("test browser socket is closed");
+    this.received.push(data);
+    this.emitMessage(data);
+  }
+
+  injectLateServerFrame(data: string | ArrayBuffer): void {
+    this.received.push(data);
+    this.emitMessage(data);
   }
 
   closeFromServer(reason?: string): void {
@@ -173,6 +205,10 @@ class BrowserSocket implements BrowserWebSocketLike {
   fail(error: unknown): void {
     if (this.closed) return;
     for (const listener of this.errorListeners) listener(error);
+  }
+
+  private emitMessage(data: string | ArrayBuffer): void {
+    for (const listener of this.messageListeners) listener({ data });
   }
 
   private emitClose(reason?: string): void {
@@ -225,6 +261,11 @@ type IssuedTicket = {
   playerId: string;
 };
 
+type SocketConnection = {
+  browser: BrowserSocket;
+  server: ServerSocket;
+};
+
 /**
  * Test-only capability adapter around the real Cloudflare Worker / Durable
  * Object implementation. It intentionally does not implement game rules or
@@ -240,6 +281,7 @@ export class InMemoryCloudflareMultiplayerHarness {
   readonly baseUrl = "https://multiplayer.test";
   private readonly rooms = new Map<string, RoomRuntime>();
   private readonly tickets = new Map<string, IssuedTicket>();
+  private readonly connections = new Map<string, SocketConnection[]>();
 
   private readonly namespace: DurableObjectNamespaceLike = {
     getByName: (roomCode: string): DurableObjectStubLike => ({
@@ -308,9 +350,75 @@ export class InMemoryCloudflareMultiplayerHarness {
       issued.playerId,
     );
 
+    const history = this.connections.get(issued.playerId) ?? [];
+    history.push({ browser, server });
+    this.connections.set(issued.playerId, history);
+
     queueMicrotask(() => browser.open());
     return browser;
   };
+
+  dropNextResponse(playerId: string): void {
+    this.activeConnection(playerId).browser.dropNextResponse();
+  }
+
+  disconnectPlayer(
+    playerId: string,
+    reason = "test network disconnect",
+  ): void {
+    this.activeConnection(playerId).server.close(4000, reason);
+  }
+
+  captureClientFrames(playerId: string): string[] {
+    return this.connectionHistory(playerId).flatMap(({ browser }) =>
+      browser.sent.slice()
+    );
+  }
+
+  captureServerFrames(playerId: string): Array<string | ArrayBuffer> {
+    return this.connectionHistory(playerId).flatMap(({ browser }) =>
+      browser.received.slice()
+    );
+  }
+
+  injectActiveServerFrame(
+    playerId: string,
+    frame: string | ArrayBuffer,
+  ): void {
+    this.activeConnection(playerId).browser.injectServerFrame(frame);
+  }
+
+  injectRetiredServerFrame(
+    playerId: string,
+    frame: string | ArrayBuffer,
+  ): void {
+    const history = this.connectionHistory(playerId);
+    for (let index = history.length - 2; index >= 0; index -= 1) {
+      const connection = history[index]!;
+      if (connection.server.readyState === 3) {
+        connection.browser.injectLateServerFrame(frame);
+        return;
+      }
+    }
+    throw new Error(`no retired test WebSocket for player ${playerId}`);
+  }
+
+  private connectionHistory(playerId: string): SocketConnection[] {
+    const history = this.connections.get(playerId);
+    if (!history?.length) {
+      throw new Error(`no test WebSocket for player ${playerId}`);
+    }
+    return history;
+  }
+
+  private activeConnection(playerId: string): SocketConnection {
+    const history = this.connectionHistory(playerId);
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+      const connection = history[index]!;
+      if (connection.server.readyState !== 3) return connection;
+    }
+    throw new Error(`no active test WebSocket for player ${playerId}`);
+  }
 
   private room(roomCode: string): RoomRuntime {
     let room = this.rooms.get(roomCode);
