@@ -44,7 +44,7 @@ Current product priorities:
 5. reconnect, app switching, screen lock, and network changes are normal lifecycle events;
 6. the system owns authoritative game flow and secret information;
 7. the host is primarily a recovery controller, not a hidden-information super-user;
-8. Werewolf is the current production game. W3D3 + MG0 shared-infrastructure admission work is complete; Blood on the Clocktower / Trouble Brewing B0 is the active production-expansion mainline. B0A and B0B1 are merged; B0B2 is active, with B0B2A recurring/conditional other-night eligibility locally complete and B0B2B immediate trigger / role-transition sequencing next.
+8. Werewolf is the current production game. W3D3 + MG0 shared-infrastructure admission work is complete; Blood on the Clocktower / Trouble Brewing B0 is the active production-expansion mainline. B0A, B0B1 and B0B2A are merged; B0B2B immediate trigger / role-transition sequencing is locally complete, and B0B3 live runtime progression / command integration is next.
 9. The WeChat product direction is two game-specific thin-client shells — working names `骏骏桌游-狼人` and `骏骏桌游-血染` — over one shared client/runtime/backend platform. Do not duplicate reconnect, identity, transport, room, recovery, persistence, or Cloudflare authority code per mini program.
 10. A room's `gameType` is fixed at room creation by the client product; the lobby no longer owns cross-game switching.
 
