@@ -1,6 +1,6 @@
 # 微信小程序 UI shell + E3.7 真机验证
 
-这个目录不是第二套客户端规则/runtime 实现。它现在同时承载两类薄壳：
+这个目录不是第二套客户端规则/runtime 实现。它目前仍是已完成 E3.7B 验收的现有狼人杀微信 shell；2026-09-29 已决定在 MG0 后演进为两个 game-specific 产品壳（`骏骏桌游-狼人` / `骏骏桌游-血染`），两者继续复用 `src/client/*` 的同一 shared runtime，而不是复制网络/恢复代码。当前目录在正式拆壳前同时承载两类开发用途：
 
 - 产品 UI foundation：入口页、Lobby 方桌、房间管理等只负责 render / intention；
 - E3.7 Diagnostics：把已经在 `src/client/*` 中完成的 E3.6 native composition 接到真实微信小程序运行时。
@@ -44,10 +44,10 @@ E3.7 的真实验证需要一个已部署且可通过公网 HTTPS/WSS 访问的 
 
 首页已经切换到产品入口骨架。开发阶段保留两个快捷入口：
 
-- **预览方桌大厅**：使用明确标记的本地 preview data 检查方桌布局、游戏单选、主持位、Ready/震动概念和房间管理页面；这些 preview 操作不写入服务器。
+- **预览方桌大厅**：使用明确标记的本地 preview data 检查方桌布局、主持位、Ready/震动概念和房间管理页面；其中现有跨游戏单选只是历史 UI prototype，不再代表目标产品行为，这些 preview 操作也不写入服务器。
 - **E3.7 Diagnostics**：进入原来的真实 session / reconnect / semantic-command 验证壳。
 
-E3.7B 已完成：真实 create/join/resume 与 authoritative public room projection 已接入产品入口，host `werewolf.startGame` 已接到既有 semantic command，并完成真实手机的双端同步、前后台恢复、飞行模式断网恢复、stored-session 恢复与 heavy vibration capability 验收。仍未接入的 Lobby authority 包括 Ready、游戏选择、reorder、moderator assignment、移交房主与踢人；这些操作继续只允许 preview 演示，不能在页面内伪造服务器状态。
+E3.7B 已完成：真实 create/join/resume 与 authoritative public room projection 已接入产品入口，host `werewolf.startGame` 已接到既有 semantic command，并完成真实手机的双端同步、前后台恢复、飞行模式断网恢复、stored-session 恢复与 heavy vibration capability 验收。仍未接入的 Lobby authority 包括 Ready、reorder、moderator assignment、移交房主与踢人；这些操作继续只允许 preview 演示，不能在页面内伪造服务器状态。跨游戏选择不再列入待实现能力：未来由不同小程序产品壳在创建房间时固定 `gameType`。
 
 ## 开发者工具验证
 
