@@ -12,12 +12,15 @@ function errorMessage(error) {
 
 Page({
   data: {
+    productName: "",
     roomCode: "",
     hasRecoverableRoom: false,
   },
 
   onShow() {
+    const app = getApp();
     this.setData({
+      productName: app.globalData.product.appName,
       hasRecoverableRoom: gameClient().hasStoredSession(),
     });
   },

@@ -34,15 +34,8 @@
       <view class="divider"></view>
 
       <view class="game-list">
-        <view
-          class="game-option {{selectedGame === item.id ? 'game-selected' : ''}}"
-          data-game-id="{{item.id}}"
-          bindtap="onGameTap"
-          wx:for="{{games}}"
-          wx:key="id"
-        >
-          <text class="radio">{{selectedGame === item.id ? "●" : "○"}}</text>
-          <text>{{item.label}}</text>
+        <view class="game-option game-selected">
+          <text>{{gameLabel}}</text>
         </view>
       </view>
     </view>
@@ -50,12 +43,21 @@
 
   <view class="status-line">{{statusLine}}</view>
 
-  <view class="host-actions" wx:if="{{isOwner && !gameStarted}}">
-    <button class="secondary-button" bindtap="onInviteTap">邀请朋友</button>
-    <button class="primary-button" bindtap="onStartGameTap">开始游戏</button>
+  <view class="host-actions" wx:if="{{!gameStarted && (isOwner || canControlGame)}}">
+    <button
+      wx:if="{{isOwner}}"
+      class="secondary-button"
+      bindtap="onInviteTap"
+    >邀请朋友</button>
+    <button
+      wx:if="{{canControlGame}}"
+      class="primary-button"
+      bindtap="onStartGameTap"
+    >开始游戏</button>
   </view>
 
   <button
+    wx:if="{{!isGameModerator}}"
     class="ready-button {{currentPlayerReady ? 'ready-active' : ''}}"
     bindtap="onReadyTap"
   >

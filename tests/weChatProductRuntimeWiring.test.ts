@@ -5,33 +5,47 @@ function text(path: string): string {
   return fs.readFileSync(path, "utf8");
 }
 
-describe("E3.7B WeChat product runtime wiring", () => {
-  it("owns one native client at the app composition boundary with the production Worker URL", () => {
+describe("MG0D WeChat product runtime wiring", () => {
+  it("binds native client gameType only through generated product config", () => {
     const app = text("miniprogram/app.js");
-    expect(app).toContain('require("./runtime/client/WeChatNativeClient.js")');
+    expect(app).toContain('require("./product-config.js")');
+    expect(app).toContain("gameType: PRODUCT.gameType");
     expect(app).toContain("createWeChatNativeClientFromGlobal");
     expect(app).toContain("https://my-game-host-vibration.jazz-zeng.workers.dev");
-    expect(app).toContain("getGameClient");
+    expect(app).not.toContain('gameType: "werewolf"');
+    expect(app).not.toContain('gameType: "botc"');
+
+    const werewolf = text("wechat-build/werewolf/miniprogram/product-config.js");
+    const botc = text("wechat-build/botc/miniprogram/product-config.js");
+    expect(werewolf).toContain('"gameType": "werewolf"');
+    expect(werewolf).toContain('"startCommand": "werewolf.startGame"');
+    expect(botc).toContain('"gameType": "botc"');
+    expect(botc).not.toContain("werewolf.startGame");
   });
 
-  it("uses real create/join/resume intents from the product entry page", () => {
+  it("uses real create/join/resume intents from the shared product entry page", () => {
     const entry = text("miniprogram/pages/index/index.js");
+    const markup = text("miniprogram/pages/index/index.wxml");
     expect(entry).toContain("getGameClient");
     expect(entry).toContain(".createRoom(");
     expect(entry).toContain(".joinRoom(");
     expect(entry).toContain(".startStoredSession(");
-    expect(entry).not.toContain("创建房间将在 authority 接线后启用");
-    expect(entry).not.toContain("加入房间将在 authority 接线后启用");
+    expect(entry).toContain("app.globalData.product.appName");
+    expect(markup).toContain("{{productName}}");
   });
 
-  it("renders the authoritative public room projection and sends startGame only through the native client", () => {
+  it("renders one fixed game identity per product without a lobby game selector", () => {
     const lobby = text("miniprogram/pages/lobby.js");
-    expect(lobby).toContain("getGameClient");
+    const markup = text("miniprogram/pages/lobby.wxml");
+    expect(lobby).toContain("this._product.gameType");
+    expect(lobby).toContain("this._product.startCommand");
     expect(lobby).toContain(".subscribe(");
     expect(lobby).toContain("view.room");
-    expect(lobby).toContain('sendCommand("werewolf.startGame"');
-    expect(lobby).not.toContain("ClientRawWebSocketProtocol");
-    expect(lobby).not.toContain("connectSocket");
-    expect(lobby).not.toContain("room:state");
+    expect(lobby).not.toContain("selectedGame");
+    expect(lobby).not.toContain("PREVIEW_GAMES");
+    expect(lobby).not.toContain("werewolf.startGame");
+    expect(markup).toContain("{{gameLabel}}");
+    expect(markup).not.toContain("data-game-id");
+    expect(markup).not.toContain("bindtap=\"onGameTap\"");
   });
 });

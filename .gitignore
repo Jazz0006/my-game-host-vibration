@@ -2,6 +2,7 @@ node_modules/
 dist/
 public/client-runtime/
 miniprogram/runtime/
+wechat-build/
 project.private.config.json
 coverage/
 .env

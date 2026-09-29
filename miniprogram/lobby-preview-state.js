@@ -1,9 +1,4 @@
-const PREVIEW_GAMES = [
-  { id: "werewolf", label: "狼人杀", moderatorLabel: "法官" },
-  { id: "botc", label: "血染钟楼", moderatorLabel: "说书人" },
-];
-
-function createPreviewLobby(roomCode) {
+function createPreviewLobby(roomCode, gameType) {
   const participants = [
     { id: "p1", name: "Jazz", isOwner: true, ready: true, connected: true },
     { id: "p2", name: "Alex", isOwner: false, ready: true, connected: true },
@@ -17,16 +12,18 @@ function createPreviewLobby(roomCode) {
 
   return {
     roomCode: String(roomCode || "6284"),
+    gameType,
     ownerId: "p1",
     currentPlayerId: "p1",
     participants,
     playerOrder: participants.map(participant => participant.id),
-    selectedGame: "botc",
-    moderatorAssignment: { type: "automatic" },
+    moderatorAssignment: { mode: "automatic" },
+    isGameModerator: false,
+    canControlGame: true,
+    gameStarted: false,
   };
 }
 
 module.exports = {
-  PREVIEW_GAMES,
   createPreviewLobby,
 };

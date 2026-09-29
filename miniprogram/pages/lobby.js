@@ -2,7 +2,6 @@ const {
   computeRoundedTableSeats,
 } = require("../rounded-table-layout.js");
 const {
-  PREVIEW_GAMES,
   createPreviewLobby,
 } = require("../lobby-preview-state.js");
 
@@ -14,24 +13,42 @@ function toParticipantMap(participants) {
   return result;
 }
 
+function canonicalModeratorAssignment(value) {
+  if (value && value.mode === "human" && value.playerId) {
+    return { mode: "human", playerId: value.playerId };
+  }
+  return { mode: "automatic" };
+}
+
 function authoritativeLobbyModel(room) {
   const players = Array.isArray(room.players)
     ? [...room.players].sort((left, right) => left.seat - right.seat)
     : [];
   const owner = players.find(player => player.isHost);
+  const moderatorAssignment = canonicalModeratorAssignment(room.gameModerator);
+  const moderatorPlayerId =
+    moderatorAssignment.mode === "human" ? moderatorAssignment.playerId : "";
+  const viewer = room.viewer || {};
   return {
     roomCode: room.roomId || "",
+    gameType: room.gameType || "",
     participants: players.map(player => ({
       id: player.id,
       name: player.name,
       isOwner: Boolean(player.isHost),
       ready: false,
     })),
-    playerOrder: players.map(player => player.id),
-    currentPlayerId: room.viewer && room.viewer.playerId ? room.viewer.playerId : "",
+    playerOrder: players
+      .filter(player => player.id !== moderatorPlayerId)
+      .map(player => player.id),
+    currentPlayerId: viewer.playerId || "",
     ownerId: owner ? owner.id : "",
-    selectedGame: room.gameType || "werewolf",
-    moderatorAssignment: { type: "automatic" },
+    moderatorAssignment,
+    isGameModerator: Boolean(viewer.isGameModerator),
+    canControlGame:
+      moderatorAssignment.mode === "human"
+        ? Boolean(viewer.isGameModerator)
+        : Boolean(viewer.isHost),
     gameStarted: Boolean(room.gameStarted),
   };
 }
@@ -64,9 +81,8 @@ Page({
   data: {
     previewMode: false,
     roomCode: "",
-    games: PREVIEW_GAMES,
-    selectedGame: "werewolf",
-    moderatorLabel: "法官",
+    gameLabel: "",
+    moderatorLabel: "",
     moderatorName: "自动",
     seats: [],
     participants: [],
@@ -74,14 +90,26 @@ Page({
     currentPlayerId: "",
     currentPlayerReady: false,
     isOwner: false,
+    isGameModerator: false,
+    canControlGame: false,
     gameStarted: false,
     statusLine: "等待 authoritative room projection。",
   },
 
   onLoad(options) {
+    const app = getApp();
+    this._product = app.globalData.product;
+    this.setData({
+      gameLabel: this._product.gameLabel,
+      moderatorLabel: this._product.moderatorLabel,
+    });
+
     const previewMode = options && options.preview === "1";
     if (previewMode) {
-      const model = createPreviewLobby(options && options.room);
+      const model = createPreviewLobby(
+        options && options.room,
+        this._product.gameType,
+      );
       this.applyLobbyModel(model, true);
       return;
     }
@@ -91,7 +119,6 @@ Page({
       roomCode: options && options.room ? String(options.room) : "",
     });
 
-    const app = getApp();
     this._client = app.getGameClient();
     this._detachClient = this._client.subscribe(view => {
       if (view.room) {
@@ -116,12 +143,10 @@ Page({
   applyLobbyModel(model, previewMode) {
     const participants = Array.isArray(model.participants) ? model.participants : [];
     const participantMap = toParticipantMap(participants);
-    const selectedGame =
-      PREVIEW_GAMES.find(game => game.id === model.selectedGame) || PREVIEW_GAMES[0];
     const currentPlayer = participantMap[model.currentPlayerId];
-    const moderatorAssignment = model.moderatorAssignment || { type: "automatic" };
+    const moderatorAssignment = canonicalModeratorAssignment(model.moderatorAssignment);
     const humanModerator =
-      moderatorAssignment.type === "human"
+      moderatorAssignment.mode === "human"
         ? participantMap[moderatorAssignment.playerId]
         : null;
 
@@ -129,13 +154,12 @@ Page({
       ...model,
       participants,
       playerOrder: Array.isArray(model.playerOrder) ? model.playerOrder : [],
+      moderatorAssignment,
     };
 
     this.setData({
       previewMode: Boolean(previewMode),
       roomCode: model.roomCode || "",
-      selectedGame: selectedGame.id,
-      moderatorLabel: selectedGame.moderatorLabel,
       moderatorName: humanModerator ? humanModerator.name : "自动",
       seats: computeRoundedTableSeats(this._lobbyModel.playerOrder, participantMap),
       participants,
@@ -143,6 +167,8 @@ Page({
       currentPlayerId: model.currentPlayerId || "",
       currentPlayerReady: Boolean(currentPlayer && currentPlayer.ready),
       isOwner: model.ownerId === model.currentPlayerId,
+      isGameModerator: Boolean(model.isGameModerator),
+      canControlGame: Boolean(model.canControlGame),
       gameStarted: Boolean(model.gameStarted),
       statusLine: previewMode
         ? "UI Preview：当前使用本地展示数据，不是服务器 authoritative state。"
@@ -152,29 +178,8 @@ Page({
     });
   },
 
-  onGameTap(event) {
-    if (!this.data.isOwner) return;
-    const gameId = event.currentTarget.dataset.gameId;
-    const game = PREVIEW_GAMES.find(item => item.id === gameId);
-    if (!game || !this._lobbyModel) return;
-
-    if (!this.data.previewMode) {
-      wx.showToast({
-        title: "游戏选择将在 lobby command slice 接入",
-        icon: "none",
-      });
-      return;
-    }
-
-    this._lobbyModel.selectedGame = game.id;
-    this.setData({
-      selectedGame: game.id,
-      moderatorLabel: game.moderatorLabel,
-    });
-  },
-
   onReadyTap() {
-    if (!this._lobbyModel) return;
+    if (!this._lobbyModel || this.data.isGameModerator) return;
     if (!this.data.previewMode) {
       wx.showToast({
         title: "准备状态将在 lobby command slice 接入",
@@ -210,7 +215,7 @@ Page({
   },
 
   async onStartGameTap() {
-    if (!this.data.isOwner || this.data.gameStarted) return;
+    if (!this.data.canControlGame || this.data.gameStarted) return;
 
     if (this.data.previewMode) {
       wx.showToast({
@@ -220,9 +225,17 @@ Page({
       return;
     }
 
+    if (!this._product.startCommand) {
+      wx.showToast({
+        title: `${this._product.gameLabel}设置将在下一阶段接入`,
+        icon: "none",
+      });
+      return;
+    }
+
     wx.showLoading({ title: "开始游戏…" });
     try {
-      await this._client.sendCommand("werewolf.startGame", {});
+      await this._client.sendCommand(this._product.startCommand, {});
       wx.showToast({ title: "游戏已开始", icon: "success" });
     } catch (error) {
       wx.showToast({ title: errorMessage(error), icon: "none" });
