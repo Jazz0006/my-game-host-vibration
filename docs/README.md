@@ -12,10 +12,10 @@ Use these in this order:
 
 ## Current handoff
 
-- `docs/B0A_TROUBLE_BREWING_PRODUCTION_ENTRY_HANDOFF_2026-09-30.md`
-  - B0A completion scope and ownership;
-  - local GREEN validation evidence;
-  - merge closure gates and B0B entry point.
+- `docs/B0B_TROUBLE_BREWING_NIGHT_SEQUENCING_HANDOFF_2026-09-30.md`
+  - current B0B decomposition and sequencing authority;
+  - B0B1 local GREEN validation evidence;
+  - B0B2 entry scope after B0B1 merge.
 
 ## Current product route
 
@@ -24,7 +24,9 @@ MG0 COMPLETE
   ↓
 B0 BotC / Trouble Brewing production entry
   ├─ B0A module + setup/view contracts ✅ COMPLETE
-  ├─ B0B first-night / night sequencing ← NEXT
+  ├─ B0B first-night / night sequencing ← CURRENT
+  │   ├─ B0B1 canonical order + first-night progression ✅ LOCAL GREEN
+  │   └─ B0B2 later-night dynamic eligibility / progression ← NEXT AFTER MERGE
   └─ B0C+ information / storyteller intelligence
 ```
 

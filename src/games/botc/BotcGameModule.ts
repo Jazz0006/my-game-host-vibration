@@ -13,6 +13,10 @@ import {
   type BotcRoleCategory,
   type TroubleBrewingRoleId,
 } from "./TroubleBrewing.js";
+import {
+  createTroubleBrewingFirstNightSequence,
+  type BotcNightStep,
+} from "./TroubleBrewingNightSequence.js";
 
 export type BotcGameConfig = {
   scriptId: typeof TROUBLE_BREWING_SCRIPT_ID;
@@ -30,7 +34,7 @@ export type BotcCreateInput = {
   assignments: readonly BotcSetupAssignment[];
 };
 
-export type BotcGamePhase = "role_reveal";
+export type BotcGamePhase = "role_reveal" | "first_night" | "day";
 
 export type BotcGameState = {
   scriptId: typeof TROUBLE_BREWING_SCRIPT_ID;
@@ -44,23 +48,46 @@ export type BotcGameState = {
   dayNumber: number;
   nightNumber: number;
   deadPlayerIds: string[];
+  nightStepIndex?: number;
 };
 
-export type BotcCommand = { type: "confirmRole" };
+export type BotcCommand =
+  | { type: "confirmRole" }
+  | { type: "beginFirstNight" }
+  | { type: "completeNightStep" };
 
-export type BotcCommandOutcome = {
-  kind: "roleConfirmed";
-  allConfirmed: boolean;
+export type BotcCommandOutcome =
+  | {
+      kind: "roleConfirmed";
+      allConfirmed: boolean;
+    }
+  | {
+      kind: "firstNightStarted";
+      firstStepId?: BotcNightStep["id"];
+      nightComplete: boolean;
+    }
+  | {
+      kind: "nightStepCompleted";
+      completedStepId: BotcNightStep["id"];
+      nextStepId?: BotcNightStep["id"];
+      nightComplete: boolean;
+    };
+
+export type BotcPlayerNightStepView = {
+  id: BotcNightStep["id"];
+  kind: BotcNightStep["kind"];
+  roleId?: TroubleBrewingRoleId;
 };
 
 export type BotcPlayerView = {
   phase: BotcGamePhase;
-  mode: "role_reveal" | "waiting" | "spectator";
+  mode: "role_reveal" | "waiting" | "night_wake" | "day" | "spectator";
   roleId?: TroubleBrewingRoleId;
   roleName?: string;
   roleNameZh?: string;
   roleCategory?: BotcRoleCategory;
   roleConfirmed?: boolean;
+  nightStep?: BotcPlayerNightStepView;
 };
 
 export type BotcPublicView = {
@@ -79,6 +106,7 @@ export type BotcModeratorView = BotcPublicView & {
     actualRoleId: TroubleBrewingRoleId;
     shownRoleId: TroubleBrewingRoleId;
   }>;
+  nightStep?: BotcNightStep;
 };
 
 function unique(values: readonly string[], message: string): void {
@@ -170,6 +198,32 @@ function normalizeAssignments(
   return normalized;
 }
 
+function firstNightSequence(state: BotcGameState): BotcNightStep[] {
+  return createTroubleBrewingFirstNightSequence(state.assignments);
+}
+
+function currentNightStep(state: BotcGameState): BotcNightStep | undefined {
+  if (state.phase !== "first_night" || state.nightStepIndex === undefined) {
+    return undefined;
+  }
+  return firstNightSequence(state)[state.nightStepIndex];
+}
+
+function playerNightStepView(
+  step: BotcNightStep,
+): BotcPlayerNightStepView {
+  return step.kind === "role"
+    ? {
+        id: step.id,
+        kind: step.kind,
+        roleId: step.roleId,
+      }
+    : {
+        id: step.id,
+        kind: step.kind,
+      };
+}
+
 function publicView(state: BotcGameState): BotcPublicView {
   return {
     scriptId: state.scriptId,
@@ -213,6 +267,9 @@ export class BotcGameModule implements GameModule<
   ): GameCommandResult<BotcGameState, BotcCommandOutcome> {
     switch (command.type) {
       case "confirmRole": {
+        if (state.phase !== "role_reveal") {
+          throw new Error("BotC role confirmation is closed");
+        }
         if (!context.playerId) throw new Error("player command requires playerId");
         if (!state.assignments.some(assignment => assignment.playerId === context.playerId)) {
           throw new Error("Only a seated BotC player can confirm a role");
@@ -229,6 +286,82 @@ export class BotcGameModule implements GameModule<
           },
         };
       }
+
+      case "beginFirstNight": {
+        if (!context.isModerator) {
+          throw new Error("Only the BotC moderator can begin the first night");
+        }
+        if (state.phase !== "role_reveal") {
+          throw new Error("BotC first night can only begin after role reveal");
+        }
+        if (state.confirmedRolePlayerIds.length !== state.assignments.length) {
+          throw new Error("All BotC players must confirm their shown role first");
+        }
+
+        const sequence = firstNightSequence(state);
+        const firstStep = sequence[0];
+        state.nightNumber = 1;
+        if (!firstStep) {
+          state.phase = "day";
+          state.dayNumber = 1;
+          delete state.nightStepIndex;
+          return {
+            state,
+            outcome: {
+              kind: "firstNightStarted",
+              nightComplete: true,
+            },
+          };
+        }
+
+        state.phase = "first_night";
+        state.nightStepIndex = 0;
+        return {
+          state,
+          outcome: {
+            kind: "firstNightStarted",
+            firstStepId: firstStep.id,
+            nightComplete: false,
+          },
+        };
+      }
+
+      case "completeNightStep": {
+        if (!context.isModerator) {
+          throw new Error("Only the BotC moderator can complete a night step");
+        }
+        const step = currentNightStep(state);
+        if (!step || state.nightStepIndex === undefined) {
+          throw new Error("There is no active BotC night step");
+        }
+
+        const sequence = firstNightSequence(state);
+        const nextStep = sequence[state.nightStepIndex + 1];
+        if (!nextStep) {
+          state.phase = "day";
+          state.dayNumber = 1;
+          delete state.nightStepIndex;
+          return {
+            state,
+            outcome: {
+              kind: "nightStepCompleted",
+              completedStepId: step.id,
+              nightComplete: true,
+            },
+          };
+        }
+
+        state.nightStepIndex += 1;
+        return {
+          state,
+          outcome: {
+            kind: "nightStepCompleted",
+            completedStepId: step.id,
+            nextStepId: nextStep.id,
+            nightComplete: false,
+          },
+        };
+      }
     }
   }
 
@@ -242,14 +375,40 @@ export class BotcGameModule implements GameModule<
 
     const shownRole = troubleBrewingRole(assignment.shownRoleId);
     const confirmed = state.confirmedRolePlayerIds.includes(playerId);
-    return {
+    const base = {
       phase: state.phase,
-      mode: confirmed ? "waiting" : "role_reveal",
       roleId: shownRole.id,
       roleName: shownRole.name,
       roleNameZh: shownRole.nameZh,
       roleCategory: shownRole.category,
       roleConfirmed: confirmed,
+    };
+
+    if (state.phase === "role_reveal") {
+      return {
+        ...base,
+        mode: confirmed ? "waiting" : "role_reveal",
+      };
+    }
+
+    if (state.phase === "first_night") {
+      const step = currentNightStep(state);
+      if (step?.actorPlayerIds.includes(playerId)) {
+        return {
+          ...base,
+          mode: "night_wake",
+          nightStep: playerNightStepView(step),
+        };
+      }
+      return {
+        ...base,
+        mode: "waiting",
+      };
+    }
+
+    return {
+      ...base,
+      mode: "day",
     };
   }
 
@@ -257,9 +416,18 @@ export class BotcGameModule implements GameModule<
     state: BotcGameState,
     _context: GameViewContext,
   ): BotcModeratorView {
+    const step = currentNightStep(state);
     return {
       ...publicView(state),
       assignments: state.assignments.map(assignment => ({ ...assignment })),
+      ...(step
+        ? {
+            nightStep: {
+              ...step,
+              actorPlayerIds: [...step.actorPlayerIds],
+            },
+          }
+        : {}),
     };
   }
 
