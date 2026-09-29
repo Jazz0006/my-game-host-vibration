@@ -45,7 +45,7 @@ async function post(
   }));
 }
 
-describe("MG0A game admission", () => {
+describe("MG0 game admission and shared lobby runtime", () => {
   it("creates and joins a BotC room without inventing BotC gameplay state", async () => {
     const harness = room();
 
@@ -106,10 +106,11 @@ describe("MG0A game admission", () => {
       playerId: guest.playerId,
       resumeToken: guest.resumeToken,
     });
-    expect(ticket.status).toBe(409);
+    expect(ticket.status).toBe(200);
     await expect(ticket.json()).resolves.toMatchObject({
-      ok: false,
-      code: "game_runtime_unavailable",
+      ok: true,
+      ticket: expect.any(String),
+      expiresAt: expect.any(Number),
     });
   });
 

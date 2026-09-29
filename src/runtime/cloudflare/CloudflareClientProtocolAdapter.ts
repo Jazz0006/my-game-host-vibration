@@ -1,14 +1,9 @@
-import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
-import { restoreRoomSnapshot } from "../../core/room/RoomSnapshot.js";
-import type { GameConfig, GameState } from "../../domain/game.js";
-import {
-  createPlayerStateEnvelope,
-  createRoomStateEnvelope,
-} from "../../protocol/client/ClientProtocol.js";
 import type { WerewolfClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
 import { mapWerewolfClientCommand } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
-import { createWerewolfClientRoomProjection } from "../shared/werewolfClientRoomProjection.js";
-import { werewolfPlayerGameView } from "../shared/werewolfRoomView.js";
+export {
+  createGamePlayerStateEnvelope as createCloudflarePlayerStateEnvelope,
+  createGameRoomStateEnvelope as createCloudflareRoomStateEnvelope,
+} from "../shared/gameClientStateProjection.js";
 import type { CloudflareWerewolfCommandRuntime } from "./CloudflareWerewolfCommandRuntime.js";
 
 /**
@@ -26,33 +21,3 @@ export function executeCloudflareClientProtocolCommand(
     : runtime.executePlayer(authenticatedPlayerId, mapped.commandId, mapped.command);
 }
 
-export function createCloudflarePlayerStateEnvelope(
-  snapshot: RoomSnapshot<GameState, GameConfig, unknown, unknown, unknown>,
-  playerId: string,
-) {
-  const restored = restoreRoomSnapshot(snapshot);
-  if (!restored.room.players.some(player => player.id === playerId)) {
-    throw new Error("player is not a room member");
-  }
-  return createPlayerStateEnvelope(
-    restored.room.id,
-    playerId,
-    werewolfPlayerGameView(restored.room, playerId),
-  );
-}
-
-export function createCloudflareRoomStateEnvelope(
-  snapshot: RoomSnapshot<GameState, GameConfig, unknown, unknown, unknown>,
-  playerId: string,
-  isPlayerConnected: (playerId: string) => boolean,
-) {
-  const restored = restoreRoomSnapshot(snapshot);
-  return createRoomStateEnvelope(
-    restored.room.id,
-    createWerewolfClientRoomProjection(
-      restored.room,
-      playerId,
-      { isPlayerConnected },
-    ),
-  );
-}

@@ -1,5 +1,6 @@
 import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
+import { isGameType } from "../../games/GameCatalog.js";
 import { GameRuleError } from "../../games/werewolf/WerewolfDomainFacade.js";
 import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlanner.js";
 import { createClientActionAlertEffectEvent } from "../../protocol/client/ClientEffects.js";
@@ -58,13 +59,22 @@ import {
 import { CloudflareWerewolfCommandRuntime } from "./CloudflareWerewolfCommandRuntime.js";
 import { CloudflareWerewolfLifecycleRuntime } from "./CloudflareWerewolfLifecycleRuntime.js";
 
-type ClientSnapshot = RoomSnapshot<
+type ClientSnapshot = RoomSnapshot;
+
+type WerewolfClientSnapshot = RoomSnapshot<
   GameState,
   GameConfig,
   unknown,
   WerewolfInteraction,
   unknown
 >;
+
+function asWerewolfSnapshot(snapshot: ClientSnapshot): WerewolfClientSnapshot {
+  if (snapshot.metadata.gameType !== "werewolf") {
+    throw new Error(`unsupported game type: ${snapshot.metadata.gameType}`);
+  }
+  return snapshot as WerewolfClientSnapshot;
+}
 
 function commandFailureMessage(error: unknown): string {
   return error instanceof GameRuleError ? error.message : "操作失败，请重试";
@@ -152,15 +162,17 @@ export class CloudflareRawWebSocketClientProtocol {
       createClientRawWebSocketSuccessResponse(requestId, result),
     ));
 
-    const activeTimeout = await this.interactionTimeouts.activeStateForPlayer(
-      snapshot,
-      playerId,
-    );
-    if (activeTimeout) {
-      emitCloudflareInteractionTimeoutActive(
-        this.realtime,
-        { ...activeTimeout, actorPlayerIds: [playerId] },
+    if (snapshot.metadata.gameType === "werewolf") {
+      const activeTimeout = await this.interactionTimeouts.activeStateForPlayer(
+        asWerewolfSnapshot(snapshot),
+        playerId,
       );
+      if (activeTimeout) {
+        emitCloudflareInteractionTimeoutActive(
+          this.realtime,
+          { ...activeTimeout, actorPlayerIds: [playerId] },
+        );
+      }
     }
   }
 
@@ -170,6 +182,40 @@ export class CloudflareRawWebSocketClientProtocol {
     requestId: string,
     envelope: ClientCommandEnvelope,
   ): Promise<void> {
+    if (isRoomManagementClientCommand(envelope)) {
+      await this.handleRoomManagement(
+        webSocket,
+        playerId,
+        requestId,
+        envelope,
+      );
+      return;
+    }
+
+    const snapshot = await this.snapshots.load();
+    if (!snapshot) {
+      this.sendFailure(webSocket, requestId, "room_not_found", "房间不存在");
+      return;
+    }
+    if (!isGameType(snapshot.metadata.gameType)) {
+      this.sendFailure(
+        webSocket,
+        requestId,
+        "unsupported_room_game",
+        "房间游戏类型不受支持",
+      );
+      return;
+    }
+    if (snapshot.metadata.gameType !== "werewolf") {
+      this.sendFailure(
+        webSocket,
+        requestId,
+        "game_command_unavailable",
+        "该游戏命令尚未启用",
+      );
+      return;
+    }
+
     if (isInteractionTimeoutClientCommand(envelope)) {
       await this.handleInteractionTimeout(
         webSocket,
@@ -182,16 +228,6 @@ export class CloudflareRawWebSocketClientProtocol {
 
     if (isRoomRecoveryClientCommand(envelope)) {
       await this.handleRoomRecovery(
-        webSocket,
-        playerId,
-        requestId,
-        envelope,
-      );
-      return;
-    }
-
-    if (isRoomManagementClientCommand(envelope)) {
-      await this.handleRoomManagement(
         webSocket,
         playerId,
         requestId,
@@ -491,7 +527,7 @@ export class CloudflareRawWebSocketClientProtocol {
   }
 
   private async reconcileInteractionTimeout(
-    snapshot: ClientSnapshot,
+    snapshot: WerewolfClientSnapshot,
   ): Promise<void> {
     const transition = await this.interactionTimeouts.reconcile(snapshot);
     if (transition.cleared && transition.previous) {
@@ -519,7 +555,7 @@ export class CloudflareRawWebSocketClientProtocol {
     ));
   }
 
-  private pushActionAlertEffect(snapshot: ClientSnapshot): void {
+  private pushActionAlertEffect(snapshot: WerewolfClientSnapshot): void {
     const interaction = snapshot.pendingInteraction;
     if (!interaction || interaction.status !== "active") return;
 

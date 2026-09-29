@@ -1,6 +1,4 @@
 import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
-import type { GameConfig, GameState } from "../../domain/game.js";
-import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlanner.js";
 import {
   createClientRawWebSocketStateFrame,
   encodeClientRawWebSocketFrame,
@@ -11,13 +9,7 @@ import {
 } from "./CloudflareClientProtocolAdapter.js";
 import type { CloudflareRoomRealtime } from "./CloudflareRoomRealtime.js";
 
-export type CloudflareClientSnapshot = RoomSnapshot<
-  GameState,
-  GameConfig,
-  unknown,
-  WerewolfInteraction,
-  unknown
->;
+export type CloudflareClientSnapshot = RoomSnapshot;
 
 export function pushCloudflareAuthoritativeStates(
   realtime: CloudflareRoomRealtime,

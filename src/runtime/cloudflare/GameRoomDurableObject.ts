@@ -2,7 +2,6 @@ import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
 import { SessionTokenService } from "../../core/session/SessionTokenService.js";
 import {
   gameAdmission,
-  gameModuleFor,
   isGameType,
   type GameType,
 } from "../../games/GameCatalog.js";
@@ -89,6 +88,13 @@ function hibernationState(
 
 function jsonMessage(type: string, payload: Record<string, unknown> = {}): string {
   return JSON.stringify({ type, ...payload });
+}
+
+function gamePhase(snapshot: RoomSnapshot | undefined): string | undefined {
+  const game = snapshot?.game;
+  if (!game || typeof game !== "object" || Array.isArray(game)) return undefined;
+  const phase = (game as Record<string, unknown>).phase;
+  return typeof phase === "string" ? phase : undefined;
 }
 
 /**
@@ -265,17 +271,13 @@ export class GameRoomDurableObject {
     switch (execution.kind) {
       case "warning": {
         const snapshot = await this.snapshots.load();
-        const werewolfSnapshot = snapshot?.metadata.gameType === "werewolf"
-          ? snapshot as CloudflareClientSnapshot
-          : undefined;
+        const phase = gamePhase(snapshot);
         emitCloudflareActionAlertToPlayers(
           realtime,
           execution.state.actorPlayerIds,
           {
             actionId: execution.state.actionId,
-            ...(werewolfSnapshot?.game?.phase === undefined
-              ? {}
-              : { phase: werewolfSnapshot.game.phase }),
+            ...(phase === undefined ? {} : { phase }),
             timeoutWarning: true,
           },
         );
@@ -301,14 +303,13 @@ export class GameRoomDurableObject {
             realtime,
             execution.next.active,
           );
+          const phase = gamePhase(execution.snapshot);
           emitCloudflareActionAlertToPlayers(
             realtime,
             execution.next.active.actorPlayerIds,
             {
               actionId: execution.next.active.actionId,
-              ...(execution.snapshot.game?.phase === undefined
-                ? {}
-                : { phase: execution.snapshot.game.phase }),
+              ...(phase === undefined ? {} : { phase }),
             },
           );
         }
@@ -456,10 +457,10 @@ export class GameRoomDurableObject {
       const nextSnapshot = joined.snapshot;
       await this.snapshots.save(nextSnapshot);
       const realtimeState = hibernationState(this.state);
-      if (realtimeState && nextSnapshot.metadata.gameType === "werewolf") {
+      if (realtimeState) {
         pushCloudflareAuthoritativeStates(
           new CloudflareRoomRealtime(realtimeState),
-          nextSnapshot as CloudflareClientSnapshot,
+          nextSnapshot,
         );
       }
       return Response.json({ ok: true, ...joined.session });
@@ -600,9 +601,9 @@ export class GameRoomDurableObject {
 
     const snapshot = await this.snapshots.load();
     if (!snapshot) return new Response("Not Found", { status: 404 });
-    if (!isGameType(snapshot.metadata.gameType) || !gameModuleFor(snapshot.metadata.gameType)) {
+    if (!isGameType(snapshot.metadata.gameType)) {
       return Response.json(
-        { ok: false, code: "game_runtime_unavailable", message: "该游戏运行时尚未启用" },
+        { ok: false, code: "unsupported_room_game", message: "房间游戏类型不受支持" },
         { status: 409 },
       );
     }

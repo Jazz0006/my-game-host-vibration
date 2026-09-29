@@ -117,6 +117,35 @@ function lobbySnapshot() {
   );
 }
 
+function botcLobbySnapshot() {
+  return createRoomSnapshot(
+    {
+      id: "5678",
+      gameType: "botc",
+      players: [
+        {
+          id: "b1",
+          name: "Storyteller",
+          seat: 1,
+          isHost: true,
+          resumeTokenHash: "a".repeat(64),
+        },
+        {
+          id: "b2",
+          name: "Player 2",
+          seat: 2,
+          isHost: false,
+          resumeTokenHash: "b".repeat(64),
+        },
+      ],
+      createdAt: 30,
+      updatedAt: 40,
+      gameConfig: {},
+    },
+    { revision: 4 },
+  );
+}
+
 function fivePlayerLobbySnapshot() {
   const playerIds = ["p1", "p2", "p3", "p4", "p5"];
   return createRoomSnapshot(
@@ -278,6 +307,83 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
         },
       },
     });
+  });
+
+  it("syncs a BotC lobby through shared realtime, allows room management, and fences Werewolf commands", async () => {
+    const storage = new MemoryStorage();
+    await new CloudflareRoomSnapshotRepository(storage).save(botcLobbySnapshot());
+    const hibernation = new FakeHibernationState();
+    const host = new FakeWebSocket();
+    const other = new FakeWebSocket();
+    const realtime = new CloudflareRoomRealtime(hibernation);
+    realtime.acceptPlayerSocket(host, "b1");
+    realtime.acceptPlayerSocket(other, "b2");
+
+    const room = new GameRoomDurableObject(stateLike(storage, hibernation));
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketSyncRequest("botc-sync")),
+    );
+
+    expect(parsedFrames(host).at(-1)).toMatchObject({
+      kind: "response",
+      requestId: "botc-sync",
+      ok: true,
+      result: {
+        revision: 4,
+        envelope: {
+          scope: "player",
+          roomId: "5678",
+          playerId: "b1",
+          payload: { phase: "lobby", mode: "lobby" },
+        },
+        roomEnvelope: {
+          scope: "room",
+          roomId: "5678",
+          payload: {
+            roomId: "5678",
+            gameType: "botc",
+            viewer: { playerId: "b1", isHost: true },
+            gameStarted: false,
+          },
+        },
+      },
+    });
+
+    const rename = createClientCommandEnvelope(
+      "room.updateName",
+      { name: "ST" },
+      "botc-rename",
+    );
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("botc-room-command", rename)),
+    );
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "botc-room-command",
+      ok: true,
+      result: expect.objectContaining({ revision: 5, replayed: false }),
+    }));
+    expect((await new CloudflareRoomSnapshotRepository(storage).load())?.membership[0]?.name)
+      .toBe("ST");
+
+    const werewolfOnly = createClientCommandEnvelope(
+      "werewolf.confirmRole",
+      { actionId: "not-a-botc-action" },
+      "botc-werewolf-command",
+    );
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest("botc-game-command", werewolfOnly)),
+    );
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "botc-game-command",
+      ok: false,
+      error: expect.objectContaining({ code: "game_command_unavailable" }),
+    }));
+    expect((await new CloudflareRoomSnapshotRepository(storage).load())?.revision).toBe(5);
   });
 
   it("replays the same commandId under a new requestId without advancing revision twice", async () => {

@@ -389,7 +389,7 @@ Rules:
 - GitHub is canonical remote truth;
 - local execution success does not substitute for remote PR/CI acceptance when remote acceptance is part of the task.
 
-Do not merge a PR unless the user has authorized merge for that task.
+Standing merge authorization (2026-09-29): once a PR for an accepted task has passed all required repository validation, is mergeable/clean, has no unresolved review threads, and the final diff remains within the accepted scope, merge it without asking the user for a separate per-PR authorization. Stop instead of merging when required checks fail or remain pending, mergeability is not clean, review threads remain unresolved, or the implementation has materially drifted beyond the accepted task.
 
 ## 13. Developer-memory workflow
 

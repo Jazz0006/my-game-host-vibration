@@ -7,8 +7,6 @@ import {
   type RoomSnapshot,
 } from "../../core/room/RoomSnapshot.js";
 import type { RoomPlayer, RoomState } from "../../core/room/types.js";
-import type { GameConfig, GameState } from "../../domain/game.js";
-import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlanner.js";
 import {
   mapRoomManagementClientCommand,
   type RoomManagementClientCommandEnvelope,
@@ -25,14 +23,14 @@ import {
 type RoomReceipt = CommandReceipt<unknown>;
 
 export type CloudflareRoomManagementSnapshot = RoomSnapshot<
-  GameState,
-  GameConfig,
   unknown,
-  WerewolfInteraction,
+  unknown,
+  unknown,
+  unknown,
   RoomReceipt
 >;
 
-type ManagementRoom = RoomState<GameState, GameConfig, RoomPlayer> & {
+type ManagementRoom = RoomState<unknown, unknown, RoomPlayer> & {
   commandReceipts?: RoomReceipt[];
 };
 
