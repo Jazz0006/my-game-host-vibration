@@ -12,6 +12,7 @@ App({
   onLaunch() {
     this._gameClient = createWeChatNativeClientFromGlobal({
       baseUrl: WORKER_BASE_URL,
+      gameType: "werewolf",
     });
   },
 
@@ -19,6 +20,7 @@ App({
     if (!this._gameClient) {
       this._gameClient = createWeChatNativeClientFromGlobal({
         baseUrl: WORKER_BASE_URL,
+        gameType: "werewolf",
       });
     }
     return this._gameClient;

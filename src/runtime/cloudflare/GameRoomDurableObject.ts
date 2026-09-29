@@ -1,9 +1,11 @@
+import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
 import { SessionTokenService } from "../../core/session/SessionTokenService.js";
 import {
-  DEFAULT_GAME_CONFIG,
-  type GameConfig,
-  type GameState,
-} from "../../games/werewolf/WerewolfDomainFacade.js";
+  gameAdmission,
+  gameModuleFor,
+  isGameType,
+  type GameType,
+} from "../../games/GameCatalog.js";
 import {
   IdentityRecoveryError,
 } from "../shared/IdentityRecoveryService.js";
@@ -98,25 +100,15 @@ function jsonMessage(type: string, payload: Record<string, unknown> = {}): strin
  * require an in-memory session registry to be rebuilt.
  */
 export class GameRoomDurableObject {
-  private readonly snapshots: CloudflareRoomSnapshotRepository<CloudflareClientSnapshot>;
+  private readonly snapshots: CloudflareRoomSnapshotRepository<RoomSnapshot>;
   private readonly crypto = new CloudflareSessionTokenCryptoProvider();
   private readonly sessionTokens = new SessionTokenService(this.crypto);
-  private readonly bootstrap: RoomBootstrapService<GameState, GameConfig>;
   private readonly webSocketTickets: CloudflareWebSocketTicketRepository;
   private readonly interactionTimeouts: CloudflareInteractionTimeoutRuntime;
   private readonly identityRecovery: CloudflareIdentityRecoveryRuntime;
 
   constructor(private readonly state: DurableObjectStateLike) {
-    this.snapshots = new CloudflareRoomSnapshotRepository<CloudflareClientSnapshot>(state.storage);
-    this.bootstrap = new RoomBootstrapService(this.sessionTokens, {
-      gameType: "werewolf",
-      maxPlayers: 12,
-      createInitialGameConfig: () => ({
-        ...DEFAULT_GAME_CONFIG,
-        roleDeck: [...DEFAULT_GAME_CONFIG.roleDeck],
-      }),
-      createPlayerId: () => this.crypto.randomToken(16),
-    });
+    this.snapshots = new CloudflareRoomSnapshotRepository<RoomSnapshot>(state.storage);
     this.webSocketTickets = new CloudflareWebSocketTicketRepository(state.storage, this.crypto);
     this.interactionTimeouts = new CloudflareInteractionTimeoutRuntime(state.storage);
     this.identityRecovery = new CloudflareIdentityRecoveryRuntime(
@@ -137,6 +129,16 @@ export class GameRoomDurableObject {
     if (realtimeState?.setWebSocketAutoResponse && Pair) {
       realtimeState.setWebSocketAutoResponse(new Pair("ping", "pong"));
     }
+  }
+
+  private bootstrapFor(gameType: GameType): RoomBootstrapService<unknown, unknown> {
+    const admission = gameAdmission(gameType);
+    return new RoomBootstrapService<unknown, unknown>(this.sessionTokens, {
+      gameType: admission.gameType,
+      maxPlayers: admission.maxPlayers,
+      createInitialGameConfig: admission.createInitialGameConfig,
+      createPlayerId: () => this.crypto.randomToken(16),
+    });
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -263,14 +265,17 @@ export class GameRoomDurableObject {
     switch (execution.kind) {
       case "warning": {
         const snapshot = await this.snapshots.load();
+        const werewolfSnapshot = snapshot?.metadata.gameType === "werewolf"
+          ? snapshot as CloudflareClientSnapshot
+          : undefined;
         emitCloudflareActionAlertToPlayers(
           realtime,
           execution.state.actorPlayerIds,
           {
             actionId: execution.state.actionId,
-            ...(snapshot?.game?.phase === undefined
+            ...(werewolfSnapshot?.game?.phase === undefined
               ? {}
-              : { phase: snapshot.game.phase }),
+              : { phase: werewolfSnapshot.game.phase }),
             timeoutWarning: true,
           },
         );
@@ -358,9 +363,9 @@ export class GameRoomDurableObject {
   }
 
   private async createRoomSession(request: Request): Promise<Response> {
-    let body: { roomId?: unknown; name?: unknown };
+    let body: { roomId?: unknown; gameType?: unknown; name?: unknown };
     try {
-      body = await request.json() as { roomId?: unknown; name?: unknown };
+      body = await request.json() as { roomId?: unknown; gameType?: unknown; name?: unknown };
     } catch {
       return Response.json(
         { ok: false, code: "invalid_request", message: "invalid request body" },
@@ -371,6 +376,12 @@ export class GameRoomDurableObject {
     if (typeof body.roomId !== "string" || !/^\d{4}$/u.test(body.roomId)) {
       return Response.json(
         { ok: false, code: "invalid_room_code", message: "roomId must be exactly 4 digits" },
+        { status: 400 },
+      );
+    }
+    if (!isGameType(body.gameType)) {
+      return Response.json(
+        { ok: false, code: "invalid_game_type", message: "unsupported gameType" },
         { status: 400 },
       );
     }
@@ -387,22 +398,28 @@ export class GameRoomDurableObject {
       );
     }
 
-    const created = await this.bootstrap.create(body.roomId, body.name);
+    const created = await this.bootstrapFor(body.gameType).create(body.roomId, body.name);
     // A reused Durable Object room code must never inherit timeout config,
     // identity-recovery grants, receipts, or alarms from a previous incarnation.
     await this.interactionTimeouts.clearAll();
     await this.identityRecovery.clear();
-    await this.snapshots.save(created.snapshot as CloudflareClientSnapshot);
+    await this.snapshots.save(created.snapshot);
     return Response.json({ ok: true, ...created.session }, { status: 201 });
   }
 
   private async joinRoomSession(request: Request): Promise<Response> {
-    let body: { name?: unknown };
+    let body: { gameType?: unknown; name?: unknown };
     try {
-      body = await request.json() as { name?: unknown };
+      body = await request.json() as { gameType?: unknown; name?: unknown };
     } catch {
       return Response.json(
         { ok: false, code: "invalid_request", message: "invalid request body" },
+        { status: 400 },
+      );
+    }
+    if (!isGameType(body.gameType)) {
+      return Response.json(
+        { ok: false, code: "invalid_game_type", message: "unsupported gameType" },
         { status: 400 },
       );
     }
@@ -421,15 +438,28 @@ export class GameRoomDurableObject {
       );
     }
 
+    if (!isGameType(snapshot.metadata.gameType)) {
+      return Response.json(
+        { ok: false, code: "unsupported_room_game", message: "room gameType is unsupported" },
+        { status: 409 },
+      );
+    }
+    if (snapshot.metadata.gameType !== body.gameType) {
+      return Response.json(
+        { ok: false, code: "game_type_mismatch", message: "房间属于另一个游戏客户端" },
+        { status: 409 },
+      );
+    }
+
     try {
-      const joined = await this.bootstrap.join(snapshot, body.name);
-      const nextSnapshot = joined.snapshot as CloudflareClientSnapshot;
+      const joined = await this.bootstrapFor(snapshot.metadata.gameType).join(snapshot, body.name);
+      const nextSnapshot = joined.snapshot;
       await this.snapshots.save(nextSnapshot);
       const realtimeState = hibernationState(this.state);
-      if (realtimeState) {
+      if (realtimeState && nextSnapshot.metadata.gameType === "werewolf") {
         pushCloudflareAuthoritativeStates(
           new CloudflareRoomRealtime(realtimeState),
-          nextSnapshot,
+          nextSnapshot as CloudflareClientSnapshot,
         );
       }
       return Response.json({ ok: true, ...joined.session });
@@ -570,6 +600,12 @@ export class GameRoomDurableObject {
 
     const snapshot = await this.snapshots.load();
     if (!snapshot) return new Response("Not Found", { status: 404 });
+    if (!isGameType(snapshot.metadata.gameType) || !gameModuleFor(snapshot.metadata.gameType)) {
+      return Response.json(
+        { ok: false, code: "game_runtime_unavailable", message: "该游戏运行时尚未启用" },
+        { status: 409 },
+      );
+    }
 
     const member = snapshot.membership.find(item => item.id === body.playerId);
     const valid = member && typeof member.resumeTokenHash === "string"

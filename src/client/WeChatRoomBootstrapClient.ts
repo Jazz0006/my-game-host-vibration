@@ -44,12 +44,13 @@ export class WeChatRoomBootstrapClient {
 
   constructor(
     private readonly api: WeChatRoomBootstrapRequestApi,
-    options: { baseUrl: string },
+    options: { baseUrl: string; gameType?: string },
   ) {
     this.core = new RoomBootstrapClientCore(
       (url, data) => this.post(url, data),
       {
         baseUrl: options.baseUrl,
+        gameType: options.gameType ?? "werewolf",
         transportLabel: "WeChat room bootstrap",
       },
     );

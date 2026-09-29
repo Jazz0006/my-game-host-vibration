@@ -60,6 +60,7 @@ export type WeChatNativeClientListener<TPlayerView = unknown> = (
 
 export type WeChatNativeClientOptions = {
   baseUrl: string;
+  gameType?: string;
   storageKey?: string;
   audioSources?: WeChatClientEffectOptions["audioSources"];
   requestIdFactory?: () => string;
@@ -136,7 +137,10 @@ export function createWeChatNativeClient<TPlayerView = unknown>(
   const credentialStoreOptions: WeChatSessionCredentialStoreOptions =
     options.storageKey === undefined ? {} : { storageKey: options.storageKey };
   const credentials = new WeChatSessionCredentialStore(api, credentialStoreOptions);
-  const roomBootstrap = new WeChatRoomBootstrapClient(api, { baseUrl: options.baseUrl });
+  const roomBootstrap = new WeChatRoomBootstrapClient(api, {
+    baseUrl: options.baseUrl,
+    gameType: options.gameType ?? "werewolf",
+  });
   const listeners = new Set<WeChatNativeClientListener<TPlayerView>>();
   let commandSequence = 0;
   const commandIdFactory = options.commandIdFactory ??

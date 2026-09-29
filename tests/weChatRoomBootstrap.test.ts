@@ -20,6 +20,7 @@ describe("E3.7B WeChat room bootstrap client", () => {
           data: {
             ok: true,
             roomId: "4321",
+            gameType: "werewolf",
             playerId: sequence === 1 ? "p1" : "p2",
             resumeToken: sequence === 1 ? "resume-host" : "resume-guest",
             name: sequence === 1 ? "Host" : "Guest",
@@ -52,12 +53,12 @@ describe("E3.7B WeChat room bootstrap client", () => {
       {
         url: "https://game.example/rooms",
         method: "POST",
-        data: { name: "Host" },
+        data: { gameType: "werewolf", name: "Host" },
       },
       {
         url: "https://game.example/rooms/4321/join",
         method: "POST",
-        data: { name: "Guest" },
+        data: { gameType: "werewolf", name: "Guest" },
       },
     ]);
     expect(calls.some(call => call.url.includes("resume-host") || call.url.includes("resume-guest"))).toBe(false);
