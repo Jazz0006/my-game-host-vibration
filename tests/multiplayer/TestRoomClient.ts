@@ -31,6 +31,8 @@ export type TestRoomClientOptions = {
   baseUrl: string;
   fetch: BrowserFetchLike;
   webSocketFactory: BrowserWebSocketFactory;
+  requestTimeoutMs?: number;
+  commandRetries?: number;
   traceLimit?: number;
 };
 
@@ -108,6 +110,12 @@ export class TestRoomClient<TPlayerView = unknown> {
       baseUrl: this.options.baseUrl,
       fetch: this.options.fetch,
       webSocketFactory: this.options.webSocketFactory,
+      ...(this.options.requestTimeoutMs === undefined
+        ? {}
+        : { requestTimeoutMs: this.options.requestTimeoutMs }),
+      ...(this.options.commandRetries === undefined
+        ? {}
+        : { commandRetries: this.options.commandRetries }),
     });
     const session = new ClientSession<TPlayerView>(transport);
     this.session = session;
@@ -137,6 +145,15 @@ export class TestRoomClient<TPlayerView = unknown> {
     });
 
     session.start(this.credentials);
+    await this.waitForConnected(timeoutMs);
+  }
+
+  async reconnect(timeoutMs = DEFAULT_WAIT_TIMEOUT_MS): Promise<void> {
+    const session = this.requireSession();
+    if (session.getConnectionState().status !== "Disconnected") {
+      throw new Error(`${this.options.label} must be disconnected before reconnect`);
+    }
+    session.reconnect();
     await this.waitForConnected(timeoutMs);
   }
 
