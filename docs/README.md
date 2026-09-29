@@ -38,8 +38,11 @@ B0 BotC / Trouble Brewing production entry
   - platform-level multiplayer test strategy;
   - virtual `TestRoomClient` / multi-client convergence / reconnect / idempotency / privacy plan;
   - two-real-device + N-virtual-player smoke route and milestone full-table acceptance;
-  - implementation starts with T0 contract/seam audit;
   - this route is parallel to B0B and does **not** replace the V5 mainline NEXT.
+- `docs/T0_MULTIPLAYER_HARNESS_SEAM_AUDIT_2026-09-30.md`
+  - T0 owner/seam audit and existing-test map;
+  - production-gap result: NONE for T1;
+  - T1 implementation contract: test-only Cloudflare/DO capability adapter + production bootstrap/Raw WS/ClientSession owners.
 
 ## Historical / superseded documents
 
