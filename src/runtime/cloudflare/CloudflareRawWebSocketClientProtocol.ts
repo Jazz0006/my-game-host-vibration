@@ -5,6 +5,10 @@ import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlan
 import { createClientActionAlertEffectEvent } from "../../protocol/client/ClientEffects.js";
 import type { ClientCommandEnvelope } from "../../protocol/client/ClientProtocol.js";
 import {
+  isRoomRecoveryClientCommand,
+  parseRoomRecoveryClientCommandEnvelope,
+} from "../../protocol/client/ClientRecoveryProtocol.js";
+import {
   isRoomManagementClientCommand,
   parseRoomManagementClientCommandEnvelope,
 } from "../../protocol/client/ClientRoomManagementProtocol.js";
@@ -33,6 +37,7 @@ import {
   emitCloudflareRoomRemoved,
 } from "./CloudflareClientEventDelivery.js";
 import { CloudflareRoomManagementRuntime } from "./CloudflareRoomManagementRuntime.js";
+import { CloudflareRoomRecoveryRuntime } from "./CloudflareRoomRecoveryRuntime.js";
 import {
   CloudflareRoomRealtime,
   type HibernationWebSocketLike,
@@ -68,6 +73,7 @@ export class CloudflareRawWebSocketClientProtocol {
   private readonly commands: CloudflareWerewolfCommandRuntime;
   private readonly lifecycle: CloudflareWerewolfLifecycleRuntime;
   private readonly roomManagement: CloudflareRoomManagementRuntime;
+  private readonly roomRecovery: CloudflareRoomRecoveryRuntime;
 
   constructor(
     storage: DurableObjectStorageLike,
@@ -79,6 +85,9 @@ export class CloudflareRawWebSocketClientProtocol {
       isPlayerConnected: playerId => realtime.isPlayerConnected(playerId),
     });
     this.roomManagement = new CloudflareRoomManagementRuntime(storage, {
+      isPlayerConnected: playerId => realtime.isPlayerConnected(playerId),
+    });
+    this.roomRecovery = new CloudflareRoomRecoveryRuntime(storage, {
       isPlayerConnected: playerId => realtime.isPlayerConnected(playerId),
     });
   }
@@ -139,6 +148,16 @@ export class CloudflareRawWebSocketClientProtocol {
     requestId: string,
     envelope: ClientCommandEnvelope,
   ): Promise<void> {
+    if (isRoomRecoveryClientCommand(envelope)) {
+      await this.handleRoomRecovery(
+        webSocket,
+        playerId,
+        requestId,
+        envelope,
+      );
+      return;
+    }
+
     if (isRoomManagementClientCommand(envelope)) {
       await this.handleRoomManagement(
         webSocket,
@@ -206,6 +225,63 @@ export class CloudflareRawWebSocketClientProtocol {
           this.pushActionAlertEffect(execution.snapshot);
         }
       }
+    } catch (error) {
+      this.sendFailure(
+        webSocket,
+        requestId,
+        "command_failed",
+        commandFailureMessage(error),
+      );
+    }
+  }
+
+  private async handleRoomRecovery(
+    webSocket: HibernationWebSocketLike,
+    playerId: string,
+    requestId: string,
+    envelope: ClientCommandEnvelope,
+  ): Promise<void> {
+    let parsed;
+    try {
+      parsed = parseRoomRecoveryClientCommandEnvelope(envelope);
+    } catch (error) {
+      this.sendFailure(
+        webSocket,
+        requestId,
+        "invalid_command",
+        error instanceof Error ? error.message : "命令格式无效",
+      );
+      return;
+    }
+
+    try {
+      const execution = await this.roomRecovery.execute(playerId, parsed);
+      webSocket.send(encodeClientRawWebSocketFrame(
+        createClientRawWebSocketSuccessResponse(requestId, {
+          revision: execution.revision,
+          replayed: execution.replayed,
+          outcome: execution.outcome,
+        }),
+      ));
+      if (execution.replayed) return;
+
+      if (execution.outcome.kind === "hostRecoveryReminder") {
+        const frame = encodeClientRawWebSocketFrame(
+          createClientRawWebSocketEventFrame(
+            createClientActionAlertEffectEvent({
+              actionId: execution.outcome.actionId,
+              phase: execution.outcome.phase,
+              resumed: true,
+            }),
+          ),
+        );
+        for (const actorPlayerId of execution.outcome.actorPlayerIds) {
+          this.realtime.sendToPlayer(actorPlayerId, frame);
+        }
+        return;
+      }
+
+      pushCloudflareAuthoritativeStates(this.realtime, execution.snapshot);
     } catch (error) {
       this.sendFailure(
         webSocket,
