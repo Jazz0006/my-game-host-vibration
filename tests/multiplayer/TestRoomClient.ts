@@ -228,6 +228,10 @@ export class TestRoomClient<TPlayerView = unknown> {
     return this.requireSession().getRoomState().envelope?.payload ?? null;
   }
 
+  getRoomRevision(): number | null {
+    return this.requireSession().getRoomState().revision;
+  }
+
   getConnectionState() {
     return this.requireSession().getConnectionState();
   }
