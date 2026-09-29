@@ -44,7 +44,9 @@ Current product priorities:
 5. reconnect, app switching, screen lock, and network changes are normal lifecycle events;
 6. the system owns authoritative game flow and secret information;
 7. the host is primarily a recovery controller, not a hidden-information super-user;
-8. Werewolf is the current production game, while the platform must remain capable of later supporting Blood on the Clocktower.
+8. Werewolf is the current production game, and Blood on the Clocktower is now the next production-game direction once the remaining shared infrastructure admission work is complete.
+9. The WeChat product direction is two game-specific thin-client shells — working names `骏骏桌游-狼人` and `骏骏桌游-血染` — over one shared client/runtime/backend platform. Do not duplicate reconnect, identity, transport, room, recovery, persistence, or Cloudflare authority code per mini program.
+10. A room's `gameType` is fixed at room creation by the client product; the lobby no longer owns cross-game switching.
 
 Do not turn this repository into a general game-platform framework before real product needs justify it.
 
@@ -65,6 +67,14 @@ domain
 games/werewolf
   -> authoritative Werewolf rules, planning, timeout policy, metadata, and projections
 
+games/botc
+  -> authoritative BotC rules/state, setup/night sequencing, views, and BotC-specific interaction semantics
+  -> add only when the BotC production slice begins; do not prebuild a large generic rules DSL
+
+GameCatalog / game admission seam
+  -> selects the concrete GameModule from room.gameType
+  -> platform/runtime code must not hard-code Werewolf once MG0 is complete
+
 protocol/client
   -> versioned transport-neutral client contract
 
@@ -84,6 +94,7 @@ Mandatory invariants:
 - new Werewolf rule semantics must not be added to the legacy global `domain/game.ts`; add them under the concrete Werewolf module and migrate touched legacy slices incrementally.
 - non-game production code may type-import legacy Werewolf state types, but runtime rule values/mutations must flow through the `games/werewolf` ownership seam.
 - concrete Werewolf state fields must not be mutated directly by runtime adapters.
+- once BotC admission hardening begins, shared room/runtime code must not depend on concrete Werewolf state, config, interaction, error, lifecycle, or projection types; such dependencies belong behind the concrete game seam.
 - Werewolf display metadata has one canonical owner: the role registry; server/runtime/view layers consume it rather than recreating parallel tables.
 - game modules must not depend on Node/Cloudflare runtime adapters.
 - game modules must not reverse-depend on the client protocol layer.
@@ -126,15 +137,20 @@ Do not import Android UI/runtime ownership, offline Host state management, netwo
 
 **CampBoardGameHost may inform game semantics and algorithms, but it does not define this repository's runtime architecture.**
 
-For future BotC work, keep the runtime boundary explicit:
+For BotC work, keep the runtime boundary explicit:
 
 ```text
 Room Runtime
-  -> command / state / interaction / view / revision
+  -> membership / owner / identity / command / state / revision / persistence / delivery
 
-BotC rules / storyteller intelligence
-  -> game semantics / information generation / recommendation
+BotC GameModule
+  -> game semantics / setup / night sequencing / interactions / player-host-public views
+
+BotC storyteller intelligence
+  -> legal-information candidate generation / recommendation / trace / replay
 ```
+
+Room Owner and Game Moderator/Storyteller are distinct authorities. A human BotC storyteller may require full game-secret visibility while the room owner remains a privacy-safe recovery/management role. Automatic storyteller mode is also distinct from room ownership.
 
 Storyteller recommendation must remain a separate recommendation/intelligence layer and must not become Room Runtime policy.
 

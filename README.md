@@ -1,6 +1,6 @@
-# 无法官狼人杀助手
+# 多游戏自动主持系统
 
-面向线下面杀的自动主持系统。玩家在同一房间面对面交流，每人使用自己的手机接收私密身份、夜间行动和震动提醒；系统负责自动主持，因此不需要牺牲一名玩家担任真人法官。
+面向线下面对面社交推理游戏的自动主持平台。共享 Room Runtime / ClientSession / Cloudflare authority 负责身份、断线恢复、房间与实时通信；具体游戏由独立 GameModule 和 game-specific 微信薄壳承载。当前已验证狼人杀，下一 production-game 方向为 Blood on the Clocktower。
 
 ## 当前权威文档
 
@@ -14,7 +14,7 @@
 
 ## 当前开发状态
 
-截至 2026-09-28，主线阶段状态：
+截至 2026-09-29，主线阶段状态：
 
 ```text
 C1–C4  Reconnect / Recovery                     ✅
@@ -33,10 +33,13 @@ E3.5   WeChat vibration / audio adapter         ✅
 E3.6   Minimal native WeChat vertical slice     ✅
 E3.7A  WeChat Developer Tools shell/build        ✅
 E3.7B  WeChat real-device lifecycle validation   ✅
-Cloudflare Web client transport swap             ← NEXT
-R1     Reliability Hardening / Effect Outbox
-Broader real-device field validation
-BotC production expansion
+W3D1   Cloudflare recovery command parity         ✅
+W3D2   Cloudflare interaction-timeout parity      ✅
+W3D3   Game-neutral identity recovery             ← NEXT
+MG0    Second-game admission hardening
+BotC   Trouble Brewing production expansion       ← IMMEDIATELY AFTER MG0
+W3E+   Production Web Cloudflare cutover           deferred / not a BotC prerequisite
+R1     Reliability Hardening / Effect Outbox       risk-driven
 ```
 
 HEAD、working tree、remote、PR/CI 都是可变事实，不在 README 固化具体 commit；开始开发前必须重新查询 live state。
@@ -44,8 +47,10 @@ HEAD、working tree、remote、PR/CI 都是可变事实，不在 README 固化�
 ## 当前技术栈
 
 - Node.js + TypeScript
-- Express
-- Socket.IO
+- Express + Socket.IO（当前 legacy/production Web baseline）
+- Cloudflare Workers + Durable Objects + Hibernation WebSocket
+- shared ClientSession / Raw WebSocket client runtime
+- Native WeChat thin-client shell/build pipeline
 - 静态 Web 玩家端
 - Vitest
 
@@ -133,7 +138,7 @@ UI intention
 → shared authoritative Werewolf runtime
 ```
 
-private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.5 已建立微信 ticket/Raw WS、reconnect、same-commandId retry 与 native effects；E3.6 进一步加入 transport-neutral public room projection、Cloudflare start/restart lifecycle、next-actor action alert，以及微信 credential storage/lifecycle/native composition/minimal page-controller。fake-`wx` vertical test 已跑通 lobby → command → effect → background reconnect。E3.7A 已提供可直接导入微信开发者工具的 `miniprogram/` shell，以及 TS7 bundler-mode typecheck + esbuild CommonJS runtime build；E3.7B 已在真实 Developer Tools + 手机上完成 production create/join、双端 authoritative push、foreground/background、飞行模式断网恢复、stored-session 恢复与 heavy vibration capability 验收。stale-generation fencing 继续由专门自动化测试覆盖。Ready、游戏选择、主持位、排序与房间管理仍属于后续 authoritative lobby-command slices。
+private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.5 已建立微信 ticket/Raw WS、reconnect、same-commandId retry 与 native effects；E3.6 进一步加入 transport-neutral public room projection、Cloudflare start/restart lifecycle、next-actor action alert，以及微信 credential storage/lifecycle/native composition/minimal page-controller。fake-`wx` vertical test 已跑通 lobby → command → effect → background reconnect。E3.7A 已提供可直接导入微信开发者工具的 `miniprogram/` shell，以及 TS7 bundler-mode typecheck + esbuild CommonJS runtime build；E3.7B 已在真实 Developer Tools + 手机上完成 production create/join、双端 authoritative push、foreground/background、飞行模式断网恢复、stored-session 恢复与 heavy vibration capability 验收。stale-generation fencing 继续由专门自动化测试覆盖。Ready、主持位、排序与房间管理仍属于后续 authoritative lobby-command slices。2026-09-29 产品方向调整后，微信不再在同一小程序 Lobby 中切换游戏；`骏骏桌游-狼人` 与 `骏骏桌游-血染` 作为两个 game-specific 薄壳共享同一 ClientSession / transport / reconnect / backend，房间在创建时固定 gameType。
 
 ## 多玩家模拟器
 
@@ -161,11 +166,12 @@ http://localhost:3000/dev/lab
 
 ## 长期产品边界
 
-- 当前正式交付目标仍是线下面对面狼人杀自动主持；
+- 狼人杀已验证当前平台基础；完成 W3D3 + MG0 后立即进入 Blood on the Clocktower / Trouble Brewing production expansion；
 - 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；
 - 讨论、发言和社交推理仍在线下完成；
 - 断线、熄屏、切 App 和网络切换视为正常生命周期；
-- 房主是 Recovery Controller，不是拥有秘密上帝视角的真人法官；
-- 平台核心不硬编码狼人杀具体角色；
-- 后续目标包括 Cloudflare Durable Objects、微信小程序和 Blood on the Clocktower；
-- BotC 自动说书人推荐保持为独立 recommendation layer，不进入 Room Runtime 核心。
+- Room Owner 是房间管理/Recovery Controller，不等同于 Game Moderator/Storyteller；
+- BotC 真人说书人可以获得游戏所需秘密视图，但 Room Owner 不会自动获得秘密上帝视角；
+- 平台核心不硬编码狼人杀或 BotC 具体角色；
+- 微信发布采用两个 game-specific thin-client shells，共享一套客户端内核和 Cloudflare backend；
+- BotC 自动说书人推荐保持为独立 recommendation/intelligence layer，不进入 Room Runtime 核心。

@@ -3,11 +3,11 @@
 > 项目：`Jazz0006/my-game-host-vibration`  
 > 主分支：`main`  
 > 当前系统：Node.js + TypeScript + Express + Socket.IO + Web 客户端  
-> 目标平台：Cloudflare Workers + Durable Objects + Web / 微信小程序，多游戏扩展到 Blood on the Clocktower  
+> 目标平台：Cloudflare Workers + Durable Objects + Web / game-specific 微信小程序薄壳；共享平台同时承载 Werewolf 与 Blood on the Clocktower  
 > 参考实现：`Jazz0006/WerewolfGameJudge`（fork，自 `olveryu/WerewolfGameJudge`）  
 > 文档版本：V4  
 > 日期：2026-08-19  
-> 最近同步：2026-09-27
+> 最近同步：2026-09-29
 
 > 当前 milestone / 下一步以 `开发计划_V5_客户端运行时与网络韧性实施路线.md` 为准。本文负责长期架构；其中 E2.2 / E2.3 的实施拆分保留为历史设计记录，不应覆盖 V5 的当前阶段状态。
 
@@ -42,8 +42,9 @@ V4 不推翻已经完成并通过 CI 的 C1–E2.1 基础，而是在再次审�
 2. 隐私边界；
 3. 低打扰和低操作量；
 4. 快速断线恢复；
-5. Web 与微信客户端一致行为；
-6. 狼人杀先可用，再自然扩展到 BotC。
+5. Web 与微信客户端在共享协议/恢复语义上一致；
+6. 狼人杀已验证平台基础，下一 production game 立即进入 BotC；
+7. 微信发布采用按游戏拆分的薄壳产品，共享同一客户端内核与后端 authority。
 
 ---
 
@@ -605,15 +606,24 @@ WerewolfGameJudge 当前 miniapp 主要是 WebView shell，可作为发布链路
 
 > 微信客户端正式大厅/方桌 UX 以 `docs/微信客户端大厅与方桌_UI实施基线_2026-09-28.md` 为实现标准；该文档只拥有入口页、Lobby、通用方桌、主持位与房间管理 UX，不覆盖本章的 runtime / protocol ownership。
 
+微信产品不再采用“一个小程序内选择多个游戏”的发布形态，而采用两个 game-specific thin-client shells（工作名 `骏骏桌游-狼人` / `骏骏桌游-血染`）。两者不是两套 runtime：
+
 ```text
-WeChat native thin client
-       ↓
-shared client protocol
-       ↓
-Cloudflare WebSocket
-       ↓
-GameRoom Durable Object
+骏骏桌游-狼人 ─┐
+                ├─> shared WeChat client/runtime
+骏骏桌游-血染 ─┘          ↓
+                    shared client protocol
+                           ↓
+                   Cloudflare WebSocket
+                           ↓
+                  GameRoom Durable Object
+                           ↓
+                       GameCatalog
+                     /             \
+                Werewolf           BotC
 ```
+
+每个产品壳在创建房间时固定 `gameType`。Lobby 不承担跨游戏切换，也不承担房间 gameType 迁移。
 
 微信客户端只实现：
 
@@ -697,9 +707,9 @@ E3.7B 进一步补齐首次身份 bootstrap：`POST /rooms` / `POST /rooms/:room
 
 # 19. 多游戏平台边界
 
-WerewolfGameJudge 的 game catalog 验证了 registry 模式适合多游戏平台。
+WerewolfGameJudge 的 game catalog 验证了 registry 模式适合多游戏平台。2026-09-29 起 BotC 已成为下一 production-game 方向，因此这一边界从未来规划升级为近期实施约束。
 
-本项目未来 BotC 阶段可收敛为：
+MG0 收敛为最小：
 
 ```text
 GameCatalog
@@ -713,10 +723,13 @@ GameCatalog
 GameState
 GameCommand
 PlayerView
-HostView
+Moderator/StorytellerView
+PublicView
 PendingInteraction
 Effect
 ```
+
+Room Owner 是房间管理/恢复权限，不等同于 Game Moderator/Storyteller。尤其在 BotC 中，真人说书人可能需要完整秘密魔典视图，而 Room Owner 不应因此自动获得秘密信息。
 
 不理解：
 
@@ -855,16 +868,13 @@ Cloudflare production cutover 前必须有真实设备验证，而不能只依�
 
 # 25. 何时不要继续抽象
 
-以下条件出现前，不建设大型通用平台能力：
+大型通用平台能力仍只在真实需求驱动下建设。此前约定的两个关键触发条件现在已经发生：第二个 production client（Native WeChat）已通过真机验证，第二个 production game（BotC）正式开始接入。
 
-- 第二个 production game 真正开始接入；
-- 第二个 production client 真正开始接入；
-- 实际 field test 证明当前简单机制不足；
-- 明确重复代码已经形成维护成本。
+因此当前允许且要求进行的通用化仅限 MG0 已暴露的真实责任边界：GameCatalog/game admission、game-neutral room/runtime/recovery、Owner/Moderator 分离，以及共享客户端内核与 game-specific product shell 分离。仍然禁止为了未知角色能力建设大型通用规则 DSL。
 
-原则：
+原则更新为：
 
-> **先用真实狼人杀体验验证抽象，再让 BotC 和微信客户端推动下一次通用化。**
+> **只抽第二个真实 game/client 已经证明需要共享的边界；游戏规则和 UI 保持具体。**
 
 ---
 
@@ -875,21 +885,21 @@ Cloudflare production cutover 前必须有真实设备验证，而不能只依�
 ```text
                Shared Client Protocol
                        |
-          +------------+------------+
-          |                         |
-      Web Client              WeChat Client
-          |                         |
-      ClientSession             ClientSession
-          |                         |
-          +------------+------------+
-                       |
-                Cloudflare Worker
-                       |
-               GameRoom Durable Object
-                       |
-                  Game Catalog
-               /               \
-          Werewolf             BotC
+          +------------+-----------------------+
+          |                                    |
+      Web Client                      Shared WeChat Runtime
+                                              /         \
+                               骏骏桌游-狼人   骏骏桌游-血染
+          |                                    |
+          +--------------------+---------------+
+                               |
+                        Cloudflare Worker
+                               |
+                       GameRoom Durable Object
+                               |
+                          Game Catalog
+                       /               \
+                  Werewolf             BotC
 ```
 
 系统必须保证：
