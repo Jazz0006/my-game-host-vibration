@@ -64,4 +64,43 @@ describe("platform boundaries", () => {
     expect(nativeSource).not.toMatch(/from\s+["']\.\.\/domain\//u);
     expect(nativeSource).not.toMatch(/from\s+["']\.\.\/games\//u);
   });
+
+  it("keeps shared Raw WebSocket client semantics platform-neutral and single-owned", () => {
+    const coreSource = source("src/client/runtime/RawWebSocketClientTransportCore.ts");
+    const endpointSource = source("src/client/runtime/RawWebSocketClientEndpoint.ts");
+    const weChatTransportSource = source("src/client/WeChatRealtimeTransport.ts");
+    const browserTransportSource = source(
+      "src/client/browser/CloudflareRealtimeTransport.ts",
+    );
+
+    for (const relativePath of [
+      "src/client/runtime/RawWebSocketClientTransportCore.ts",
+      "src/client/runtime/RawWebSocketClientEndpoint.ts",
+    ]) {
+      expectNoNodeRuntimeImports(relativePath);
+    }
+    for (const contents of [coreSource, endpointSource]) {
+      expect(contents).not.toMatch(/from\s+["'][^"']*domain\//u);
+      expect(contents).not.toMatch(/from\s+["'][^"']*games\//u);
+      expect(contents).not.toMatch(/from\s+["'][^"']*runtime\/(?:node|cloudflare)\//u);
+      expect(contents).not.toMatch(/\bwx\b/u);
+      expect(contents).not.toMatch(/\bfetch\b/u);
+      expect(contents).not.toMatch(/\bwindow\b/u);
+    }
+
+    expect(weChatTransportSource).toContain(
+      'from "./runtime/RawWebSocketClientTransportCore.js"',
+    );
+    expect(browserTransportSource).toContain(
+      'from "../runtime/RawWebSocketClientTransportCore.js"',
+    );
+    expect(weChatTransportSource).toContain(
+      'from "./runtime/RawWebSocketClientEndpoint.js"',
+    );
+    expect(browserTransportSource).toContain(
+      'from "../runtime/RawWebSocketClientEndpoint.js"',
+    );
+    expect(weChatTransportSource).not.toContain("ClientRawWebSocketProtocol");
+    expect(browserTransportSource).not.toContain("ClientRawWebSocketProtocol");
+  });
 });
