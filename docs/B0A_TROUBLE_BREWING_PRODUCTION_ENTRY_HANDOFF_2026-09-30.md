@@ -10,17 +10,13 @@ Branch:
 agent/b0a-botc-trouble-brewing-module
 ```
 
-Last committed HEAD before the current implementation work:
+Continuation checkpoint before B0A source completion:
 
 ```text
-1f1d0f9263202e29e63eb1195cdab3ea7af780df
+dba279aae7f92ae3462dcbd9b2242bbdb0bcbbf9
 ```
 
-Base `main` at branch start:
-
-```text
-834c01224de935ceb9860eb05a96147bbdb70eba
-```
+At that checkpoint the local branch and same-name remote branch matched exactly. Mutable Git/PR/CI state must still be rechecked live.
 
 MG0 is COMPLETE. PR #99 / MG0D has already been merged.
 
@@ -32,40 +28,34 @@ Standing merge authorization remains active: accepted-scope PRs may be merged au
 MG0 COMPLETE
   ↓
 B0 BotC / Trouble Brewing production entry
-  ├─ B0A module + setup/view contracts ← CURRENT
-  ├─ B0B first-night / night sequencing
+  ├─ B0A module + setup/view contracts ✅ COMPLETE
+  ├─ B0B first-night / night sequencing ← NEXT
   └─ B0C+ information / storyteller intelligence slices
 ```
 
-B0A must establish a real authoritative BotC game owner before first-night sequencing.
+B0A has established the real authoritative BotC setup/view owner required before first-night sequencing.
 
 Do not prebuild a generic rules DSL.
 
 Do not put Storyteller Intelligence / recommendation policy into authoritative BotC Rules or Information Engine state.
 
-## Current uncommitted B0A implementation
+## B0A implementation scope
 
-The working tree intentionally contains in-progress production changes that must be preserved. Do not reset, discard, or overwrite them.
-
-Modified:
+The completed B0A slice owns these production changes:
 
 ```text
 src/games/GameCatalog.ts
-src/runtime/shared/gameClientStateProjection.ts
-```
-
-New:
-
-```text
 src/games/botc/BotcGameModule.ts
 src/games/botc/TroubleBrewing.ts
 src/protocol/client/BotcRoomClientProjection.ts
+src/protocol/client/ClientRawWebSocketProtocol.ts
 src/runtime/shared/botcClientRoomProjection.ts
+src/runtime/shared/gameClientStateProjection.ts
 ```
 
-The BotC owner directory itself was established by the committed branch checkpoint.
+The Raw WebSocket protocol change is limited to preserving a union of game-specific state-envelope payloads at the game-neutral delivery boundary; Cloudflare delivery itself does not import concrete game types.
 
-## B0A implementation already drafted
+## B0A implementation completed
 
 ### Trouble Brewing metadata / setup
 
@@ -96,50 +86,47 @@ Drunk setup semantics are explicitly modeled:
 
 This is only setup/view truth. Drunk late-binding / information recommendation remains a later BotC slice and must not be folded into B0A.
 
-### Integration drafted
+### Integration completed
 
-- `GameCatalog` is being changed from BotC admission-only to a real `botcGameModule`;
-- BotC initial config is becoming Trouble Brewing-specific;
-- `BotcRoomClientProjection` and `botcClientRoomProjection` are being introduced;
-- shared `gameClientStateProjection` is being expanded so BotC can emit real PlayerView / Moderator/Public room projections instead of lobby-only fallback.
+- `GameCatalog` now registers a real `botcGameModule`;
+- BotC initial config is Trouble Brewing-specific;
+- `BotcRoomClientProjection` and `botcClientRoomProjection` own BotC lobby/public/moderator room projection;
+- shared `gameClientStateProjection` dispatches active BotC PlayerView / Moderator/Public room projections instead of the former lobby-only fallback;
+- game-neutral Raw WebSocket state framing accepts the resulting BotC/Werewolf projection union without concrete game imports in Cloudflare delivery.
 
-## Current validation state
+## Validation state
 
-Current `npm run typecheck` is RED with one known type-boundary issue:
+B0A local acceptance is GREEN:
 
 ```text
-src/runtime/cloudflare/CloudflareAuthoritativeStateDelivery.ts(22,9)
-TS2379:
-ClientStateEnvelope<BotcClientRoomProjection> |
-ClientStateEnvelope<WerewolfClientRoomProjection>
-is not assignable to a single Botc projection envelope generic.
+npm run typecheck
+  PASS
+
+npm test
+  PASS
+  121 test files
+  497 tests
 ```
 
-This is a TypeScript union/generic inference issue at the game-neutral delivery boundary, not a known runtime semantic failure.
+The full test command also completed the Web client build and both WeChat product-shell build/verification steps.
 
-No B0A feature PR exists yet.
+Focused B0A coverage now includes:
 
-B0A-specific setup/projection tests still need to be added before the slice can be considered complete.
+- all 22 Trouble Brewing roles;
+- every 5–15 non-Traveler base setup distribution;
+- Baron +2 Outsider / -2 Townsfolk mutation;
+- Drunk actual/shown-role constraints;
+- duplicate and illegal category-distribution rejection;
+- PlayerView hiding actual Drunk identity;
+- ModeratorView actual + shown assignment visibility;
+- PublicView secret exclusion;
+- BotC lobby and active-game projection dispatch through the shared seam.
 
-## Next actions
+## Merge closure / next milestone
 
-1. Re-check live branch / HEAD / working tree before editing.
-2. Preserve all current uncommitted B0A files.
-3. Fix the game-neutral authoritative-delivery generic boundary without reintroducing concrete game imports into shared transport code.
-4. Add focused tests for:
-   - the full 22-role Trouble Brewing catalog;
-   - 5–15 setup counts;
-   - Baron setup mutation;
-   - Drunk actual/shown-role constraints;
-   - illegal duplicate / category distributions;
-   - PlayerView hides actual Drunk identity;
-   - ModeratorView sees actual + shown assignments;
-   - PublicView contains no secret assignments;
-   - BotC lobby/game room projection dispatch.
-5. Run `npm run typecheck`.
-6. Run full `npm test`.
-7. Only after GREEN, update this handoff/checkpoint to B0A COMPLETE, commit the production slice, push, create PR, run CI, and auto-merge if normal merge gates pass.
-8. Then begin B0B first-night / night sequencing from fresh `main`.
+Use the standing merge authorization: commit the reviewed B0A slice, push, create/refresh its PR, require clean mergeability / zero unresolved review threads / required CI GREEN, and merge without a separate authorization when those gates pass.
+
+After merge, begin B0B first-night / night sequencing from fresh live `main`.
 
 ## Authority / ownership reminders
 

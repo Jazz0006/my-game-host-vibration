@@ -13,10 +13,9 @@ Use these in this order:
 ## Current handoff
 
 - `docs/B0A_TROUBLE_BREWING_PRODUCTION_ENTRY_HANDOFF_2026-09-30.md`
-  - current branch/worktree checkpoint;
-  - B0A in-progress BotC files;
-  - current typecheck blocker;
-  - exact next validation steps.
+  - B0A completion scope and ownership;
+  - local GREEN validation evidence;
+  - merge closure gates and B0B entry point.
 
 ## Current product route
 
@@ -24,8 +23,8 @@ Use these in this order:
 MG0 COMPLETE
   ↓
 B0 BotC / Trouble Brewing production entry
-  ├─ B0A module + setup/view contracts ← CURRENT
-  ├─ B0B first-night / night sequencing
+  ├─ B0A module + setup/view contracts ✅ COMPLETE
+  ├─ B0B first-night / night sequencing ← NEXT
   └─ B0C+ information / storyteller intelligence
 ```
 

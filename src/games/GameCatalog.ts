@@ -1,4 +1,6 @@
 import type { GameModule } from "../core/game/GameModule.js";
+import { botcGameModule } from "./botc/BotcGameModule.js";
+import { TROUBLE_BREWING_SCRIPT_ID } from "./botc/TroubleBrewing.js";
 import { DEFAULT_GAME_CONFIG } from "./werewolf/WerewolfDomainFacade.js";
 import { werewolfGameModule } from "./werewolf/WerewolfGameModule.js";
 import { WEREWOLF_MAX_PLAYERS } from "./werewolf/WerewolfLobbyPolicy.js";
@@ -33,18 +35,21 @@ const definitions: Record<GameType, GameAdmissionDefinition> = {
   },
   botc: {
     gameType: "botc",
-    // MG0A admits BotC rooms into the shared room platform only. BotC gameplay
-    // config/module ownership begins in B0; do not prebuild those rules here.
     maxPlayers: 15,
-    createInitialGameConfig: () => ({}),
+    createInitialGameConfig: () => ({ scriptId: TROUBLE_BREWING_SCRIPT_ID }),
+    gameModule: botcGameModule as unknown as GameModule<
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown
+    >,
   },
 };
 
-/**
- * Small product admission catalog. It intentionally owns only game selection
- * and room-bootstrap metadata at MG0A; concrete command/projection dispatch
- * moves behind this seam in later MG0 slices.
- */
+/** Product admission catalog. Concrete game semantics remain game-owned. */
 export function isGameType(value: unknown): value is GameType {
   return typeof value === "string" &&
     (GAME_TYPES as readonly string[]).includes(value);

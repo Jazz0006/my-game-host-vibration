@@ -4,14 +4,30 @@ import {
 } from "../../core/room/RoomSnapshot.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
 import { isGameType } from "../../games/GameCatalog.js";
+import {
+  botcGameModule,
+  type BotcGameConfig,
+  type BotcGameState,
+} from "../../games/botc/BotcGameModule.js";
 import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlanner.js";
 import {
   createPlayerStateEnvelope,
   createRoomStateEnvelope,
 } from "../../protocol/client/ClientProtocol.js";
-import { createClientRoomProjection } from "./clientRoomProjection.js";
+import {
+  botcGameViewContext,
+  createBotcClientRoomProjection,
+} from "./botcClientRoomProjection.js";
 import { createWerewolfClientRoomProjection } from "./werewolfClientRoomProjection.js";
 import { werewolfPlayerGameView } from "./werewolfRoomView.js";
+
+type BotcSnapshot = RoomSnapshot<
+  BotcGameState,
+  BotcGameConfig,
+  unknown,
+  unknown,
+  unknown
+>;
 
 type WerewolfSnapshot = RoomSnapshot<
   GameState,
@@ -29,18 +45,12 @@ function assertKnownGameType(snapshot: RoomSnapshot): "werewolf" | "botc" {
   return gameType;
 }
 
-function assertLobbyOnly(snapshot: RoomSnapshot, gameType: "botc"): void {
-  if (snapshot.game !== undefined) {
-    throw new Error(`${gameType} gameplay runtime is not available`);
-  }
-}
-
 /**
  * Game-dispatched client projection seam.
  *
  * Shared transport/runtime code calls only these functions. Concrete game view
- * logic remains in per-game projection owners; BotC is intentionally lobby-only
- * until its B0 runtime exists.
+ * logic remains in per-game projection owners; this seam only selects the
+ * game-specific projector for the snapshot's fixed gameType.
  */
 export function createGamePlayerStateEnvelope(
   snapshot: RoomSnapshot,
@@ -60,15 +70,20 @@ export function createGamePlayerStateEnvelope(
     );
   }
 
-  assertLobbyOnly(snapshot, gameType);
-  const restored = restoreRoomSnapshot(snapshot);
+  const restored = restoreRoomSnapshot(snapshot as BotcSnapshot);
   if (!restored.room.players.some(player => player.id === playerId)) {
     throw new Error("player is not a room member");
   }
   return createPlayerStateEnvelope(
     restored.room.id,
     playerId,
-    { phase: "lobby", mode: "lobby" },
+    restored.room.game
+      ? botcGameModule.getPlayerView(
+          restored.room.game,
+          playerId,
+          botcGameViewContext(restored.room),
+        )
+      : { phase: "lobby", mode: "lobby" },
   );
 }
 
@@ -91,10 +106,13 @@ export function createGameRoomStateEnvelope(
     );
   }
 
-  assertLobbyOnly(snapshot, gameType);
-  const restored = restoreRoomSnapshot(snapshot);
+  const restored = restoreRoomSnapshot(snapshot as BotcSnapshot);
   return createRoomStateEnvelope(
     restored.room.id,
-    createClientRoomProjection(restored.room, playerId),
+    createBotcClientRoomProjection(
+      restored.room,
+      playerId,
+      { isPlayerConnected },
+    ),
   );
 }
