@@ -3,6 +3,10 @@ import type { GameConfig, GameState } from "../../domain/game.js";
 import { GameRuleError } from "../../games/werewolf/WerewolfDomainFacade.js";
 import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlanner.js";
 import { createClientActionAlertEffectEvent } from "../../protocol/client/ClientEffects.js";
+import {
+  isInteractionTimeoutClientCommand,
+  parseInteractionTimeoutClientCommandEnvelope,
+} from "../../protocol/client/ClientInteractionTimeoutProtocol.js";
 import type { ClientCommandEnvelope } from "../../protocol/client/ClientProtocol.js";
 import {
   isRoomRecoveryClientCommand,
@@ -32,6 +36,11 @@ import {
   executeCloudflareClientProtocolCommand,
 } from "./CloudflareClientProtocolAdapter.js";
 import { pushCloudflareAuthoritativeStates } from "./CloudflareAuthoritativeStateDelivery.js";
+import {
+  emitCloudflareInteractionTimeoutActive,
+  emitCloudflareInteractionTimeoutInactive,
+} from "./CloudflareInteractionTimeoutDelivery.js";
+import { CloudflareInteractionTimeoutRuntime } from "./CloudflareInteractionTimeoutRuntime.js";
 import {
   emitCloudflareRoomClosed,
   emitCloudflareRoomRemoved,
@@ -74,6 +83,7 @@ export class CloudflareRawWebSocketClientProtocol {
   private readonly lifecycle: CloudflareWerewolfLifecycleRuntime;
   private readonly roomManagement: CloudflareRoomManagementRuntime;
   private readonly roomRecovery: CloudflareRoomRecoveryRuntime;
+  private readonly interactionTimeouts: CloudflareInteractionTimeoutRuntime;
 
   constructor(
     storage: DurableObjectStorageLike,
@@ -90,6 +100,7 @@ export class CloudflareRawWebSocketClientProtocol {
     this.roomRecovery = new CloudflareRoomRecoveryRuntime(storage, {
       isPlayerConnected: playerId => realtime.isPlayerConnected(playerId),
     });
+    this.interactionTimeouts = new CloudflareInteractionTimeoutRuntime(storage);
   }
 
   async handleRequest(
@@ -140,6 +151,17 @@ export class CloudflareRawWebSocketClientProtocol {
     webSocket.send(encodeClientRawWebSocketFrame(
       createClientRawWebSocketSuccessResponse(requestId, result),
     ));
+
+    const activeTimeout = await this.interactionTimeouts.activeStateForPlayer(
+      snapshot,
+      playerId,
+    );
+    if (activeTimeout) {
+      emitCloudflareInteractionTimeoutActive(
+        this.realtime,
+        { ...activeTimeout, actorPlayerIds: [playerId] },
+      );
+    }
   }
 
   private async handleCommand(
@@ -148,6 +170,16 @@ export class CloudflareRawWebSocketClientProtocol {
     requestId: string,
     envelope: ClientCommandEnvelope,
   ): Promise<void> {
+    if (isInteractionTimeoutClientCommand(envelope)) {
+      await this.handleInteractionTimeout(
+        webSocket,
+        playerId,
+        requestId,
+        envelope,
+      );
+      return;
+    }
+
     if (isRoomRecoveryClientCommand(envelope)) {
       await this.handleRoomRecovery(
         webSocket,
@@ -182,6 +214,7 @@ export class CloudflareRawWebSocketClientProtocol {
         ));
         if (!execution.replayed) {
           pushCloudflareAuthoritativeStates(this.realtime, execution.snapshot);
+          await this.reconcileInteractionTimeout(execution.snapshot);
         }
       } catch (error) {
         this.sendFailure(
@@ -224,6 +257,7 @@ export class CloudflareRawWebSocketClientProtocol {
         if (execution.outcome.kind === "afterNightAction") {
           this.pushActionAlertEffect(execution.snapshot);
         }
+        await this.reconcileInteractionTimeout(execution.snapshot);
       }
     } catch (error) {
       this.sendFailure(
@@ -231,6 +265,75 @@ export class CloudflareRawWebSocketClientProtocol {
         requestId,
         "command_failed",
         commandFailureMessage(error),
+      );
+    }
+  }
+
+  private async handleInteractionTimeout(
+    webSocket: HibernationWebSocketLike,
+    playerId: string,
+    requestId: string,
+    envelope: ClientCommandEnvelope,
+  ): Promise<void> {
+    let parsed;
+    try {
+      parsed = parseInteractionTimeoutClientCommandEnvelope(envelope);
+    } catch (error) {
+      this.sendFailure(
+        webSocket,
+        requestId,
+        "invalid_command",
+        error instanceof Error ? error.message : "命令格式无效",
+      );
+      return;
+    }
+
+    try {
+      const execution = await this.interactionTimeouts.executeCommand(
+        playerId,
+        parsed,
+      );
+      if (!execution.result.ok) {
+        this.sendFailure(
+          webSocket,
+          requestId,
+          "command_failed",
+          execution.result.message,
+        );
+        return;
+      }
+
+      if (execution.result.kind === "config") {
+        webSocket.send(encodeClientRawWebSocketFrame(
+          createClientRawWebSocketSuccessResponse(requestId, {
+            replayed: execution.replayed,
+            timeoutSeconds: execution.result.timeoutSeconds,
+          }),
+        ));
+        return;
+      }
+
+      webSocket.send(encodeClientRawWebSocketFrame(
+        createClientRawWebSocketSuccessResponse(requestId, {
+          replayed: execution.replayed,
+          deadlineAt: execution.result.deadlineAt,
+          canExtend: execution.result.canExtend,
+        }),
+      ));
+      if (!execution.replayed && execution.active) {
+        emitCloudflareInteractionTimeoutActive(
+          this.realtime,
+          execution.active,
+        );
+      }
+    } catch (error) {
+      this.sendFailure(
+        webSocket,
+        requestId,
+        "command_failed",
+        error instanceof Error && error.message
+          ? error.message
+          : "操作失败，请重试",
       );
     }
   }
@@ -282,6 +385,7 @@ export class CloudflareRawWebSocketClientProtocol {
       }
 
       pushCloudflareAuthoritativeStates(this.realtime, execution.snapshot);
+      await this.reconcileInteractionTimeout(execution.snapshot);
     } catch (error) {
       this.sendFailure(
         webSocket,
@@ -322,6 +426,9 @@ export class CloudflareRawWebSocketClientProtocol {
       ));
 
       if (execution.replayed) return;
+      if (execution.roomCleared) {
+        await this.interactionTimeouts.clearAll();
+      }
 
       switch (execution.outcome.kind) {
         case "removedPlayer":
@@ -379,6 +486,24 @@ export class CloudflareRawWebSocketClientProtocol {
         error instanceof Error && error.message
           ? error.message
           : "操作失败，请重试",
+      );
+    }
+  }
+
+  private async reconcileInteractionTimeout(
+    snapshot: ClientSnapshot,
+  ): Promise<void> {
+    const transition = await this.interactionTimeouts.reconcile(snapshot);
+    if (transition.cleared && transition.previous) {
+      emitCloudflareInteractionTimeoutInactive(
+        this.realtime,
+        transition.previous,
+      );
+    }
+    if (transition.created && transition.active) {
+      emitCloudflareInteractionTimeoutActive(
+        this.realtime,
+        transition.active,
       );
     }
   }

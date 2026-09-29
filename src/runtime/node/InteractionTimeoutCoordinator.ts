@@ -1,35 +1,22 @@
-export const DEFAULT_INTERACTION_TIMEOUT_SECONDS = 30;
-export const INTERACTION_TIMEOUT_WARNING_SECONDS = 8;
-export const INTERACTION_TIMEOUT_EXTENSION_SECONDS = 30;
-export const MAX_INTERACTION_TIMEOUT_EXTENSIONS = 1;
+import {
+  DEFAULT_INTERACTION_TIMEOUT_SECONDS,
+  createInteractionTimeoutState,
+  extendInteractionTimeout,
+  interactionTimeoutClientState,
+  markInteractionTimeoutWarning,
+  normalizeInteractionTimeoutSeconds,
+  type InteractionTimeoutClientState,
+  type InteractionTimeoutState,
+} from "../shared/interactionTimeoutPolicy.js";
 
-export type InteractionTimeoutState = {
-  roomId: string;
-  actionId: string;
-  actorPlayerIds: string[];
-  startedAt: number;
-  deadlineAt: number;
-  warningAt: number;
-  warningSent: boolean;
-  extensionCount: number;
-};
-
-export type InteractionTimeoutClientState = {
-  active: boolean;
-  actionId?: string;
-  deadlineAt?: number;
-  warningAt?: number;
-  warning?: boolean;
-  canExtend?: boolean;
-  extensionCount?: number;
-};
-
-function normalizedTimeoutSeconds(value: number | undefined): number {
-  if (value === undefined) return DEFAULT_INTERACTION_TIMEOUT_SECONDS;
-  if (!Number.isFinite(value)) return DEFAULT_INTERACTION_TIMEOUT_SECONDS;
-  if (value <= 0) return 0;
-  return Math.max(10, Math.min(120, Math.round(value)));
-}
+export {
+  DEFAULT_INTERACTION_TIMEOUT_SECONDS,
+  INTERACTION_TIMEOUT_EXTENSION_SECONDS,
+  INTERACTION_TIMEOUT_WARNING_SECONDS,
+  MAX_INTERACTION_TIMEOUT_EXTENSIONS,
+  type InteractionTimeoutClientState,
+  type InteractionTimeoutState,
+} from "../shared/interactionTimeoutPolicy.js";
 
 export class InteractionTimeoutCoordinator {
   private readonly timers = new Map<string, InteractionTimeoutState>();
@@ -40,7 +27,7 @@ export class InteractionTimeoutCoordinator {
   }
 
   setRoomTimeoutSeconds(roomId: string, seconds: number): number {
-    const normalized = normalizedTimeoutSeconds(seconds);
+    const normalized = normalizeInteractionTimeoutSeconds(seconds);
     this.roomTimeoutSeconds.set(roomId, normalized);
     this.timers.delete(roomId);
     return normalized;
@@ -75,21 +62,20 @@ export class InteractionTimeoutCoordinator {
 
     if (existing?.actionId === actionId) return { state: existing, created: false };
 
-    const timeoutMs = timeoutSeconds * 1000;
-    const warningLeadMs = Math.min(
-      INTERACTION_TIMEOUT_WARNING_SECONDS * 1000,
-      Math.max(1000, Math.floor(timeoutMs / 3)),
-    );
-    const state: InteractionTimeoutState = {
+    const state = createInteractionTimeoutState(
       roomId,
       actionId,
-      actorPlayerIds: [...actorPlayerIds],
-      startedAt: now,
-      deadlineAt: now + timeoutMs,
-      warningAt: now + timeoutMs - warningLeadMs,
-      warningSent: false,
-      extensionCount: 0,
-    };
+      actorPlayerIds,
+      now,
+      timeoutSeconds,
+    );
+    if (!state) {
+      if (existing) {
+        this.timers.delete(roomId);
+        return { created: false, replaced: existing };
+      }
+      return { created: false };
+    }
     this.timers.set(roomId, state);
     return existing
       ? { state, created: true, replaced: existing }
@@ -98,9 +84,11 @@ export class InteractionTimeoutCoordinator {
 
   markWarningSent(roomId: string, actionId: string): InteractionTimeoutState | undefined {
     const state = this.timers.get(roomId);
-    if (!state || state.actionId !== actionId || state.warningSent) return undefined;
-    state.warningSent = true;
-    return state;
+    if (!state) return undefined;
+    const warned = markInteractionTimeoutWarning(state, actionId);
+    if (!warned) return undefined;
+    this.timers.set(roomId, warned);
+    return warned;
   }
 
   extend(
@@ -109,33 +97,18 @@ export class InteractionTimeoutCoordinator {
     playerId: string,
     now: number = Date.now(),
   ): { ok: true; state: InteractionTimeoutState } | { ok: false; message: string } {
-    const state = this.timers.get(roomId);
-    if (!state || state.actionId !== actionId || now >= state.deadlineAt) {
-      return { ok: false, message: "当前行动已经结束" };
-    }
-    if (!state.actorPlayerIds.includes(playerId)) {
-      return { ok: false, message: "当前不是你的行动阶段" };
-    }
-    if (state.extensionCount >= MAX_INTERACTION_TIMEOUT_EXTENSIONS) {
-      return { ok: false, message: "本次行动已经延长过一次" };
-    }
-
-    state.extensionCount += 1;
-    state.deadlineAt += INTERACTION_TIMEOUT_EXTENSION_SECONDS * 1000;
-    state.warningAt = state.deadlineAt - INTERACTION_TIMEOUT_WARNING_SECONDS * 1000;
-    state.warningSent = false;
-    return { ok: true, state };
+    const result = extendInteractionTimeout(
+      this.timers.get(roomId),
+      actionId,
+      playerId,
+      now,
+    );
+    if (!result.ok) return result;
+    this.timers.set(roomId, result.state);
+    return result;
   }
 
   clientState(state: InteractionTimeoutState, warning = false): InteractionTimeoutClientState {
-    return {
-      active: true,
-      actionId: state.actionId,
-      deadlineAt: state.deadlineAt,
-      warningAt: state.warningAt,
-      warning,
-      canExtend: state.extensionCount < MAX_INTERACTION_TIMEOUT_EXTENSIONS,
-      extensionCount: state.extensionCount,
-    };
+    return interactionTimeoutClientState(state, warning);
   }
 }
