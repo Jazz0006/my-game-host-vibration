@@ -169,11 +169,13 @@ describe("D5 Node / Cloudflare parity", () => {
         expect.objectContaining({ id: "p5", connected: true }),
       ]),
     );
-    expect(cloudflareEnvelope.payload.game).toMatchObject({
-      phase: snapshot.game?.phase,
-      minPlayers: 5,
-      maxPlayers: 12,
-      canStart: false,
+    expect(cloudflareEnvelope.payload).toMatchObject({
+      game: {
+        phase: snapshot.game?.phase,
+        minPlayers: 5,
+        maxPlayers: 12,
+        canStart: false,
+      },
     });
   });
 
