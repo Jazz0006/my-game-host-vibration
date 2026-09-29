@@ -107,7 +107,7 @@ describe("stable Werewolf lifecycle client protocol", () => {
     expect(room.game?.actionId).toBe(restartActionId);
     expect(JSON.stringify(room.game?.roles)).toBe(restartRoles);
     expect(room.commandReceipts).toEqual([
-      { commandId: "host:stable-restart", result: { kind: "broadcast" } },
+      { commandId: "game-moderator:stable-restart", result: { kind: "broadcast" } },
     ]);
   });
 });

@@ -121,7 +121,7 @@ export type WerewolfPublicView = {
   deadPlayerIds: string[];
 };
 
-export type WerewolfHostView = WerewolfPublicView & {
+export type WerewolfModeratorView = WerewolfPublicView & {
   voteTally: Record<string, number> | undefined;
 };
 
@@ -180,7 +180,7 @@ export class WerewolfGameModule implements GameModule<
   GameState,
   WerewolfCommand,
   WerewolfPlayerView,
-  WerewolfHostView,
+  WerewolfModeratorView,
   WerewolfPublicView,
   WerewolfCreateInput
 > {
@@ -452,7 +452,7 @@ export class WerewolfGameModule implements GameModule<
     return { ...base, mode: "waiting" };
   }
 
-  getHostView(game: GameState, _context: GameViewContext): WerewolfHostView {
+  getModeratorView(game: GameState, _context: GameViewContext): WerewolfModeratorView {
     return {
       ...commonRoomGameView(game),
       voteTally: ["day_vote", "day_pk", "day_result"].includes(game.phase)

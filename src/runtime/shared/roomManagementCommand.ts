@@ -1,11 +1,16 @@
 import { RoomCore } from "../../core/room/RoomCore.js";
-import type { RoomPlayer, RoomState } from "../../core/room/types.js";
+import type {
+  GameModeratorAssignment,
+  RoomPlayer,
+  RoomState,
+} from "../../core/room/types.js";
 import type { RoomManagementCommand } from "../../protocol/client/ClientRoomManagementProtocol.js";
 
 export type RoomManagementCommandOutcome =
   | { kind: "updatedName"; name: string }
   | { kind: "movedPlayer"; playerId: string }
   | { kind: "removedPlayer"; playerId: string }
+  | { kind: "updatedGameModerator"; assignment: GameModeratorAssignment }
   | { kind: "transferredHost"; playerId: string }
   | {
       kind: "leftAndTransferred";
@@ -115,6 +120,25 @@ export function executeRoomManagementMutation<
       }
       core.movePlayerSeat(command.targetPlayerId, command.insertIndex);
       return { kind: "movedPlayer", playerId: command.targetPlayerId };
+    }
+
+    case "room.setGameModerator": {
+      requireHost(actor, "只有房主可以指定主持人");
+      if (room.game !== undefined) {
+        throw new RoomManagementError("游戏开始后不能更换主持人");
+      }
+      const assignment = command.assignment;
+      if (
+        assignment.mode === "human" &&
+        !room.players.some(player => player.id === assignment.playerId)
+      ) {
+        throw new RoomManagementError("主持人必须是房间成员");
+      }
+      core.setGameModerator(assignment);
+      return {
+        kind: "updatedGameModerator",
+        assignment: { ...room.gameModerator },
+      };
     }
 
     case "room.removePlayer": {

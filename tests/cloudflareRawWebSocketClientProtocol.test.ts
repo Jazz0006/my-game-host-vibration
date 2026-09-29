@@ -111,6 +111,7 @@ function lobbySnapshot() {
       }],
       createdAt: 10,
       updatedAt: 20,
+      gameModerator: { mode: "automatic" },
       gameConfig: { playerCount: 5, roleDeck: ["werewolf"] },
     },
     { revision: 3 },
@@ -140,6 +141,7 @@ function botcLobbySnapshot() {
       ],
       createdAt: 30,
       updatedAt: 40,
+      gameModerator: { mode: "automatic" },
       gameConfig: {},
     },
     { revision: 4 },
@@ -161,6 +163,7 @@ function fivePlayerLobbySnapshot() {
       })),
       createdAt: 10,
       updatedAt: 20,
+      gameModerator: { mode: "automatic" },
       gameConfig: configFromRoleDeck(
         5,
         ["werewolf", "seer", "witch", "villager", "villager"],
@@ -202,6 +205,7 @@ function activeSnapshot() {
       })),
       createdAt: 10,
       updatedAt: 20,
+      gameModerator: { mode: "automatic" },
       gameConfig: config,
       game,
     },
@@ -228,6 +232,7 @@ function wolfActionSnapshot() {
       })),
       createdAt: 10,
       updatedAt: 20,
+      gameModerator: { mode: "automatic" },
       gameConfig: config,
       game: {
         config,
@@ -368,6 +373,27 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
     expect((await new CloudflareRoomSnapshotRepository(storage).load())?.membership[0]?.name)
       .toBe("ST");
 
+    const assignModerator = createClientCommandEnvelope(
+      "room.setGameModerator",
+      { assignment: { mode: "human", playerId: "b2" } },
+      "botc-assign-moderator",
+    );
+    await room.webSocketMessage(
+      host,
+      JSON.stringify(createClientRawWebSocketCommandRequest(
+        "botc-moderator-command",
+        assignModerator,
+      )),
+    );
+    expect(parsedFrames(host)).toContainEqual(expect.objectContaining({
+      kind: "response",
+      requestId: "botc-moderator-command",
+      ok: true,
+      result: expect.objectContaining({ revision: 6, replayed: false }),
+    }));
+    expect((await new CloudflareRoomSnapshotRepository(storage).load())?.gameModerator)
+      .toEqual({ mode: "human", playerId: "b2" });
+
     const werewolfOnly = createClientCommandEnvelope(
       "werewolf.confirmRole",
       { actionId: "not-a-botc-action" },
@@ -383,7 +409,7 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
       ok: false,
       error: expect.objectContaining({ code: "game_command_unavailable" }),
     }));
-    expect((await new CloudflareRoomSnapshotRepository(storage).load())?.revision).toBe(5);
+    expect((await new CloudflareRoomSnapshotRepository(storage).load())?.revision).toBe(6);
   });
 
   it("replays the same commandId under a new requestId without advancing revision twice", async () => {

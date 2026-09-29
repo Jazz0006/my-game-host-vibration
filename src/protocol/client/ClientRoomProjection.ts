@@ -1,3 +1,5 @@
+import type { GameModeratorAssignment } from "../../core/room/types.js";
+
 export type ClientRoomProjectionPlayer = {
   id: string;
   name: string;
@@ -11,7 +13,9 @@ export type ClientRoomProjection = {
   viewer: {
     playerId: string;
     isHost: boolean;
+    isGameModerator: boolean;
   };
+  gameModerator: GameModeratorAssignment;
   players: ClientRoomProjectionPlayer[];
   gameStarted: boolean;
 };

@@ -3,7 +3,7 @@ import type { RandomProvider } from "../random/RandomProvider.js";
 
 export type GameCommandContext = {
   playerId?: string;
-  isHost: boolean;
+  isModerator: boolean;
   now: number;
 };
 
@@ -31,7 +31,7 @@ export interface GameModule<
   TState,
   TCommand,
   TPlayerView,
-  THostView,
+  TModeratorView,
   TPublicView = unknown,
   TCreateInput = unknown,
   TCommandOutcome = unknown,
@@ -53,7 +53,7 @@ export interface GameModule<
     context: GameViewContext,
   ): TPlayerView;
 
-  getHostView(state: TState, context: GameViewContext): THostView;
+  getModeratorView(state: TState, context: GameViewContext): TModeratorView;
 
   getPublicView(state: TState, context: GameViewContext): TPublicView;
 }

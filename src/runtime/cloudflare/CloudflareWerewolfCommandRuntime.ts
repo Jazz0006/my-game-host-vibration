@@ -1,5 +1,6 @@
 import type { CommandReceipt } from "../../core/command/IdempotentCommandLedger.js";
 import { RoomCommandRuntime } from "../../core/room/RoomCommandRuntime.js";
+import { hasGameModeratorControl } from "../../core/room/GameModerator.js";
 import {
   createRoomSnapshot,
   nextRoomRevision,
@@ -46,7 +47,7 @@ export type CloudflareWerewolfCommandExecution = {
   snapshot: WerewolfSnapshot;
 };
 
-const HOST_SCOPE = "host";
+const MODERATOR_SCOPE = "game-moderator";
 
 function playerScope(playerId: string): string {
   return `player:${playerId}`;
@@ -87,12 +88,19 @@ export class CloudflareWerewolfCommandRuntime {
     return this.execute(playerScope(playerId), { playerId }, commandId, command, playerId);
   }
 
-  executeHost(
-    hostPlayerId: string,
+  executeModerator(
+    moderatorPlayerId: string,
     commandId: string,
     command: WerewolfCommand,
   ): Promise<CloudflareWerewolfCommandExecution> {
-    return this.execute(HOST_SCOPE, { isHost: true }, commandId, command, hostPlayerId, true);
+    return this.execute(
+      MODERATOR_SCOPE,
+      { isModerator: true },
+      commandId,
+      command,
+      moderatorPlayerId,
+      true,
+    );
   }
 
   private async execute(
@@ -101,7 +109,7 @@ export class CloudflareWerewolfCommandRuntime {
     commandId: string,
     command: WerewolfCommand,
     authenticatedPlayerId: string,
-    requireHost = false,
+    requireModerator = false,
   ): Promise<CloudflareWerewolfCommandExecution> {
     const snapshot = await this.snapshots.load();
     if (!snapshot) throw new Error("room snapshot not found");
@@ -111,7 +119,9 @@ export class CloudflareWerewolfCommandRuntime {
 
     const member = snapshot.membership.find(item => item.id === authenticatedPlayerId);
     if (!member) throw new Error("authenticated player is not a room member");
-    if (requireHost && !member.isHost) throw new Error("host command requires host authority");
+    if (requireModerator && !hasGameModeratorControl(snapshot.gameModerator, member)) {
+      throw new Error("game command requires moderator authority");
+    }
 
     const restored = restoreRoomSnapshot(snapshot);
     const room: CloudflareWerewolfRoom = {

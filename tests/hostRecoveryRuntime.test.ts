@@ -7,7 +7,7 @@ import {
   type RuntimeRoom,
 } from "../src/runtime/node/roomBridge.js";
 import {
-  runHostCommand,
+  runModeratorCommand,
   runHostRecoveryCommandIdempotent,
   runPlayerCommand,
 } from "../src/runtime/node/werewolfCommandFacade.js";
@@ -28,6 +28,7 @@ function room(): RuntimeRoom {
     })),
     createdAt: 1,
     updatedAt: 1,
+    gameModerator: { mode: "automatic" },
     gameConfig: config,
   };
 }
@@ -44,7 +45,7 @@ function prepareActiveInteraction(currentRoom: RuntimeRoom): string[] {
   }
 
   expect(currentRoom.game?.phase).toBe("night_start");
-  runHostCommand(currentRoom, { type: "startNight" });
+  runModeratorCommand(currentRoom, { type: "startNight" });
 
   const actors = actingPlayerIds(currentRoom);
   expect(actors.length).toBeGreaterThan(0);
@@ -109,7 +110,7 @@ describe("C4.1 host recovery runtime", () => {
     expect(JSON.stringify(currentRoom.game)).toBe(gameBefore);
     expect(currentRoom.commandReceipts).toEqual([
       {
-        commandId: "host:cmd-resend-current-action",
+        commandId: "room-owner:cmd-resend-current-action",
         result: first.outcome,
       },
     ]);

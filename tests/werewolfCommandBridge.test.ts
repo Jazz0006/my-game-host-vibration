@@ -51,6 +51,7 @@ function room(state: GameState): RuntimeRoom {
     players: players(),
     createdAt: 1,
     updatedAt: 1,
+    gameModerator: { mode: "automatic" },
     gameConfig: state.config,
     game: state,
   };
@@ -59,7 +60,7 @@ function room(state: GameState): RuntimeRoom {
 describe("executeWerewolfCommand", () => {
   it("marks start-night as requiring night orchestration", () => {
     const state = game();
-    const outcome = executeWerewolfCommand(room(state), { type: "startNight" }, { isHost: true });
+    const outcome = executeWerewolfCommand(room(state), { type: "startNight" }, { isModerator: true });
 
     expect(outcome).toEqual({ kind: "afterNightAction" });
     expect(state.phase).toBe("night_werewolf");
@@ -102,7 +103,7 @@ describe("executeWerewolfCommand", () => {
       votes: { p1: "p2", p2: "p1", p3: "p1", p4: "p1", p5: "p1" },
     });
 
-    const outcome = executeWerewolfCommand(room(state), { type: "closeDayVote" }, { isHost: true });
+    const outcome = executeWerewolfCommand(room(state), { type: "closeDayVote" }, { isModerator: true });
 
     expect(outcome).toEqual({ kind: "voteClosed", result: "p1" });
     expect(state.eliminatedTodayId).toBe("p1");

@@ -50,7 +50,7 @@ export type CloudflareRoomRecoveryDependencies = {
   now?: () => number;
 };
 
-const HOST_SCOPE = "host";
+const OWNER_SCOPE = "room-owner";
 
 export class CloudflareRoomRecoveryRuntime {
   private readonly snapshots: CloudflareRoomSnapshotRepository<RecoverySnapshot>;
@@ -97,7 +97,7 @@ export class CloudflareRoomRecoveryRuntime {
 
     const execution = await this.commands.execute(
       room,
-      HOST_SCOPE,
+      OWNER_SCOPE,
       mapped.commandId,
       () =>
         executeRoomRecoveryCommand(

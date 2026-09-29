@@ -387,7 +387,7 @@ describe("five-player Socket.IO game flow", () => {
     expect(room.game?.actionId).toBe(firstRestartActionId);
     expect(JSON.stringify(room.game?.roles)).toBe(firstRestartRoles);
     expect(room.commandReceipts).toEqual([
-      { commandId: "host:restart-game-retry", result: { kind: "broadcast" } },
+      { commandId: "game-moderator:restart-game-retry", result: { kind: "broadcast" } },
     ]);
   });
 });

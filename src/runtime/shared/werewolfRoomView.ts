@@ -1,5 +1,9 @@
 import type { GameViewContext } from "../../core/game/GameModule.js";
 import { interactionForPlayer } from "../../core/interaction/PendingInteraction.js";
+import {
+  gameParticipantPlayers,
+  isHumanGameModerator,
+} from "../../core/room/GameModerator.js";
 import type { RoomPlayer, RoomState } from "../../core/room/types.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
 import { werewolfGameModule } from "../../games/werewolf/WerewolfGameModule.js";
@@ -12,7 +16,7 @@ export function werewolfGameViewContext<TPlayer extends RoomPlayer>(
   room: RoomState<GameState, GameConfig, TPlayer>,
 ): GameViewContext {
   return {
-    players: room.players.map(({ id, name, seat }) => ({ id, name, seat })),
+    players: gameParticipantPlayers(room).map(({ id, name, seat }) => ({ id, name, seat })),
   };
 }
 
@@ -32,6 +36,9 @@ export function werewolfPlayerGameView<TPlayer extends RoomPlayer>(
   playerId: string,
 ): unknown {
   if (!room.game) return { phase: "lobby", mode: "lobby" };
+  if (isHumanGameModerator(room.gameModerator, playerId)) {
+    return { phase: room.game.phase, mode: "moderator" };
+  }
 
   const view = werewolfGameModule.getPlayerView(
     room.game,

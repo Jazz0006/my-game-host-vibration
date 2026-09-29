@@ -4,6 +4,7 @@ import {
   restoreRoomSnapshot,
   type RoomSnapshot,
 } from "../../core/room/RoomSnapshot.js";
+import { hasGameModeratorControl } from "../../core/room/GameModerator.js";
 import type { RoomPlayer, RoomState } from "../../core/room/types.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
 import {
@@ -79,13 +80,15 @@ export type CloudflareInteractionTimeoutAlarmResult =
       transition: InteractionTimeoutReconcileResult;
     };
 
-function hostAuthority(
+function moderatorAuthority(
   snapshot: TimeoutSnapshot,
   playerId: string,
   message: string,
 ): void {
   const member = snapshot.membership.find(item => item.id === playerId);
-  if (!member?.isHost) throw new Error(message);
+  if (!member || !hasGameModeratorControl(snapshot.gameModerator, member)) {
+    throw new Error(message);
+  }
 }
 
 function memberAuthority(snapshot: TimeoutSnapshot, playerId: string): void {
@@ -130,7 +133,7 @@ export class CloudflareInteractionTimeoutRuntime {
     const state = await this.repository.load();
 
     if (mapped.command.type === "interactionTimeout.getConfig") {
-      hostAuthority(snapshot, authenticatedPlayerId, "只有房主可以查看超时设置");
+      moderatorAuthority(snapshot, authenticatedPlayerId, "只有主持人可以查看超时设置");
       return {
         result: {
           ok: true,
@@ -142,8 +145,8 @@ export class CloudflareInteractionTimeoutRuntime {
     }
 
     if (mapped.command.type === "interactionTimeout.setConfig") {
-      hostAuthority(snapshot, authenticatedPlayerId, "只有房主可以修改超时设置");
-      const key = receiptKey(`host:${authenticatedPlayerId}`, mapped.commandId);
+      moderatorAuthority(snapshot, authenticatedPlayerId, "只有主持人可以修改超时设置");
+      const key = receiptKey(`moderator:${authenticatedPlayerId}`, mapped.commandId);
       const replay = this.repository.findReceipt(state, key);
       if (replay) return { result: replay, replayed: true };
 
@@ -370,7 +373,7 @@ export class CloudflareInteractionTimeoutRuntime {
         executeWerewolfRoomCommand(
           room,
           { type: "startDayVote" },
-          { isHost: true },
+          { isModerator: true },
           { random: this.random, now: () => now },
         );
       }

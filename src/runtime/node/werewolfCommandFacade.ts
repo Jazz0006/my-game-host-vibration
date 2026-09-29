@@ -21,7 +21,8 @@ function playerCommandScope(playerId: string): string {
   return `player:${playerId}`;
 }
 
-const HOST_COMMAND_SCOPE = "host";
+const MODERATOR_COMMAND_SCOPE = "game-moderator";
+const OWNER_COMMAND_SCOPE = "room-owner";
 
 // Stable Node-runtime entry points: transport handlers provide identity/authority,
 // while WerewolfGameModule owns rule-specific command handling and projections.
@@ -33,11 +34,11 @@ export function runPlayerCommand(
   return executeWerewolfCommand(room, command, { playerId });
 }
 
-export function runHostCommand(
+export function runModeratorCommand(
   room: RuntimeRoom,
   command: WerewolfCommand,
 ): WerewolfCommandOutcome {
-  return executeWerewolfCommand(room, command, { isHost: true });
+  return executeWerewolfCommand(room, command, { isModerator: true });
 }
 
 /**
@@ -65,7 +66,7 @@ export function runPlayerCommandIdempotent(
   );
 }
 
-export function runHostCommandIdempotent(
+export function runModeratorCommandIdempotent(
   room: RuntimeRoom,
   commandId: string,
   command: WerewolfCommand,
@@ -73,9 +74,9 @@ export function runHostCommandIdempotent(
 ): Promise<{ outcome: WerewolfCommandOutcome; replayed: boolean }> {
   return roomCommands.execute(
     room,
-    HOST_COMMAND_SCOPE,
+    MODERATOR_COMMAND_SCOPE,
     commandId,
-    () => executeWerewolfCommand(room, command, { isHost: true }, environment),
+    () => executeWerewolfCommand(room, command, { isModerator: true }, environment),
   );
 }
 
@@ -95,7 +96,7 @@ export function runHostRecoveryCommandIdempotent(
   assertRoomRecoveryAuthority(room, authenticatedPlayerId, command);
   return roomCommands.execute(
     room,
-    HOST_COMMAND_SCOPE,
+    OWNER_COMMAND_SCOPE,
     commandId,
     () =>
       executeRoomRecoveryCommand(
@@ -110,7 +111,7 @@ export function runHostRecoveryCommandIdempotent(
   );
 }
 
-export function runHostLifecycleMutationIdempotent(
+export function runModeratorLifecycleMutationIdempotent(
   room: RuntimeRoom,
   commandId: string,
   mutation: () => WerewolfCommandOutcome,
@@ -120,7 +121,7 @@ export function runHostLifecycleMutationIdempotent(
 }> {
   return roomCommands.execute(
     room,
-    HOST_COMMAND_SCOPE,
+    MODERATOR_COMMAND_SCOPE,
     commandId,
     mutation,
     { resetReceiptHistory: true },

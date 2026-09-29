@@ -94,6 +94,7 @@ function startingSnapshot(): RoomSnapshot<
       })),
       createdAt: 10,
       updatedAt: 20,
+      gameModerator: { mode: "automatic" },
       gameConfig: config,
       game,
     },
@@ -191,18 +192,18 @@ describe("E1 Node / Cloudflare client protocol parity", () => {
     });
   });
 
-  it("enforces host authority before dispatching a host protocol command on both adapters", async () => {
+  it("enforces moderator authority before dispatching a moderator protocol command on both adapters", async () => {
     const snapshot = startingSnapshot();
     const envelope: WerewolfClientCommandEnvelope = createClientCommandEnvelope(
       "werewolf.startNight",
       {},
-      "host-only",
+      "moderator-only",
     );
 
     const nodeRoom = nodeRoomFromSnapshot(snapshot);
     expect(() =>
       executeNodeClientProtocolCommand(nodeRoom, "p2", envelope, deterministicEnvironment(1)),
-    ).toThrow("host command requires host authority");
+    ).toThrow("game command requires moderator authority");
 
     const storage = new MemoryStorage();
     const repository = new CloudflareRoomSnapshotRepository(storage);
@@ -214,6 +215,6 @@ describe("E1 Node / Cloudflare client protocol parity", () => {
 
     await expect(
       executeCloudflareClientProtocolCommand(cloudflareRuntime, "p2", envelope),
-    ).rejects.toThrow("host command requires host authority");
+    ).rejects.toThrow("game command requires moderator authority");
   });
 });

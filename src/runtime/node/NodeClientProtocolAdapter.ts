@@ -1,3 +1,4 @@
+import { hasGameModeratorControl } from "../../core/room/GameModerator.js";
 import type { WerewolfClientCommandEnvelope } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
 import { mapWerewolfClientCommand } from "../../protocol/client/werewolf/WerewolfClientProtocol.js";
 import {
@@ -9,7 +10,7 @@ import type { WerewolfCommandEnvironment } from "../shared/werewolfRoomCommand.j
 import { werewolfPlayerGameView } from "../shared/werewolfRoomView.js";
 import type { RuntimeRoom } from "./roomBridge.js";
 import {
-  runHostCommandIdempotent,
+  runModeratorCommandIdempotent,
   runPlayerCommandIdempotent,
 } from "./werewolfCommandFacade.js";
 
@@ -27,9 +28,11 @@ export function executeNodeClientProtocolCommand(
   if (!member) throw new Error("authenticated player is not a room member");
 
   const mapped = mapWerewolfClientCommand(envelope);
-  if (mapped.authority === "host") {
-    if (!member.isHost) throw new Error("host command requires host authority");
-    return runHostCommandIdempotent(
+  if (mapped.authority === "moderator") {
+    if (!hasGameModeratorControl(room.gameModerator, member)) {
+      throw new Error("game command requires moderator authority");
+    }
+    return runModeratorCommandIdempotent(
       room,
       mapped.commandId,
       mapped.command,

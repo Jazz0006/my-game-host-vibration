@@ -61,6 +61,7 @@ function parseRoomProjectionEnvelope(
   const envelope = asRecord(value);
   const payload = asRecord(envelope?.payload);
   const viewer = asRecord(payload?.viewer);
+  const moderator = asRecord(payload?.gameModerator);
   const players = payload?.players;
 
   if (
@@ -75,6 +76,10 @@ function parseRoomProjectionEnvelope(
     !viewer ||
     typeof viewer.playerId !== "string" ||
     typeof viewer.isHost !== "boolean" ||
+    typeof viewer.isGameModerator !== "boolean" ||
+    !moderator ||
+    (moderator.mode !== "automatic" && moderator.mode !== "human") ||
+    (moderator.mode === "human" && typeof moderator.playerId !== "string") ||
     !Array.isArray(players) ||
     typeof payload.gameStarted !== "boolean"
   ) {

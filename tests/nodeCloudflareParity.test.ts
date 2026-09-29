@@ -91,6 +91,7 @@ function startingSnapshot(): RoomSnapshot<
       })),
       createdAt: 10,
       updatedAt: 20,
+      gameModerator: { mode: "automatic" },
       gameConfig: config,
       game,
     },

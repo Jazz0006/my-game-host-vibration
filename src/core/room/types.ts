@@ -1,3 +1,7 @@
+export type GameModeratorAssignment =
+  | { mode: "automatic" }
+  | { mode: "human"; playerId: string };
+
 export type RoomPlayer = {
   id: string;
   name: string;
@@ -16,6 +20,7 @@ export type RoomState<
   players: TPlayer[];
   createdAt: number;
   updatedAt: number;
+  gameModerator: GameModeratorAssignment;
   gameConfig: TGameConfig;
   game?: TGameState;
 };

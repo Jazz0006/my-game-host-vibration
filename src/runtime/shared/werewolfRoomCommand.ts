@@ -17,7 +17,7 @@ export type WerewolfCommandOutcome =
 
 export type WerewolfCommandActor = {
   playerId?: string;
-  isHost?: boolean;
+  isModerator?: boolean;
 };
 
 export type WerewolfCommandEnvironment = {
@@ -45,7 +45,7 @@ export function executeWerewolfRoomCommand<TPlayer extends RoomPlayer>(
     room.game,
     {
       ...(actor.playerId === undefined ? {} : { playerId: actor.playerId }),
-      isHost: actor.isHost ?? false,
+      isModerator: actor.isModerator ?? false,
       now,
     },
     command,

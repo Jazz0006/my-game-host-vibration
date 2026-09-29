@@ -1,3 +1,7 @@
+import {
+  gameParticipantPlayers,
+  isHumanGameModerator,
+} from "../../core/room/GameModerator.js";
 import type { RoomPlayer, RoomState } from "../../core/room/types.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
 import {
@@ -15,7 +19,7 @@ import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlan
 import { werewolfRoleCatalog } from "../../games/werewolf/roles/registry.js";
 import type {
   WerewolfClientRoomProjection,
-  WerewolfHostRecoveryProjection,
+  WerewolfOwnerRecoveryProjection,
 } from "../../protocol/client/werewolf/WerewolfRoomClientProjection.js";
 import {
   activeWerewolfInteraction,
@@ -30,7 +34,7 @@ export type WerewolfClientRoomProjectionOptions = {
 function hostRecoveryProjection<TPlayer extends RoomPlayer>(
   room: RoomState<GameState, GameConfig, TPlayer>,
   options: WerewolfClientRoomProjectionOptions,
-): WerewolfHostRecoveryProjection {
+): WerewolfOwnerRecoveryProjection {
   if (!room.game) {
     return {
       hasPendingInteraction: false,
@@ -80,9 +84,9 @@ export function createWerewolfClientRoomProjection<
   }));
 
   if (!room.game) {
-    const playerCount = room.players.length;
-    const defaultRoleDeck = isWerewolfPlayerCountSupported(playerCount)
-      ? configFromPlayerCount(playerCount).roleDeck
+    const participantCount = gameParticipantPlayers(room).length;
+    const defaultRoleDeck = isWerewolfPlayerCountSupported(participantCount)
+      ? configFromPlayerCount(participantCount).roleDeck
       : room.gameConfig.roleDeck;
 
     return {
@@ -91,12 +95,14 @@ export function createWerewolfClientRoomProjection<
       viewer: {
         playerId: viewer.id,
         isHost: viewer.isHost,
+        isGameModerator: isHumanGameModerator(room.gameModerator, viewer.id),
       },
+      gameModerator: { ...room.gameModerator },
       players,
       gameStarted: false,
       lobbySetup: {
         canStart:
-          isWerewolfPlayerCountSupported(playerCount) &&
+          isWerewolfPlayerCountSupported(participantCount) &&
           room.players.every(player =>
             options.isPlayerConnected(player.id)
           ),
@@ -121,18 +127,20 @@ export function createWerewolfClientRoomProjection<
     viewer: {
       playerId: viewer.id,
       isHost: viewer.isHost,
+      isGameModerator: isHumanGameModerator(room.gameModerator, viewer.id),
     },
+    gameModerator: { ...room.gameModerator },
     players,
     gameStarted: true,
-    game: viewer.isHost
+    game: isHumanGameModerator(room.gameModerator, viewer.id)
       ? {
-          ...werewolfGameModule.getHostView(room.game, context),
+          ...werewolfGameModule.getModeratorView(room.game, context),
           ...common,
-          recovery: hostRecoveryProjection(room, options),
         }
       : {
           ...werewolfGameModule.getPublicView(room.game, context),
           ...common,
         },
+    ...(viewer.isHost ? { recovery: hostRecoveryProjection(room, options) } : {}),
   };
 }

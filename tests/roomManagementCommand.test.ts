@@ -39,6 +39,7 @@ function createRoom(): RoomState<unknown, { playerCount: number }, TestPlayer> {
     ],
     createdAt: 1,
     updatedAt: 2,
+    gameModerator: { mode: "automatic" },
     gameConfig: { playerCount: 3 },
   };
 }
@@ -129,6 +130,37 @@ describe("W3C shared room-management semantics", () => {
       roomEmpty: false,
     });
     expect(transferRoom.players.map(player => player.id)).toEqual(["p3"]);
+  });
+
+  it("keeps moderator assignment owner-controlled, lobby-only, and self-healing on removal", () => {
+    const room = createRoom();
+
+    expect(execute(room, "p1", {
+      type: "room.setGameModerator",
+      assignment: { mode: "human", playerId: "p2" },
+    })).toEqual({
+      kind: "updatedGameModerator",
+      assignment: { mode: "human", playerId: "p2" },
+    });
+    expect(room.gameModerator).toEqual({ mode: "human", playerId: "p2" });
+
+    expect(() => execute(room, "p2", {
+      type: "room.setGameModerator",
+      assignment: { mode: "automatic" },
+    })).toThrow("只有房主可以指定主持人");
+
+    expect(execute(room, "p1", {
+      type: "room.removePlayer",
+      targetPlayerId: "p2",
+    })).toEqual({ kind: "removedPlayer", playerId: "p2" });
+    expect(room.gameModerator).toEqual({ mode: "automatic" });
+
+    const activeRoom = createRoom();
+    activeRoom.game = { phase: "night" };
+    expect(() => execute(activeRoom, "p1", {
+      type: "room.setGameModerator",
+      assignment: { mode: "human", playerId: "p2" },
+    })).toThrow("游戏开始后不能更换主持人");
   });
 
   it("owns close-room authorization without deleting storage itself", () => {

@@ -52,6 +52,7 @@ const baseRoom = (
   ],
   createdAt: 100,
   updatedAt: 200,
+  gameModerator: { mode: "automatic" },
   gameConfig: {
     playerCount: 5,
     roleDeck: ["werewolf", "witch", "hunter", "villager", "villager"],

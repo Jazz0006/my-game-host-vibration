@@ -40,6 +40,7 @@ function authoritativeSnapshot() {
       ],
       createdAt: 10,
       updatedAt: 20,
+      gameModerator: { mode: "automatic" },
       gameConfig: { playerCount: 5, roleDeck: ["werewolf"] },
       game: { phase: "night_werewolf", actionId: "a-1" },
     },

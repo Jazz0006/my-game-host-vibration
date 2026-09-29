@@ -1,4 +1,5 @@
 import path from "node:path";
+import { hasGameModeratorControl } from "./core/room/GameModerator.js";
 import { fileURLToPath } from "node:url";
 import type { Server, Socket } from "socket.io";
 import { GameRuleError } from "./games/werewolf/WerewolfDomainFacade.js";
@@ -23,7 +24,7 @@ import {
   emitNightCompleteEffects,
 } from "./runtime/node/SocketIoClientEffectDelivery.js";
 import {
-  runHostCommand,
+  runModeratorCommand,
   runHostRecoveryCommandIdempotent,
 } from "./runtime/node/werewolfCommandFacade.js";
 import { createGameServer } from "./server.js";
@@ -82,7 +83,7 @@ function afterTimedRecovery(
 
   if (game.phase === "night_complete") {
     emitNightCompleteEffects(io, room);
-    runHostCommand(room, { type: "startDayVote" });
+    runModeratorCommand(room, { type: "startDayVote" });
     broadcastRoom(room);
     emitActionAlertEffects(io, room, { timeoutWarning: false });
     return;
@@ -163,8 +164,11 @@ export function createTimedGameServer(): TimedServer {
       "host:get-interaction-timeout",
       (_data: unknown, ack: (result: TimeoutConfigResult) => void) => {
         const membership = findMembership(rooms, socket.id);
-        if (!membership?.player.isHost) {
-          return ack({ ok: false, message: "只有房主可以查看超时设置" });
+        if (
+          !membership ||
+          !hasGameModeratorControl(membership.room.gameModerator, membership.player)
+        ) {
+          return ack({ ok: false, message: "只有主持人可以查看超时设置" });
         }
         ack({
           ok: true,
@@ -180,8 +184,11 @@ export function createTimedGameServer(): TimedServer {
         ack: (result: TimeoutConfigResult) => void,
       ) => {
         const membership = findMembership(rooms, socket.id);
-        if (!membership?.player.isHost) {
-          return ack({ ok: false, message: "只有房主可以修改超时设置" });
+        if (
+          !membership ||
+          !hasGameModeratorControl(membership.room.gameModerator, membership.player)
+        ) {
+          return ack({ ok: false, message: "只有主持人可以修改超时设置" });
         }
         if (membership.room.game) {
           return ack({ ok: false, message: "游戏开始后不能修改行动超时" });

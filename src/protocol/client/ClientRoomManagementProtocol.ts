@@ -1,4 +1,5 @@
 import { requireCommandId } from "../../core/command/CommandEnvelope.js";
+import type { GameModeratorAssignment } from "../../core/room/types.js";
 import {
   CLIENT_PROTOCOL_VERSION,
   type ClientCommandEnvelope,
@@ -8,6 +9,7 @@ export type RoomManagementCommand =
   | { type: "room.updateName"; name: string }
   | { type: "room.movePlayerSeat"; targetPlayerId: string; insertIndex: number }
   | { type: "room.removePlayer"; targetPlayerId: string }
+  | { type: "room.setGameModerator"; assignment: GameModeratorAssignment }
   | { type: "room.transferHost"; targetPlayerId: string }
   | { type: "room.leaveAndTransfer"; targetPlayerId: string }
   | { type: "room.close" }
@@ -20,6 +22,10 @@ export type RoomManagementClientCommandEnvelope =
       { targetPlayerId: string; insertIndex: number }
     >
   | ClientCommandEnvelope<"room.removePlayer", { targetPlayerId: string }>
+  | ClientCommandEnvelope<
+      "room.setGameModerator",
+      { assignment: GameModeratorAssignment }
+    >
   | ClientCommandEnvelope<"room.transferHost", { targetPlayerId: string }>
   | ClientCommandEnvelope<"room.leaveAndTransfer", { targetPlayerId: string }>
   | ClientCommandEnvelope<"room.close", Record<string, never>>
@@ -29,6 +35,7 @@ export const ROOM_MANAGEMENT_CLIENT_COMMAND_TYPES = [
   "room.updateName",
   "room.movePlayerSeat",
   "room.removePlayer",
+  "room.setGameModerator",
   "room.transferHost",
   "room.leaveAndTransfer",
   "room.close",
@@ -42,6 +49,25 @@ function asRecord(value: unknown): Record<string, unknown> {
     throw new Error("command payload must be an object");
   }
   return value as Record<string, unknown>;
+}
+
+function requiredGameModeratorAssignment(
+  record: Record<string, unknown>,
+): GameModeratorAssignment {
+  const value = record.assignment;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("assignment is required");
+  }
+  const assignment = value as Record<string, unknown>;
+  if (assignment.mode === "automatic") return { mode: "automatic" };
+  if (assignment.mode === "human") {
+    const playerId = assignment.playerId;
+    if (typeof playerId !== "string" || !playerId.trim()) {
+      throw new Error("assignment.playerId is required");
+    }
+    return { mode: "human", playerId: playerId.trim() };
+  }
+  throw new Error("assignment.mode must be automatic or human");
 }
 
 function requiredString(
@@ -110,6 +136,15 @@ export function parseRoomManagementClientCommandEnvelope(
       };
     }
 
+    case "room.setGameModerator":
+      return {
+        protocolVersion: CLIENT_PROTOCOL_VERSION,
+        kind: "command",
+        commandId,
+        type: "room.setGameModerator",
+        payload: { assignment: requiredGameModeratorAssignment(payload) },
+      };
+
     case "room.removePlayer":
     case "room.transferHost":
     case "room.leaveAndTransfer":
@@ -154,6 +189,14 @@ export function mapRoomManagementClientCommand(
           type: envelope.type,
           targetPlayerId: envelope.payload.targetPlayerId,
           insertIndex: envelope.payload.insertIndex,
+        },
+      };
+    case "room.setGameModerator":
+      return {
+        commandId: envelope.commandId,
+        command: {
+          type: envelope.type,
+          assignment: { ...envelope.payload.assignment },
         },
       };
     case "room.removePlayer":

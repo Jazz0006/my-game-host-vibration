@@ -1,3 +1,4 @@
+import { isHumanGameModerator } from "../../core/room/GameModerator.js";
 import type { RoomPlayer, RoomState } from "../../core/room/types.js";
 import type { ClientRoomProjection } from "../../protocol/client/ClientRoomProjection.js";
 
@@ -18,7 +19,9 @@ export function createClientRoomProjection<
     viewer: {
       playerId: viewer.id,
       isHost: viewer.isHost,
+      isGameModerator: isHumanGameModerator(room.gameModerator, viewer.id),
     },
+    gameModerator: { ...room.gameModerator },
     players: room.players.map(player => ({
       id: player.id,
       name: player.name,

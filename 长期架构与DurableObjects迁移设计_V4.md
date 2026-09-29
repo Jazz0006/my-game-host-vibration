@@ -729,7 +729,7 @@ PendingInteraction
 Effect
 ```
 
-Room Owner 是房间管理/恢复权限，不等同于 Game Moderator/Storyteller。尤其在 BotC 中，真人说书人可能需要完整秘密魔典视图，而 Room Owner 不应因此自动获得秘密信息。
+Room Owner 是房间管理/恢复权限，不等同于 Game Moderator/Storyteller。该边界已在 MG0C 落地为持久化 `Automatic | Human(playerId)` moderator assignment：Room Owner 保留房间管理与 recovery，Human Moderator 获得 game-control / secret moderator view 且不计入实际游戏参与者；Automatic 模式下当前 Werewolf 仍允许 Owner 作为控制入口，但不会因此获得秘密 moderator view。尤其在 BotC 中，真人说书人可以获得完整秘密魔典视图，而 Room Owner 不会自动获得秘密信息。
 
 不理解：
 
@@ -769,17 +769,22 @@ E3 Native WeChat Thin Client
   ├─ E3.5 vibration / audio adapter ✅
   ├─ E3.6 minimal native vertical slice ✅
   ├─ E3.7A Developer Tools shell + native runtime build ✅
-  └─ E3.7B Developer Tools + real-device lifecycle validation ← CURRENT
+  └─ E3.7B Developer Tools + real-device lifecycle validation ✅
         ↓
-Reliability Hardening
-  └─ Post-commit Effect Outbox
+W3D3 Game-neutral identity recovery ✅
         ↓
-Cloudflare Production Cutover + Real-device Field Validation
+MG0 Second-game admission hardening
+  ├─ MG0A GameCatalog / fixed admission ✅
+  ├─ MG0B game-neutral realtime + command dispatch ✅
+  ├─ MG0C Room Owner / Game Moderator split ✅
+  └─ MG0D game-specific WeChat product shells ← CURRENT
         ↓
-BotC Production Expansion
+BotC / Trouble Brewing Production Expansion
+        ↓
+Production Web cutover / Reliability hardening — deferred, risk-driven
 ```
 
-E2 已完成；E3.1–E3.7A 已完成第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle、native composition，以及真实 Developer Tools 工程壳/构建链。微信 runtime 由 `tsconfig.wechat` 做 bundler-mode typecheck，再由显式 `esbuild` owner 打成生成型 CommonJS bundle；`miniprogram/runtime` 不成为第二份源码。当前只剩 E3.7B 的真实开发者工具/手机 lifecycle 验收；真实设备结果优先于 fake-`wx` contract。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 与 E3.1–E3.7B 已完成，包括第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle、native composition、Developer Tools 工程壳/构建链与真实设备 lifecycle 验收。后续又完成 W3D3 game-neutral identity recovery、MG0A fixed game admission、MG0B game-neutral realtime/command dispatch 与 MG0C Owner/Moderator authority split；当前进入 MG0D game-specific WeChat product shells，完成后立即进入 BotC / Trouble Brewing production expansion。Production Web cutover 与 Reliability hardening 不再作为 BotC 前置。微信 runtime 继续由 `tsconfig.wechat` 做 bundler-mode typecheck，再由显式 `esbuild` owner 打成生成型 CommonJS bundle；`miniprogram/runtime` 不成为第二份源码。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 

@@ -8,7 +8,7 @@ import {
   type RuntimeRoom,
 } from "../src/runtime/node/roomBridge.js";
 import {
-  runHostCommand,
+  runModeratorCommand,
   runPlayerCommand,
 } from "../src/runtime/node/werewolfCommandFacade.js";
 
@@ -28,6 +28,7 @@ function room(): RuntimeRoom {
     })),
     createdAt: 1,
     updatedAt: 1,
+    gameModerator: { mode: "automatic" },
     gameConfig: config,
   };
 }
@@ -43,7 +44,7 @@ function prepareActiveInteraction(currentRoom: RuntimeRoom): string[] {
     });
   }
 
-  runHostCommand(currentRoom, { type: "startNight" });
+  runModeratorCommand(currentRoom, { type: "startNight" });
   const actors = actingPlayerIds(currentRoom);
   expect(actors.length).toBeGreaterThan(0);
   return actors;
@@ -71,17 +72,17 @@ describe("C4.2 host recovery status", () => {
     for (const player of currentRoom.players) expect(serialized).not.toContain(player.name);
   });
 
-  it("adds recovery diagnostics only to the host game projection", () => {
+  it("keeps owner recovery diagnostics out of game secret/public views", () => {
     const currentRoom = room();
     prepareActiveInteraction(currentRoom);
 
-    const hostView = roomGameView(currentRoom, true);
+    const moderatorView = roomGameView(currentRoom, true);
     const publicView = roomGameView(currentRoom, false);
 
-    expect(hostView).toHaveProperty("recovery");
+    expect(moderatorView).not.toHaveProperty("recovery");
     expect(publicView).not.toHaveProperty("recovery");
 
-    const recovery = hostView?.recovery as Record<string, unknown>;
+    const recovery = hostRecoveryStatus(currentRoom) as Record<string, unknown>;
     expect(recovery).toEqual({
       hasPendingInteraction: true,
       waitingCount: expect.any(Number),

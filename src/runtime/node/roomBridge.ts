@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { CommandReceipt } from "../../core/command/IdempotentCommandLedger.js";
 import { RoomCore } from "../../core/room/RoomCore.js";
+import { gameParticipantPlayers } from "../../core/room/GameModerator.js";
 import type { RoomPlayer, RoomState } from "../../core/room/types.js";
 import type { GameConfig, GameState } from "../../domain/game.js";
 import type { TestPrompt } from "../../domain/testPrompt.js";
@@ -111,21 +112,22 @@ export function hostRecoveryStatus(room: RuntimeRoom): HostRecoveryStatus {
   };
 }
 
-export function roomGameView(room: RuntimeRoom, isHost: boolean): Record<string, unknown> | undefined {
+export function roomGameView(
+  room: RuntimeRoom,
+  isModerator: boolean,
+): Record<string, unknown> | undefined {
   if (!room.game) return undefined;
   const context = gameViewContext(room);
-  if (!isHost) return werewolfGameModule.getPublicView(room.game, context);
-  return {
-    ...werewolfGameModule.getHostView(room.game, context),
-    recovery: hostRecoveryStatus(room),
-  };
+  return isModerator
+    ? werewolfGameModule.getModeratorView(room.game, context)
+    : werewolfGameModule.getPublicView(room.game, context);
 }
 
 export function createWerewolfGame(room: RuntimeRoom, config: GameConfig): GameState {
   room.gameType = werewolfGameModule.type;
   room.gameConfig = config;
   room.game = werewolfGameModule.createGame(
-    { playerIds: room.players.map(player => player.id), config },
+    { playerIds: gameParticipantPlayers(room).map(player => player.id), config },
     commandDependencies,
   );
   room.commandReceipts = [];
@@ -156,7 +158,7 @@ export function recoverTimedOutWerewolfInteraction(
 export function executeWerewolfCommand(
   room: RuntimeRoom,
   command: WerewolfCommand,
-  context: { playerId?: string; isHost?: boolean } = {},
+  context: { playerId?: string; isModerator?: boolean } = {},
   environment: WerewolfCommandEnvironment = nodeCommandEnvironment,
 ): WerewolfCommandOutcome {
   return executeWerewolfRoomCommand(room, command, context, environment);
