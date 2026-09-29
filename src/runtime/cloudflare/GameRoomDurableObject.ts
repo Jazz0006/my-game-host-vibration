@@ -5,6 +5,9 @@ import {
   type GameState,
 } from "../../games/werewolf/WerewolfDomainFacade.js";
 import {
+  IdentityRecoveryError,
+} from "../shared/IdentityRecoveryService.js";
+import {
   RoomBootstrapError,
   RoomBootstrapService,
 } from "../shared/RoomBootstrapService.js";
@@ -30,6 +33,7 @@ import {
   emitCloudflareInteractionTimeoutInactive,
 } from "./CloudflareInteractionTimeoutDelivery.js";
 import { CloudflareInteractionTimeoutRuntime } from "./CloudflareInteractionTimeoutRuntime.js";
+import { CloudflareIdentityRecoveryRuntime } from "./CloudflareIdentityRecoveryRuntime.js";
 import {
   CloudflareRoomRealtime,
   type DurableObjectHibernationStateLike,
@@ -100,6 +104,7 @@ export class GameRoomDurableObject {
   private readonly bootstrap: RoomBootstrapService<GameState, GameConfig>;
   private readonly webSocketTickets: CloudflareWebSocketTicketRepository;
   private readonly interactionTimeouts: CloudflareInteractionTimeoutRuntime;
+  private readonly identityRecovery: CloudflareIdentityRecoveryRuntime;
 
   constructor(private readonly state: DurableObjectStateLike) {
     this.snapshots = new CloudflareRoomSnapshotRepository<CloudflareClientSnapshot>(state.storage);
@@ -114,6 +119,18 @@ export class GameRoomDurableObject {
     });
     this.webSocketTickets = new CloudflareWebSocketTicketRepository(state.storage, this.crypto);
     this.interactionTimeouts = new CloudflareInteractionTimeoutRuntime(state.storage);
+    this.identityRecovery = new CloudflareIdentityRecoveryRuntime(
+      state.storage,
+      this.sessionTokens,
+      {
+        isPlayerConnected: playerId => {
+          const realtimeState = hibernationState(this.state);
+          return realtimeState
+            ? new CloudflareRoomRealtime(realtimeState).isPlayerConnected(playerId)
+            : false;
+        },
+      },
+    );
 
     const realtimeState = hibernationState(state);
     const Pair = autoResponsePairConstructor();
@@ -147,6 +164,7 @@ export class GameRoomDurableObject {
     if (url.pathname === "/snapshot" && request.method === "DELETE") {
       const deleted = await this.snapshots.clear();
       await this.interactionTimeouts.clearAll();
+      await this.identityRecovery.clear();
       return Response.json({ ok: true, deleted });
     }
 
@@ -156,6 +174,10 @@ export class GameRoomDurableObject {
 
     if (url.pathname === "/bootstrap-join" && request.method === "POST") {
       return this.joinRoomSession(request);
+    }
+
+    if (url.pathname === "/identity-recovery" && request.method === "POST") {
+      return this.handleIdentityRecovery(request);
     }
 
     if (url.pathname === "/websocket-ticket" && request.method === "POST") {
@@ -367,8 +389,9 @@ export class GameRoomDurableObject {
 
     const created = await this.bootstrap.create(body.roomId, body.name);
     // A reused Durable Object room code must never inherit timeout config,
-    // receipts, or alarms from a previously cleared room incarnation.
+    // identity-recovery grants, receipts, or alarms from a previous incarnation.
     await this.interactionTimeouts.clearAll();
+    await this.identityRecovery.clear();
     await this.snapshots.save(created.snapshot as CloudflareClientSnapshot);
     return Response.json({ ok: true, ...created.session }, { status: 201 });
   }
@@ -424,6 +447,113 @@ export class GameRoomDurableObject {
     }
   }
 
+  private async handleIdentityRecovery(request: Request): Promise<Response> {
+    let body: {
+      operation?: unknown;
+      playerId?: unknown;
+      resumeToken?: unknown;
+      targetPlayerId?: unknown;
+      recoveryCode?: unknown;
+    };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return Response.json(
+        { ok: false, code: "invalid_request", message: "invalid request body" },
+        { status: 400 },
+      );
+    }
+
+    try {
+      if (body.operation === "issue") {
+        if (
+          typeof body.playerId !== "string" ||
+          typeof body.resumeToken !== "string" ||
+          typeof body.targetPlayerId !== "string"
+        ) {
+          return Response.json(
+            {
+              ok: false,
+              code: "invalid_request",
+              message: "playerId, resumeToken and targetPlayerId are required",
+            },
+            { status: 400 },
+          );
+        }
+        const grant = await this.identityRecovery.issue(
+          body.playerId,
+          body.resumeToken,
+          body.targetPlayerId,
+        );
+        return Response.json({ ok: true, ...grant });
+      }
+
+      if (body.operation === "claim") {
+        if (typeof body.recoveryCode !== "string") {
+          return Response.json(
+            { ok: false, code: "invalid_request", message: "recoveryCode is required" },
+            { status: 400 },
+          );
+        }
+        const claimed = await this.identityRecovery.claim(body.recoveryCode);
+        const realtimeState = hibernationState(this.state);
+        if (realtimeState) {
+          const realtime = new CloudflareRoomRealtime(realtimeState);
+          realtime.sendToPlayer(
+            claimed.session.playerId,
+            cloudflareSessionReplacedFrame(
+              claimed.session.roomId,
+              claimed.session.playerId,
+            ),
+          );
+          realtime.closePlayerSockets(
+            claimed.session.playerId,
+            4001,
+            "session replaced",
+          );
+          pushCloudflareAuthoritativeStates(
+            realtime,
+            claimed.snapshot as CloudflareClientSnapshot,
+          );
+        }
+        return Response.json({ ok: true, ...claimed.session });
+      }
+
+      return Response.json(
+        { ok: false, code: "invalid_request", message: "unsupported recovery operation" },
+        { status: 400 },
+      );
+    } catch (error) {
+      if (error instanceof IdentityRecoveryError) {
+        const status = error.code === "not_recovery_controller"
+          ? 403
+          : error.code === "invalid_or_expired"
+            ? 401
+            : 409;
+        return Response.json(
+          { ok: false, code: error.code, message: error.message },
+          { status },
+        );
+      }
+      if (error instanceof Error && error.message === "invalid_session") {
+        return Response.json(
+          { ok: false, code: "invalid_session", message: "invalid session credentials" },
+          { status: 401 },
+        );
+      }
+      if (error instanceof Error && error.message === "room_not_found") {
+        return Response.json(
+          { ok: false, code: "room_not_found", message: "房间不存在" },
+          { status: 404 },
+        );
+      }
+      return Response.json(
+        { ok: false, code: "identity_recovery_failed", message: "身份恢复失败，请重试" },
+        { status: 500 },
+      );
+    }
+  }
+
   private async issueWebSocketTicket(request: Request): Promise<Response> {
     let body: { playerId?: unknown; resumeToken?: unknown };
     try {
@@ -446,11 +576,17 @@ export class GameRoomDurableObject {
       ? await this.sessionTokens.verifySessionToken(body.resumeToken, member.resumeTokenHash)
       : false;
 
-    if (!valid) {
+    if (!member || !valid) {
       return Response.json({ ok: false, message: "invalid session credentials" }, { status: 401 });
     }
 
-    const issued = await this.webSocketTickets.issue(body.playerId);
+    // A successful normal resume proves the existing credential is still in the
+    // player's possession, so any host-assisted recovery grant is no longer valid.
+    await this.identityRecovery.invalidate(member.id);
+    const issued = await this.webSocketTickets.issue(
+      body.playerId,
+      member.resumeTokenHash,
+    );
     return Response.json({
       ok: true,
       ticket: issued.ticket,
@@ -469,9 +605,13 @@ export class GameRoomDurableObject {
       return Response.json({ ok: false, message: "invalid WebSocket ticket" }, { status: 401 });
     }
 
-    // The player might have left the room between ticket issuance and upgrade.
+    // The player might have left the room or rotated credentials between ticket
+    // issuance and upgrade. Binding the ticket to the credential hash prevents an
+    // already-issued old-session ticket from surviving identity recovery.
     const snapshot = await this.snapshots.load();
-    if (!snapshot?.membership.some(member => member.id === ticketRecord.playerId)) {
+    const member = snapshot?.membership.find(item => item.id === ticketRecord.playerId);
+    const roomId = snapshot?.metadata.roomId;
+    if (!member || !roomId || member.resumeTokenHash !== ticketRecord.resumeTokenHash) {
       return Response.json({ ok: false, message: "invalid WebSocket ticket" }, { status: 401 });
     }
 
@@ -488,7 +628,7 @@ export class GameRoomDurableObject {
       server,
       ticketRecord.playerId,
       cloudflareSessionReplacedFrame(
-        snapshot.metadata.roomId,
+        roomId,
         ticketRecord.playerId,
       ),
     );

@@ -12,13 +12,13 @@ export type CloudflareEnv = {
 
 type RoomRoute = {
   roomCode: string;
-  resource: "identity" | "websocket-ticket" | "websocket";
+  resource: "identity" | "identity-recovery" | "websocket-ticket" | "websocket";
 };
 
 const CREATE_ROOM_ATTEMPTS = 20;
 
 function roomRouteFromPath(pathname: string): RoomRoute | null {
-  const match = /^\/rooms\/(\d{4})\/(identity|websocket-ticket|websocket)$/.exec(pathname);
+  const match = /^\/rooms\/(\d{4})\/(identity|identity-recovery|websocket-ticket|websocket)$/.exec(pathname);
   if (!match?.[1] || !match[2]) return null;
   return {
     roomCode: match[1],
