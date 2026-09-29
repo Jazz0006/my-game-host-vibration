@@ -192,12 +192,21 @@ describe("D4 Cloudflare Hibernation WebSocket", () => {
     let now = 1_000;
     const tickets = new CloudflareWebSocketTicketRepository(storage, crypto, () => now);
 
-    const issued = await tickets.issue("p1", 100);
-    expect(issued).toEqual({ ticket: "ticket-1", playerId: "p1", expiresAt: 1_100 });
-    expect(await tickets.consume("ticket-1")).toEqual({ playerId: "p1", expiresAt: 1_100 });
+    const issued = await tickets.issue("p1", "hash-a", 100);
+    expect(issued).toEqual({
+      ticket: "ticket-1",
+      playerId: "p1",
+      resumeTokenHash: "hash-a",
+      expiresAt: 1_100,
+    });
+    expect(await tickets.consume("ticket-1")).toEqual({
+      playerId: "p1",
+      resumeTokenHash: "hash-a",
+      expiresAt: 1_100,
+    });
     expect(await tickets.consume("ticket-1")).toBeUndefined();
 
-    const expired = await tickets.issue("p1", 100);
+    const expired = await tickets.issue("p1", "hash-a", 100);
     now = 1_201;
     expect(await tickets.consume(expired.ticket)).toBeUndefined();
   });

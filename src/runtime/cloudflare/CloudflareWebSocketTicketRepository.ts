@@ -7,6 +7,7 @@ const TICKET_BYTES = 24;
 
 export type WebSocketTicketRecord = {
   playerId: string;
+  resumeTokenHash: string;
   expiresAt: number;
 };
 
@@ -25,8 +26,13 @@ export class CloudflareWebSocketTicketRepository {
     private readonly now: () => number = Date.now,
   ) {}
 
-  async issue(playerId: string, ttlMs = DEFAULT_TTL_MS): Promise<IssuedWebSocketTicket> {
+  async issue(
+    playerId: string,
+    resumeTokenHash: string,
+    ttlMs = DEFAULT_TTL_MS,
+  ): Promise<IssuedWebSocketTicket> {
     if (!playerId) throw new Error("playerId is required");
+    if (!resumeTokenHash) throw new Error("resumeTokenHash is required");
     if (!Number.isSafeInteger(ttlMs) || ttlMs <= 0) {
       throw new Error("WebSocket ticket ttl must be a positive safe integer");
     }
@@ -34,6 +40,7 @@ export class CloudflareWebSocketTicketRepository {
     const ticket = this.crypto.randomToken(TICKET_BYTES);
     const record: WebSocketTicketRecord = {
       playerId,
+      resumeTokenHash,
       expiresAt: this.now() + ttlMs,
     };
     await this.storage.put(`${TICKET_PREFIX}${ticket}`, record);

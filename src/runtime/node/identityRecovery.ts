@@ -1,99 +1,94 @@
 import crypto from "node:crypto";
 import type { SessionTokenService } from "../../core/session/SessionTokenService.js";
+import {
+  IDENTITY_RECOVERY_MAX_FAILED_ATTEMPTS,
+  IDENTITY_RECOVERY_TTL_MS,
+  IdentityRecoveryService,
+  type IdentityRecoveryState,
+  type IdentityRecoveryStateRepository,
+} from "../shared/IdentityRecoveryService.js";
 import type { RuntimeRoom } from "./roomBridge.js";
 
-const RECOVERY_CODE_SPACE = 1_000_000;
-const RECOVERY_CODE_ATTEMPTS = 10;
-export const IDENTITY_RECOVERY_TTL_MS = 5 * 60 * 1000;
-export const IDENTITY_RECOVERY_MAX_FAILED_ATTEMPTS = 5;
+export {
+  IDENTITY_RECOVERY_MAX_FAILED_ATTEMPTS,
+  IDENTITY_RECOVERY_TTL_MS,
+} from "../shared/IdentityRecoveryService.js";
 
-type RecoveryGrant = {
-  playerId: string;
-  expiresAt: number;
-};
+const roomRecoveryState = new WeakMap<RuntimeRoom, IdentityRecoveryState>();
 
-const roomRecoveryGrants = new WeakMap<RuntimeRoom, Map<string, RecoveryGrant>>();
-const roomFailedAttempts = new WeakMap<RuntimeRoom, number>();
+class NodeIdentityRecoveryRepository implements IdentityRecoveryStateRepository {
+  constructor(private readonly room: RuntimeRoom) {}
 
-function grantsFor(room: RuntimeRoom): Map<string, RecoveryGrant> {
-  let grants = roomRecoveryGrants.get(room);
-  if (!grants) {
-    grants = new Map<string, RecoveryGrant>();
-    roomRecoveryGrants.set(room, grants);
+  async load(): Promise<IdentityRecoveryState | undefined> {
+    return roomRecoveryState.get(this.room);
   }
-  return grants;
-}
 
-function removeExistingGrantForPlayer(room: RuntimeRoom, playerId: string): void {
-  const grants = grantsFor(room);
-  for (const [hash, grant] of grants) {
-    if (grant.playerId === playerId) grants.delete(hash);
+  async save(state: IdentityRecoveryState): Promise<void> {
+    roomRecoveryState.set(this.room, state);
+  }
+
+  async clear(): Promise<void> {
+    roomRecoveryState.delete(this.room);
   }
 }
 
-function recordFailedAttempt(room: RuntimeRoom): void {
-  const failedAttempts = (roomFailedAttempts.get(room) ?? 0) + 1;
-  if (failedAttempts >= IDENTITY_RECOVERY_MAX_FAILED_ATTEMPTS) {
-    grantsFor(room).clear();
-    roomFailedAttempts.set(room, 0);
-    return;
-  }
-  roomFailedAttempts.set(room, failedAttempts);
-}
-
-export async function issueIdentityRecoveryGrant(
+function recoveryService(
   room: RuntimeRoom,
-  playerId: string,
+  sessionTokens: SessionTokenService,
+  now: () => number = Date.now,
+): IdentityRecoveryService {
+  return new IdentityRecoveryService(
+    sessionTokens,
+    new NodeIdentityRecoveryRepository(room),
+    {
+      createRecoveryCode: () => crypto.randomInt(1_000_000).toString().padStart(6, "0"),
+      now,
+    },
+  );
+}
+
+function isPlayerConnected(room: RuntimeRoom, playerId: string): boolean {
+  const player = room.players.find(candidate => candidate.id === playerId);
+  return Boolean(player?.connected || player?.socketId);
+}
+
+export async function issueIdentityRecovery(
+  room: RuntimeRoom,
+  actorPlayerId: string,
+  targetPlayerId: string,
   sessionTokens: SessionTokenService,
   now = Date.now(),
 ): Promise<{ recoveryCode: string; expiresAt: number }> {
-  removeExistingGrantForPlayer(room, playerId);
-  roomFailedAttempts.set(room, 0);
-
-  for (let attempt = 0; attempt < RECOVERY_CODE_ATTEMPTS; attempt += 1) {
-    const recoveryCode = crypto.randomInt(RECOVERY_CODE_SPACE).toString().padStart(6, "0");
-    const hash = await sessionTokens.hashSessionToken(recoveryCode);
-    if (grantsFor(room).has(hash)) continue;
-
-    const expiresAt = now + IDENTITY_RECOVERY_TTL_MS;
-    grantsFor(room).set(hash, { playerId, expiresAt });
-    return { recoveryCode, expiresAt };
-  }
-
-  throw new Error("Unable to allocate recovery code");
+  return recoveryService(room, sessionTokens, () => now).issue(
+    room.players,
+    actorPlayerId,
+    targetPlayerId,
+    { isPlayerConnected: playerId => isPlayerConnected(room, playerId) },
+  );
 }
 
-export async function consumeIdentityRecoveryGrant(
+export async function claimIdentityRecovery(
   room: RuntimeRoom,
   recoveryCode: string,
   sessionTokens: SessionTokenService,
   now = Date.now(),
-): Promise<string | null> {
-  const normalized = recoveryCode.trim();
-  if (!/^\d{6}$/u.test(normalized)) {
-    recordFailedAttempt(room);
-    return null;
-  }
-
-  const hash = await sessionTokens.hashSessionToken(normalized);
-  const grants = grantsFor(room);
-  const grant = grants.get(hash);
-  if (!grant) {
-    recordFailedAttempt(room);
-    return null;
-  }
-
-  // Consume before returning so concurrent/replayed claims cannot reuse the grant.
-  grants.delete(hash);
-  if (grant.expiresAt <= now) {
-    recordFailedAttempt(room);
-    return null;
-  }
-
-  roomFailedAttempts.set(room, 0);
-  return grant.playerId;
+): Promise<{ playerId: string; resumeToken: string }> {
+  const claim = await recoveryService(room, sessionTokens, () => now).claim(
+    room.players,
+    recoveryCode,
+    { isPlayerConnected: playerId => isPlayerConnected(room, playerId) },
+  );
+  const player = room.players.find(candidate => candidate.id === claim.playerId);
+  if (!player) throw new Error("identity recovery player disappeared");
+  player.resumeTokenHash = claim.resumeTokenHash;
+  return { playerId: claim.playerId, resumeToken: claim.resumeToken };
 }
 
-export function invalidateIdentityRecoveryGrant(room: RuntimeRoom, playerId: string): void {
-  removeExistingGrantForPlayer(room, playerId);
+export async function invalidateIdentityRecoveryGrant(
+  room: RuntimeRoom,
+  playerId: string,
+  sessionTokens: SessionTokenService,
+): Promise<void> {
+  await recoveryService(room, sessionTokens).invalidate(playerId);
 }
+

@@ -33,9 +33,9 @@ import {
 } from "./runtime/node/werewolfCommandFacade.js";
 import { onlineActingPlayers } from "./runtime/node/hostRecovery.js";
 import {
-  consumeIdentityRecoveryGrant,
+  claimIdentityRecovery,
   invalidateIdentityRecoveryGrant,
-  issueIdentityRecoveryGrant,
+  issueIdentityRecovery,
 } from "./runtime/node/identityRecovery.js";
 import {
   acknowledgePrompt,
@@ -385,7 +385,7 @@ export function createGameServer() {
           return ack({ ok: false, message: "恢复凭证无效" });
         }
 
-        invalidateIdentityRecoveryGrant(room, player.id);
+        await invalidateIdentityRecoveryGrant(room, player.id, sessionTokens);
         const previousSocketId = player.socketId;
         player.socketId = socket.id;
         player.connected = true;
@@ -426,25 +426,22 @@ export function createGameServer() {
         >,
       ) => {
         const membership = findMembership(rooms, socket.id);
-        if (!membership?.player.isHost) {
+        if (!membership) {
           return ack({ ok: false, message: "只有房主可以协助恢复身份" });
         }
-        const target = membership.room.players.find(player => player.id === data.targetPlayerId);
-        if (!target || target.isHost) {
-          return ack({ ok: false, message: "请选择一名其他玩家" });
-        }
-        if (target.connected || target.socketId) {
-          return ack({ ok: false, message: "该玩家当前在线，不需要恢复身份" });
-        }
         try {
-          const grant = await issueIdentityRecoveryGrant(
+          const grant = await issueIdentityRecovery(
             membership.room,
-            target.id,
+            membership.player.id,
+            data.targetPlayerId ?? "",
             sessionTokens,
           );
           ack({ ok: true, recoveryCode: grant.recoveryCode, expiresAt: grant.expiresAt });
-        } catch {
-          ack({ ok: false, message: "生成恢复码失败，请重试" });
+        } catch (error) {
+          ack({
+            ok: false,
+            message: error instanceof Error ? error.message : "生成恢复码失败，请重试",
+          });
         }
       },
     );
@@ -466,24 +463,21 @@ export function createGameServer() {
         const room = rooms.get(roomId);
         if (!room) return ack({ ok: false, message: "恢复码无效或已过期" });
 
-        const playerId = await consumeIdentityRecoveryGrant(
-          room,
-          recoveryCode,
-          sessionTokens,
-        ).catch(() => null);
-        if (!playerId) return ack({ ok: false, message: "恢复码无效或已过期" });
+        let claim;
+        try {
+          claim = await claimIdentityRecovery(room, recoveryCode, sessionTokens);
+        } catch (error) {
+          return ack({
+            ok: false,
+            message: error instanceof Error ? error.message : "恢复码无效或已过期",
+          });
+        }
 
-        const player = room.players.find(item => item.id === playerId);
-        if (!player || player.isHost || player.connected || player.socketId) {
+        const player = room.players.find(item => item.id === claim.playerId);
+        if (!player) {
           return ack({ ok: false, message: "该身份当前无法恢复，请让房主重新生成恢复码" });
         }
 
-        const replacementSession = await sessionTokens.createSessionToken().catch(() => null);
-        if (!replacementSession) {
-          return ack({ ok: false, message: "恢复身份失败，请让房主重新生成恢复码" });
-        }
-
-        player.resumeTokenHash = replacementSession.hash;
         player.socketId = socket.id;
         player.connected = true;
         void socket.join(room.id);
@@ -495,7 +489,7 @@ export function createGameServer() {
           seat: player.seat,
           name: player.name,
           isHost: false,
-          resumeToken: replacementSession.token,
+          resumeToken: claim.resumeToken,
         });
         broadcastRoom(io, room);
         sendCurrentTestPrompt(socket, room, player);
@@ -561,7 +555,7 @@ export function createGameServer() {
 
     socket.on(
       "host:remove-player",
-      (data: { targetPlayerId?: string }, ack: BasicAck) => {
+      async (data: { targetPlayerId?: string }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
         const target = membership.room.players.find(
@@ -582,7 +576,11 @@ export function createGameServer() {
           if (outcome.kind !== "removedPlayer") {
             throw new Error("unexpected room-management outcome");
           }
-          invalidateIdentityRecoveryGrant(membership.room, outcome.playerId);
+          await invalidateIdentityRecoveryGrant(
+            membership.room,
+            outcome.playerId,
+            sessionTokens,
+          );
           clearRemovedTestPrompt(membership.room, outcome.playerId);
           if (targetSocket) {
             emitClientRoomRemoved(targetSocket, membership.room.id);
@@ -626,7 +624,7 @@ export function createGameServer() {
 
     socket.on(
       "host:leave-and-transfer",
-      (data: { targetPlayerId?: string }, ack: BasicAck) => {
+      async (data: { targetPlayerId?: string }, ack: BasicAck) => {
         const membership = findMembership(rooms, socket.id);
         if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
         try {
@@ -641,9 +639,10 @@ export function createGameServer() {
           if (outcome.kind !== "leftAndTransferred") {
             throw new Error("unexpected room-management outcome");
           }
-          invalidateIdentityRecoveryGrant(
+          await invalidateIdentityRecoveryGrant(
             membership.room,
             outcome.leavingPlayerId,
+            sessionTokens,
           );
           clearRemovedTestPrompt(membership.room, outcome.leavingPlayerId);
           void socket.leave(membership.room.id);
@@ -676,7 +675,7 @@ export function createGameServer() {
       }
     });
 
-    socket.on("player:leave-room", (_data: unknown, ack: BasicAck) => {
+    socket.on("player:leave-room", async (_data: unknown, ack: BasicAck) => {
       const membership = findMembership(rooms, socket.id);
       if (!membership) return ack({ ok: false, message: "你当前不在房间中" });
       try {
@@ -688,9 +687,10 @@ export function createGameServer() {
         if (outcome.kind !== "leftRoom") {
           throw new Error("unexpected room-management outcome");
         }
-        invalidateIdentityRecoveryGrant(
+        await invalidateIdentityRecoveryGrant(
           membership.room,
           outcome.leavingPlayerId,
+          sessionTokens,
         );
         clearRemovedTestPrompt(membership.room, outcome.leavingPlayerId);
         void socket.leave(membership.room.id);
