@@ -1,4 +1,9 @@
-import type { PublicRoomPlayer, RoomPlayer, RoomState } from "./types.js";
+import type {
+  GameModeratorAssignment,
+  PublicRoomPlayer,
+  RoomPlayer,
+  RoomState,
+} from "./types.js";
 
 const MAX_PLAYER_NAME_LENGTH = 20;
 
@@ -88,6 +93,13 @@ export class RoomCore<
     if (index < 0) return undefined;
 
     const [removed] = this.state.players.splice(index, 1);
+    if (
+      removed &&
+      this.state.gameModerator.mode === "human" &&
+      this.state.gameModerator.playerId === removed.id
+    ) {
+      this.state.gameModerator = { mode: "automatic" };
+    }
     this.normalizeSeats();
     this.touch();
     return removed;
@@ -112,6 +124,12 @@ export class RoomCore<
     const target = this.requirePlayer(targetPlayerId);
     for (const player of this.state.players) player.isHost = false;
     target.isHost = true;
+    this.touch();
+  }
+
+  setGameModerator(assignment: GameModeratorAssignment): void {
+    if (assignment.mode === "human") this.requirePlayer(assignment.playerId);
+    this.state.gameModerator = { ...assignment };
     this.touch();
   }
 

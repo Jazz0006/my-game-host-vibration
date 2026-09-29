@@ -67,6 +67,7 @@ function lobbySnapshot(): TimeoutSnapshot {
       })),
       createdAt: 1,
       updatedAt: 2,
+      gameModerator: { mode: "automatic" },
       gameConfig: configFromRoleDeck(
         5,
         ["werewolf", "seer", "witch", "villager", "villager"],
@@ -95,6 +96,7 @@ function wolfActionSnapshot(): TimeoutSnapshot {
       })),
       createdAt: 1,
       updatedAt: 2,
+      gameModerator: { mode: "automatic" },
       gameConfig: config,
       game: {
         config,
@@ -125,7 +127,7 @@ function wolfActionSnapshot(): TimeoutSnapshot {
 }
 
 describe("W3D2 Cloudflare interaction timeout runtime", () => {
-  it("persists host configuration with retry-safe command receipts", async () => {
+  it("persists moderator configuration with retry-safe command receipts", async () => {
     const storage = new AlarmStorage();
     await new CloudflareRoomSnapshotRepository(storage).save(lobbySnapshot());
     const runtime = new CloudflareInteractionTimeoutRuntime(storage, () => 1_000);
@@ -154,7 +156,7 @@ describe("W3D2 Cloudflare interaction timeout runtime", () => {
     });
 
     await expect(runtime.executeCommand("p2", setCommand)).rejects.toThrow(
-      "只有房主可以修改超时设置",
+      "只有主持人可以修改超时设置",
     );
 
     const getCommand = createClientCommandEnvelope(

@@ -18,7 +18,7 @@ export type WerewolfClientCommandEnvelope =
   | ClientCommandEnvelope<"werewolf.closeVoting", Record<string, never>>
   | ClientCommandEnvelope<"werewolf.beginNightStart", Record<string, never>>;
 
-export type WerewolfProtocolAuthority = "player" | "host";
+export type WerewolfProtocolAuthority = "player" | "moderator";
 
 export type MappedWerewolfProtocolCommand = {
   authority: WerewolfProtocolAuthority;
@@ -310,12 +310,12 @@ export function mapWerewolfClientCommand(
       };
 
     case "werewolf.startNight":
-      return { authority: "host", commandId, command: { type: "startNight" } };
+      return { authority: "moderator", commandId, command: { type: "startNight" } };
 
     case "werewolf.closeVoting":
-      return { authority: "host", commandId, command: { type: "closeDayVote" } };
+      return { authority: "moderator", commandId, command: { type: "closeDayVote" } };
 
     case "werewolf.beginNightStart":
-      return { authority: "host", commandId, command: { type: "beginNightStart" } };
+      return { authority: "moderator", commandId, command: { type: "beginNightStart" } };
   }
 }

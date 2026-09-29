@@ -1,4 +1,8 @@
-import type { RoomPlayer, RoomState } from "./types.js";
+import type {
+  GameModeratorAssignment,
+  RoomPlayer,
+  RoomState,
+} from "./types.js";
 
 export type RoomSnapshotMetadata = {
   roomId: string;
@@ -26,6 +30,7 @@ export type RoomSnapshot<
   revision: number;
   metadata: RoomSnapshotMetadata;
   membership: RoomSnapshotMember[];
+  gameModerator: GameModeratorAssignment;
   gameConfig: TGameConfig;
   game?: TGameState;
   ruleState?: TRuleState;
@@ -108,6 +113,7 @@ export function createRoomSnapshot<
       isHost: player.isHost,
       resumeTokenHash: player.resumeTokenHash,
     })),
+    gameModerator: { ...room.gameModerator },
     gameConfig: room.gameConfig,
     ...(room.game === undefined ? {} : { game: room.game }),
     ...(options.ruleState === undefined ? {} : { ruleState: options.ruleState }),
@@ -156,6 +162,7 @@ export function restoreRoomSnapshot<
       players: snapshot.membership.map(member => ({ ...member })),
       createdAt: snapshot.metadata.createdAt,
       updatedAt: snapshot.metadata.updatedAt,
+      gameModerator: { ...snapshot.gameModerator },
       gameConfig: snapshot.gameConfig,
       ...(snapshot.game === undefined ? {} : { game: snapshot.game }),
     },

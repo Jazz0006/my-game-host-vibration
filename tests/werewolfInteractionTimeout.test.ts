@@ -22,6 +22,7 @@ function room(): RuntimeRoom {
     })),
     createdAt: 1,
     updatedAt: 1,
+    gameModerator: { mode: "automatic" },
     gameConfig: config,
   };
   const game = createWerewolfGame(currentRoom, config);

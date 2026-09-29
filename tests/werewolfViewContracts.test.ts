@@ -3,7 +3,7 @@ import type { GameViewContext } from "../src/core/game/GameModule.js";
 import { configFromRoleDeck, type GameState } from "../src/domain/game.js";
 import {
   WerewolfGameModule,
-  type WerewolfHostView,
+  type WerewolfModeratorView,
   type WerewolfPlayerView,
   type WerewolfPublicView,
 } from "../src/games/werewolf/WerewolfGameModule.js";
@@ -49,7 +49,7 @@ function acceptsPlayerView(view: WerewolfPlayerView): WerewolfPlayerView {
   return view;
 }
 
-function acceptsHostView(view: WerewolfHostView): WerewolfHostView {
+function acceptsModeratorView(view: WerewolfModeratorView): WerewolfModeratorView {
   return view;
 }
 
@@ -79,13 +79,13 @@ describe("Werewolf view contracts", () => {
 
     const playerView = acceptsPlayerView(module.getPlayerView(game, "p2", context));
     const publicView = acceptsPublicView(module.getPublicView(game, context));
-    const hostView = acceptsHostView(module.getHostView(game, context));
+    const moderatorView = acceptsModeratorView(module.getModeratorView(game, context));
 
     expect(playerView.mode).toBe("seer_result");
     expect(playerView.checkedPlayer).toEqual({ id: "p1", name: "一号", seat: 1 });
     expect(playerView.checkedAlignment).toBe("werewolf");
     expect(publicView).not.toHaveProperty("checkedAlignment");
-    expect(hostView).not.toHaveProperty("checkedAlignment");
+    expect(moderatorView).not.toHaveProperty("checkedAlignment");
   });
 
   it("keeps vote tally host-only while sharing public progress fields", () => {
@@ -96,10 +96,10 @@ describe("Werewolf view contracts", () => {
       votes: { p1: "p4", p2: "p4", p3: "p5" },
     });
 
-    const hostView = acceptsHostView(module.getHostView(game, context));
+    const moderatorView = acceptsModeratorView(module.getModeratorView(game, context));
     const publicView = acceptsPublicView(module.getPublicView(game, context));
 
-    expect(hostView.voteTally).toEqual({ p4: 2, p5: 1 });
+    expect(moderatorView.voteTally).toEqual({ p4: 2, p5: 1 });
     expect(publicView.votesCast).toBe(3);
     expect(publicView).not.toHaveProperty("voteTally");
     expect(publicView).not.toHaveProperty("roles");

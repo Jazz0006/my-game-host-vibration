@@ -17,7 +17,7 @@ import {
   currentClientStateDelivery,
   type ClientStateDelivery,
 } from "./SocketIoClientStateDelivery.js";
-import { runHostCommand } from "./werewolfCommandFacade.js";
+import { runModeratorCommand } from "./werewolfCommandFacade.js";
 
 type BasicResult = { ok: true } | { ok: false; message: string };
 type BasicAck = (result: BasicResult) => void;
@@ -57,7 +57,7 @@ function afterNightAction(
 
   if (game.phase === "night_complete") {
     emitNightCompleteEffects(io, room);
-    runHostCommand(room, { type: "startDayVote" });
+    runModeratorCommand(room, { type: "startDayVote" });
     broadcastRoom(room);
     emitActionAlertEffects(io, room);
     return;
@@ -110,7 +110,7 @@ function deliverCommandOutcome(
         broadcastRoom(room);
         emitGameOverEffects(io, room);
       } else if (room.game.phase === "night_complete") {
-        runHostCommand(room, { type: "startDayVote" });
+        runModeratorCommand(room, { type: "startDayVote" });
         broadcastRoom(room);
         emitActionAlertEffects(io, room);
       } else {
@@ -122,7 +122,7 @@ function deliverCommandOutcome(
       if (!outcome.changed) return;
       broadcastRoom(room);
       if (outcome.allEligibleVoted) {
-        const closeOutcome = runHostCommand(room, { type: "closeDayVote" });
+        const closeOutcome = runModeratorCommand(room, { type: "closeDayVote" });
         broadcastRoom(room);
         if (closeOutcome.kind === "voteClosed") afterCloseDayVote(io, room);
       }

@@ -46,6 +46,7 @@ function room(): RoomState {
     ],
     createdAt: 1,
     updatedAt: 1,
+    gameModerator: { mode: "automatic" },
     gameConfig: {},
   };
 }

@@ -24,6 +24,7 @@ function room(players: RoomPlayer[]): RoomState<undefined, { roleDeck: string[] 
     players,
     createdAt: 1,
     updatedAt: 1,
+    gameModerator: { mode: "automatic" },
     gameConfig: { roleDeck: [] },
   };
 }
@@ -67,6 +68,7 @@ describe("RoomCore", () => {
       }],
       createdAt: 1,
       updatedAt: 1,
+      gameModerator: { mode: "automatic" },
       gameConfig: { roleDeck: [] },
     };
     const core = new RoomCore(state, () => 2);

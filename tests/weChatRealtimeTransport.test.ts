@@ -29,7 +29,8 @@ function roomEnvelope(gameStarted = true) {
   return createRoomStateEnvelope("1234", {
     roomId: "1234",
     gameType: "werewolf",
-    viewer: { playerId: "p1", isHost: true },
+    viewer: { playerId: "p1", isHost: true, isGameModerator: false },
+    gameModerator: { mode: "automatic" },
     players: [{ id: "p1", name: "Host", seat: 1, isHost: true }],
     gameStarted,
   });

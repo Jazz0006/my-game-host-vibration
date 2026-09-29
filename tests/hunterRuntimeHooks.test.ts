@@ -42,8 +42,8 @@ function baseState(): GameState {
   };
 }
 
-const playerContext = (playerId: string) => ({ playerId, isHost: false, now: 0 });
-const hostContext = { isHost: true, now: 0 };
+const playerContext = (playerId: string) => ({ playerId, isModerator: false, now: 0 });
+const moderatorContext = { isModerator: true, now: 0 };
 
 describe("Hunter runtime hook migration", () => {
   it("routes a wolf-killed hunter through the registry-backed afterDeath hook", () => {
@@ -79,7 +79,7 @@ describe("Hunter runtime hook migration", () => {
 
     werewolfGameModule.handleCommand(
       state,
-      hostContext,
+      moderatorContext,
       { type: "closeDayVote" },
       { random: randomProvider() },
     );

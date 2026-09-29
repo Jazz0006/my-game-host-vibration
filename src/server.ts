@@ -4,6 +4,10 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server, type Socket } from "socket.io";
+import {
+  gameParticipantPlayers,
+  isHumanGameModerator,
+} from "./core/room/GameModerator.js";
 import { SessionTokenService } from "./core/session/SessionTokenService.js";
 import {
   emitActionAlertEffects,
@@ -28,7 +32,7 @@ import {
 } from "./games/werewolf/WerewolfLobbyPolicy.js";
 import { werewolfRoleCatalog } from "./games/werewolf/roles/registry.js";
 import {
-  runHostCommand,
+  runModeratorCommand,
   runHostRecoveryCommandIdempotent,
 } from "./runtime/node/werewolfCommandFacade.js";
 import { onlineActingPlayers } from "./runtime/node/hostRecovery.js";
@@ -119,14 +123,17 @@ function clearRemovedTestPrompt(room: Room, playerId: string): void {
 
 function roomView(room: Room, viewer: Player) {
   const prompt = room.activePrompt;
-  const gameView = roomGameView(room, viewer.isHost);
+  const participantCount = gameParticipantPlayers(room).length;
+  const isGameModerator = isHumanGameModerator(room.gameModerator, viewer.id);
+  const gameView = roomGameView(room, isGameModerator);
   return {
     roomId: room.id,
-    viewer: { playerId: viewer.id, isHost: viewer.isHost },
+    viewer: { playerId: viewer.id, isHost: viewer.isHost, isGameModerator },
+    gameModerator: { ...room.gameModerator },
     players: room.players.map(publicPlayer),
     defaultRoleDeck: !room.game
-      ? (isWerewolfPlayerCountSupported(room.players.length)
-          ? configFromPlayerCount(room.players.length).roleDeck
+      ? (isWerewolfPlayerCountSupported(participantCount)
+          ? configFromPlayerCount(participantCount).roleDeck
           : room.gameConfig.roleDeck)
       : undefined,
     roleCatalog: !room.game
@@ -142,8 +149,8 @@ function roomView(room: Room, viewer: Player) {
       : {
           phase: "lobby",
           canStart:
-            isWerewolfPlayerCountSupported(room.players.length) &&
-            room.players.every(player => player.connected),
+            isWerewolfPlayerCountSupported(participantCount) &&
+            gameParticipantPlayers(room).every(player => player.connected),
           minPlayers: WEREWOLF_MIN_PLAYERS,
           maxPlayers: WEREWOLF_MAX_PLAYERS,
           confirmedRoles: 0,
@@ -201,7 +208,7 @@ function afterNightAction(io: Server, room: Room): void {
   }
   if (game.phase === "night_complete") {
     emitNightCompleteEffects(io, room);
-    runHostCommand(room, { type: "startDayVote" });
+    runModeratorCommand(room, { type: "startDayVote" });
     broadcastRoom(io, room);
     emitActionAlertEffects(io, room, { resumed: false });
     return;
@@ -297,6 +304,7 @@ export function createGameServer() {
           players: [host],
           createdAt: now,
           updatedAt: now,
+          gameModerator: { mode: "automatic" },
           gameConfig: DEFAULT_GAME_CONFIG,
         };
         rooms.set(roomId, room);
@@ -326,7 +334,7 @@ export function createGameServer() {
         }
         if (!room) return ack({ ok: false, message: "房间不存在" });
         if (room.game) return ack({ ok: false, message: "游戏已经开始，不能再加入" });
-        if (room.players.length >= WEREWOLF_MAX_PLAYERS) {
+        if (gameParticipantPlayers(room).length >= WEREWOLF_MAX_PLAYERS) {
           return ack({
             ok: false,
             message: `房间最多${WEREWOLF_MAX_PLAYERS}人`,

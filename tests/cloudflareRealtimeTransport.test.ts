@@ -32,7 +32,8 @@ function roomProjection(gameStarted = false) {
   return {
     roomId: "1234",
     gameType: "werewolf",
-    viewer: { playerId: "p1", isHost: true },
+    viewer: { playerId: "p1", isHost: true, isGameModerator: false },
+    gameModerator: { mode: "automatic" },
     players: [
       { id: "p1", name: "Host", seat: 1, isHost: true },
       { id: "p2", name: "Player", seat: 2, isHost: false },

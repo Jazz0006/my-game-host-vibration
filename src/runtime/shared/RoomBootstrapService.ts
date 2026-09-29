@@ -67,6 +67,7 @@ export class RoomBootstrapService<TGameState, TGameConfig> {
       players: [player],
       createdAt: now,
       updatedAt: now,
+      gameModerator: { mode: "automatic" },
       gameConfig: this.options.createInitialGameConfig(),
     };
     const snapshot = createRoomSnapshot(room, { revision: 0 });

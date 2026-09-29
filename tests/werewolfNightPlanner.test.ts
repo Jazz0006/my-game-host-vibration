@@ -87,7 +87,7 @@ describe("WerewolfNightPlanner", () => {
     const module = new WerewolfGameModule();
     module.handleCommand(
       game,
-      { playerId: "p4", isHost: false, now: 1 },
+      { playerId: "p4", isModerator: false, now: 1 },
       { type: "submitSeerTarget", targetPlayerId: "p1", actionId: game.actionId },
       dependencies,
     );
@@ -115,13 +115,13 @@ describe("WerewolfNightPlanner", () => {
     for (const playerId of Object.keys(game.roles)) {
       module.handleCommand(
         game,
-        { playerId, isHost: false, now: 1 },
+        { playerId, isModerator: false, now: 1 },
         { type: "confirmRole", actionId: game.actionId },
         dependencies,
       );
     }
 
-    module.handleCommand(game, { isHost: true, now: 1 }, { type: "startNight" }, dependencies);
+    module.handleCommand(game, { isModerator: true, now: 1 }, { type: "startNight" }, dependencies);
     expect(game.phase).toBe("night_werewolf");
     expect(getActiveWerewolfInteraction(game)?.kind).toBe("wolf_kill");
 
@@ -129,7 +129,7 @@ describe("WerewolfNightPlanner", () => {
     if (!wolfId) throw new Error("test setup requires a werewolf");
     module.handleCommand(
       game,
-      { playerId: wolfId, isHost: false, now: 1 },
+      { playerId: wolfId, isModerator: false, now: 1 },
       { type: "submitWolfTarget", targetPlayerId: null, actionId: game.actionId },
       dependencies,
     );

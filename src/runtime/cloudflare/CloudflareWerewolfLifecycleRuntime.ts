@@ -1,6 +1,10 @@
 import type { CommandReceipt } from "../../core/command/IdempotentCommandLedger.js";
 import { RoomCommandRuntime } from "../../core/room/RoomCommandRuntime.js";
 import {
+  gameParticipantPlayers,
+  hasGameModeratorControl,
+} from "../../core/room/GameModerator.js";
+import {
   createRoomSnapshot,
   nextRoomRevision,
   restoreRoomSnapshot,
@@ -60,7 +64,7 @@ export type CloudflareWerewolfLifecycleDependencies = {
   environment?: WerewolfCommandEnvironment;
 };
 
-const HOST_SCOPE = "host";
+const MODERATOR_SCOPE = "game-moderator";
 
 function defaultEnvironment(): WerewolfCommandEnvironment {
   return {
@@ -94,7 +98,9 @@ export class CloudflareWerewolfLifecycleRuntime {
 
     const member = snapshot.membership.find(item => item.id === authenticatedPlayerId);
     if (!member) throw new Error("authenticated player is not a room member");
-    if (!member.isHost) throw new Error("host command requires host authority");
+    if (!hasGameModeratorControl(snapshot.gameModerator, member)) {
+      throw new Error("game command requires moderator authority");
+    }
 
     const restored = restoreRoomSnapshot(snapshot);
     const room: LifecycleRoom = {
@@ -106,7 +112,7 @@ export class CloudflareWerewolfLifecycleRuntime {
 
     const execution = await this.commands.execute(
       room,
-      HOST_SCOPE,
+      MODERATOR_SCOPE,
       envelope.commandId,
       () => this.mutate(room, envelope),
       { resetReceiptHistory: true },
@@ -147,24 +153,25 @@ export class CloudflareWerewolfLifecycleRuntime {
     room: LifecycleRoom,
     envelope: WerewolfLifecycleClientCommandEnvelope,
   ): LifecycleOutcome {
+    const participants = gameParticipantPlayers(room);
     if (envelope.type === "werewolf.startGame") {
       if (room.game) throw new GameRuleError("游戏已经开始");
-      if (!isWerewolfPlayerCountSupported(room.players.length)) {
+      if (!isWerewolfPlayerCountSupported(participants.length)) {
         throw new GameRuleError(
           `需要${WEREWOLF_MIN_PLAYERS}到${WEREWOLF_MAX_PLAYERS}名玩家才能开始`,
         );
       }
-      if (room.players.some(player => !this.dependencies.isPlayerConnected(player.id))) {
+      if (participants.some(player => !this.dependencies.isPlayerConnected(player.id))) {
         throw new GameRuleError("所有玩家在线后才能开始");
       }
 
       const gameConfig = envelope.payload.roleDeck
-        ? configFromRoleDeck(room.players.length, envelope.payload.roleDeck)
-        : configFromPlayerCount(room.players.length);
+        ? configFromRoleDeck(participants.length, envelope.payload.roleDeck)
+        : configFromPlayerCount(participants.length);
       room.gameConfig = gameConfig;
       room.game = werewolfGameModule.createGame(
         {
-          playerIds: room.players.map(player => player.id),
+          playerIds: participants.map(player => player.id),
           config: gameConfig,
         },
         { random: this.environment.random },
@@ -174,13 +181,13 @@ export class CloudflareWerewolfLifecycleRuntime {
     }
 
     if (!room.game) throw new GameRuleError("游戏尚未开始");
-    const gameConfig = room.gameConfig.playerCount === room.players.length
+    const gameConfig = room.gameConfig.playerCount === participants.length
       ? room.gameConfig
-      : configFromPlayerCount(room.players.length);
+      : configFromPlayerCount(participants.length);
     room.gameConfig = gameConfig;
     room.game = werewolfGameModule.createGame(
       {
-        playerIds: room.players.map(player => player.id),
+        playerIds: participants.map(player => player.id),
         config: gameConfig,
       },
       { random: this.environment.random },

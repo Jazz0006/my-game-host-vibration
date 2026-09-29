@@ -40,6 +40,7 @@ function room(): RuntimeRoom {
     gameType: "werewolf",
     createdAt: 1,
     updatedAt: 1,
+    gameModerator: { mode: "automatic" },
     gameConfig: config,
     game: game(),
     players: [

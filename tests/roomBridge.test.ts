@@ -62,6 +62,7 @@ function runtimeRoom(): RuntimeRoom {
     ],
     createdAt: 1,
     updatedAt: 1,
+    gameModerator: { mode: "automatic" },
     gameConfig: DEFAULT_GAME_CONFIG,
   };
 }

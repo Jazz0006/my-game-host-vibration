@@ -114,6 +114,7 @@ function snapshotWithPlayer(resumeTokenHash: string) {
       ],
       createdAt: 10,
       updatedAt: 20,
+      gameModerator: { mode: "automatic" },
       gameConfig: { playerCount: 5, roleDeck: ["werewolf"] },
     },
     { revision: 1 },

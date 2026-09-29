@@ -16,8 +16,8 @@ export function executeCloudflareClientProtocolCommand(
   envelope: WerewolfClientCommandEnvelope,
 ) {
   const mapped = mapWerewolfClientCommand(envelope);
-  return mapped.authority === "host"
-    ? runtime.executeHost(authenticatedPlayerId, mapped.commandId, mapped.command)
+  return mapped.authority === "moderator"
+    ? runtime.executeModerator(authenticatedPlayerId, mapped.commandId, mapped.command)
     : runtime.executePlayer(authenticatedPlayerId, mapped.commandId, mapped.command);
 }
 

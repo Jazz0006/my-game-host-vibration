@@ -17,6 +17,7 @@ describe("E3.6 public client room projection", () => {
         }],
         createdAt: 1,
         updatedAt: 2,
+        gameModerator: { mode: "automatic" },
         gameConfig: { playerCount: 5 },
       },
       "p1",
@@ -25,7 +26,8 @@ describe("E3.6 public client room projection", () => {
     expect(projection).toEqual({
       roomId: "1234",
       gameType: "werewolf",
-      viewer: { playerId: "p1", isHost: true },
+      viewer: { playerId: "p1", isHost: true, isGameModerator: false },
+      gameModerator: { mode: "automatic" },
       players: [{ id: "p1", name: "Host", seat: 1, isHost: true }],
       gameStarted: false,
     });
@@ -41,6 +43,7 @@ describe("E3.6 public client room projection", () => {
         players: [],
         createdAt: 1,
         updatedAt: 2,
+        gameModerator: { mode: "automatic" },
         gameConfig: {},
       },
       "missing",

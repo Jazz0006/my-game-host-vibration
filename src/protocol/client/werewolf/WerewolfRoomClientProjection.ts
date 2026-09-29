@@ -1,6 +1,6 @@
 import type { Role } from "../../../domain/game.js";
 import type {
-  WerewolfHostView,
+  WerewolfModeratorView,
   WerewolfPublicView,
 } from "../../../games/werewolf/WerewolfGameModule.js";
 import type {
@@ -23,7 +23,7 @@ export type WerewolfLobbySetupProjection = {
   defaultRoleDeck: Role[];
 };
 
-export type WerewolfHostRecoveryProjection = {
+export type WerewolfOwnerRecoveryProjection = {
   hasPendingInteraction: boolean;
   waitingCount: number;
   onlineWaitingCount: number;
@@ -36,11 +36,10 @@ export type WerewolfRoomGameProjection =
       minPlayers: number;
       maxPlayers: number;
     })
-  | (WerewolfHostView & {
+  | (WerewolfModeratorView & {
       canStart: false;
       minPlayers: number;
       maxPlayers: number;
-      recovery: WerewolfHostRecoveryProjection;
     });
 
 /**
@@ -54,4 +53,5 @@ export type WerewolfClientRoomProjection = Omit<
   players: WerewolfConnectedRoomPlayer[];
   lobbySetup?: WerewolfLobbySetupProjection;
   game?: WerewolfRoomGameProjection;
+  recovery?: WerewolfOwnerRecoveryProjection;
 };

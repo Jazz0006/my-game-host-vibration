@@ -68,7 +68,7 @@ describe("WerewolfGameModule", () => {
 
     const result = module.handleCommand(
       game,
-      { playerId: "p1", isHost: false, now: 123 },
+      { playerId: "p1", isModerator: false, now: 123 },
       { type: "submitWolfTarget", targetPlayerId: "p4", actionId: "action-1" },
       dependencies,
     );
@@ -89,7 +89,7 @@ describe("WerewolfGameModule", () => {
 
     const result = module.handleCommand(
       game,
-      { playerId: "p1", isHost: false, now: 123 },
+      { playerId: "p1", isModerator: false, now: 123 },
       { type: "submitVote", targetId: "p4", actionId: "vote-1" },
       dependencies,
     );
@@ -134,11 +134,11 @@ describe("WerewolfGameModule", () => {
 
     const playerView = module.getPlayerView(game, "p3", viewContext);
     const publicView = module.getPublicView(game, viewContext);
-    const hostView = module.getHostView(game, viewContext);
+    const moderatorView = module.getModeratorView(game, viewContext);
 
     expect(playerView).not.toHaveProperty("voteTally");
     expect(publicView).not.toHaveProperty("voteTally");
-    expect(hostView.voteTally).toEqual({ p4: 2 });
+    expect(moderatorView.voteTally).toEqual({ p4: 2 });
     expect(publicView).toMatchObject({
       phase: "day_vote",
       aliveCount: 5,

@@ -53,6 +53,7 @@ describe("C2 room snapshot contract", () => {
           resumeTokenHash: "a".repeat(64),
         },
       ],
+      gameModerator: { mode: "automatic" },
       gameConfig: { playerCount: 5, roleDeck: ["werewolf"] },
       game: {
         phase: "night_werewolf",
@@ -110,6 +111,7 @@ describe("C2 room snapshot contract", () => {
       ],
       createdAt: 1000,
       updatedAt: 2000,
+      gameModerator: { mode: "automatic" },
       gameConfig: {
         playerCount: 5,
         roleDeck: ["werewolf", "seer", "witch", "villager", "villager"],
@@ -170,6 +172,7 @@ describe("C2 room snapshot contract", () => {
       players: snapshot.membership,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
+      gameModerator: room.gameModerator,
       gameConfig: room.gameConfig,
       game: room.game,
     });
@@ -197,6 +200,7 @@ describe("C2 room snapshot contract", () => {
           resumeTokenHash: "b".repeat(64),
         },
       ],
+      gameModerator: { mode: "automatic" },
       gameConfig: {},
     };
 

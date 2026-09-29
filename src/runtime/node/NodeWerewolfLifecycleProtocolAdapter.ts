@@ -1,4 +1,8 @@
 import {
+  gameParticipantPlayers,
+  hasGameModeratorControl,
+} from "../../core/room/GameModerator.js";
+import {
   configFromPlayerCount,
   configFromRoleDeck,
   GameRuleError,
@@ -13,7 +17,7 @@ import {
   createWerewolfGame,
   type RuntimeRoom,
 } from "./roomBridge.js";
-import { runHostLifecycleMutationIdempotent } from "./werewolfCommandFacade.js";
+import { runModeratorLifecycleMutationIdempotent } from "./werewolfCommandFacade.js";
 
 export function executeNodeWerewolfLifecycleCommand(
   room: RuntimeRoom,
@@ -22,35 +26,38 @@ export function executeNodeWerewolfLifecycleCommand(
 ) {
   const member = room.players.find(player => player.id === authenticatedPlayerId);
   if (!member) throw new Error("authenticated player is not a room member");
-  if (!member.isHost) throw new Error("host command requires host authority");
+  if (!hasGameModeratorControl(room.gameModerator, member)) {
+    throw new Error("game command requires moderator authority");
+  }
+  const participants = gameParticipantPlayers(room);
 
   if (envelope.type === "werewolf.startGame") {
-    return runHostLifecycleMutationIdempotent(room, envelope.commandId, () => {
+    return runModeratorLifecycleMutationIdempotent(room, envelope.commandId, () => {
       if (room.game) throw new GameRuleError("游戏已经开始");
-      if (!isWerewolfPlayerCountSupported(room.players.length)) {
+      if (!isWerewolfPlayerCountSupported(participants.length)) {
         throw new GameRuleError(
           `需要${WEREWOLF_MIN_PLAYERS}到${WEREWOLF_MAX_PLAYERS}名玩家才能开始`,
         );
       }
-      if (room.players.some(player => !player.connected)) {
+      if (participants.some(player => !player.connected)) {
         throw new GameRuleError("所有玩家在线后才能开始");
       }
 
       const gameConfig = envelope.payload.roleDeck
-        ? configFromRoleDeck(room.players.length, envelope.payload.roleDeck)
-        : configFromPlayerCount(room.players.length);
+        ? configFromRoleDeck(participants.length, envelope.payload.roleDeck)
+        : configFromPlayerCount(participants.length);
       createWerewolfGame(room, gameConfig);
       delete room.activePrompt;
       return { kind: "broadcast" };
     });
   }
 
-  return runHostLifecycleMutationIdempotent(room, envelope.commandId, () => {
+  return runModeratorLifecycleMutationIdempotent(room, envelope.commandId, () => {
     if (!room.game) throw new GameRuleError("游戏尚未开始");
     const gameConfig =
-      room.gameConfig.playerCount === room.players.length
+      room.gameConfig.playerCount === participants.length
         ? room.gameConfig
-        : configFromPlayerCount(room.players.length);
+        : configFromPlayerCount(participants.length);
     createWerewolfGame(room, gameConfig);
     delete room.activePrompt;
     return { kind: "broadcast" };

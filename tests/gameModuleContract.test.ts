@@ -31,11 +31,11 @@ const players: GameViewContext["players"] = [
 const viewContext: GameViewContext = { players };
 
 function playerContext(playerId: string): GameCommandContext {
-  return { playerId, isHost: false, now: 1_000 };
+  return { playerId, isModerator: false, now: 1_000 };
 }
 
 function hostContext(): GameCommandContext {
-  return { isHost: true, now: 1_000 };
+  return { isModerator: true, now: 1_000 };
 }
 
 function createFivePlayerGame(module: WerewolfGameModule, dependencies: GameModuleDependencies) {
@@ -146,8 +146,8 @@ describe("GameModule contract", () => {
       module.handleCommand(game, playerContext(voterId), command, dependencies);
     }
 
-    const hostView = module.getHostView(game, viewContext);
-    expect(hostView).toMatchObject({
+    const moderatorView = module.getModeratorView(game, viewContext);
+    expect(moderatorView).toMatchObject({
       phase: "day_vote",
       aliveCount: 4,
       votesCast: 4,
