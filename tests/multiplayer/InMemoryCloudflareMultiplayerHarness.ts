@@ -69,6 +69,7 @@ class RoomRuntime {
   readonly storage = new MemoryStorage();
   readonly hibernation = new HibernationState();
   readonly object: GameRoomDurableObject;
+  private httpTail: Promise<void> = Promise.resolve();
 
   constructor(roomCode: string) {
     this.object = new GameRoomDurableObject({
@@ -77,6 +78,21 @@ class RoomRuntime {
       acceptWebSocket: this.hibernation.acceptWebSocket.bind(this.hibernation),
       getWebSockets: this.hibernation.getWebSockets.bind(this.hibernation),
     });
+  }
+
+  /**
+   * Directly invoking one Durable Object instance from Vitest does not provide
+   * the platform's request scheduling/storage gates. Queue HTTP events here so
+   * rapid Promise.all joins exercise production bootstrap semantics without
+   * introducing an in-memory-only lost-update race.
+   */
+  fetch(request: Request): Promise<Response> {
+    const response = this.httpTail.then(() => this.object.fetch(request));
+    this.httpTail = response.then(
+      () => undefined,
+      () => undefined,
+    );
+    return response;
   }
 }
 
@@ -227,7 +243,7 @@ export class InMemoryCloudflareMultiplayerHarness {
 
   private readonly namespace: DurableObjectNamespaceLike = {
     getByName: (roomCode: string): DurableObjectStubLike => ({
-      fetch: request => this.room(roomCode).object.fetch(request),
+      fetch: request => this.room(roomCode).fetch(request),
     }),
   };
 

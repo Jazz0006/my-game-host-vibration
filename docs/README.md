@@ -38,6 +38,8 @@ B0 BotC / Trouble Brewing production entry
   - platform-level multiplayer test strategy;
   - virtual `TestRoomClient` / multi-client convergence / reconnect / idempotency / privacy plan;
   - two-real-device + N-virtual-player smoke route and milestone full-table acceptance;
+  - T0/T1/T2 complete: seam audit, shared TestRoomClient foundation and 10-client convergence baseline;
+  - parallel NEXT: T3 reconnect / deterministic fault injection;
   - this route is parallel to B0B and does **not** replace the V5 mainline NEXT.
 - `docs/T0_MULTIPLAYER_HARNESS_SEAM_AUDIT_2026-09-30.md`
   - T0 owner/seam audit and existing-test map;
