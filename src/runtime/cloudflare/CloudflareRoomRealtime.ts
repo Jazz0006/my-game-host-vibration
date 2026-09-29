@@ -45,14 +45,20 @@ function parseAttachment(value: unknown): RoomWebSocketAttachment | undefined {
 export class CloudflareRoomRealtime {
   constructor(private readonly state: DurableObjectHibernationStateLike) {}
 
-  acceptPlayerSocket(webSocket: HibernationWebSocketLike, playerId: string): void {
+  acceptPlayerSocket(
+    webSocket: HibernationWebSocketLike,
+    playerId: string,
+    replacementMessage?: string | ArrayBuffer,
+  ): void {
     const tag = playerWebSocketTag(playerId);
 
     // C1 contract: a newly authenticated connection replaces any previous
-    // connection for the same stable player identity.
+    // connection for the same stable player identity. The composition root
+    // supplies the stable client:event wire frame so this routing adapter does
+    // not own protocol formatting.
     for (const existing of this.state.getWebSockets(tag)) {
       if (existing === webSocket || !isOpen(existing)) continue;
-      existing.send(JSON.stringify({ type: "session:replaced" }));
+      if (replacementMessage !== undefined) existing.send(replacementMessage);
       existing.close(SESSION_REPLACED_CLOSE_CODE, "session replaced");
     }
 
@@ -88,5 +94,29 @@ export class CloudflareRoomRealtime {
       delivered += 1;
     }
     return delivered;
+  }
+
+  closePlayerSockets(
+    playerId: string,
+    code = 4004,
+    reason = "room membership ended",
+  ): number {
+    let closed = 0;
+    for (const webSocket of this.state.getWebSockets(playerWebSocketTag(playerId))) {
+      if (!isOpen(webSocket)) continue;
+      webSocket.close(code, reason);
+      closed += 1;
+    }
+    return closed;
+  }
+
+  closeAllSockets(code = 4005, reason = "room closed"): number {
+    let closed = 0;
+    for (const webSocket of this.state.getWebSockets()) {
+      if (!isOpen(webSocket)) continue;
+      webSocket.close(code, reason);
+      closed += 1;
+    }
+    return closed;
   }
 }

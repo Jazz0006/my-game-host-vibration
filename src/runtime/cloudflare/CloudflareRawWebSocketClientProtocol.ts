@@ -5,6 +5,10 @@ import type { WerewolfInteraction } from "../../games/werewolf/WerewolfNightPlan
 import { createClientActionAlertEffectEvent } from "../../protocol/client/ClientEffects.js";
 import type { ClientCommandEnvelope } from "../../protocol/client/ClientProtocol.js";
 import {
+  isRoomManagementClientCommand,
+  parseRoomManagementClientCommandEnvelope,
+} from "../../protocol/client/ClientRoomManagementProtocol.js";
+import {
   createClientRawWebSocketEventFrame,
   createClientRawWebSocketFailureResponse,
   createClientRawWebSocketSuccessResponse,
@@ -24,6 +28,11 @@ import {
   executeCloudflareClientProtocolCommand,
 } from "./CloudflareClientProtocolAdapter.js";
 import { pushCloudflareAuthoritativeStates } from "./CloudflareAuthoritativeStateDelivery.js";
+import {
+  emitCloudflareRoomClosed,
+  emitCloudflareRoomRemoved,
+} from "./CloudflareClientEventDelivery.js";
+import { CloudflareRoomManagementRuntime } from "./CloudflareRoomManagementRuntime.js";
 import {
   CloudflareRoomRealtime,
   type HibernationWebSocketLike,
@@ -58,6 +67,7 @@ export class CloudflareRawWebSocketClientProtocol {
   private readonly snapshots: CloudflareRoomSnapshotRepository<ClientSnapshot>;
   private readonly commands: CloudflareWerewolfCommandRuntime;
   private readonly lifecycle: CloudflareWerewolfLifecycleRuntime;
+  private readonly roomManagement: CloudflareRoomManagementRuntime;
 
   constructor(
     storage: DurableObjectStorageLike,
@@ -66,6 +76,9 @@ export class CloudflareRawWebSocketClientProtocol {
     this.snapshots = new CloudflareRoomSnapshotRepository<ClientSnapshot>(storage);
     this.commands = new CloudflareWerewolfCommandRuntime(storage);
     this.lifecycle = new CloudflareWerewolfLifecycleRuntime(storage, {
+      isPlayerConnected: playerId => realtime.isPlayerConnected(playerId),
+    });
+    this.roomManagement = new CloudflareRoomManagementRuntime(storage, {
       isPlayerConnected: playerId => realtime.isPlayerConnected(playerId),
     });
   }
@@ -126,6 +139,16 @@ export class CloudflareRawWebSocketClientProtocol {
     requestId: string,
     envelope: ClientCommandEnvelope,
   ): Promise<void> {
+    if (isRoomManagementClientCommand(envelope)) {
+      await this.handleRoomManagement(
+        webSocket,
+        playerId,
+        requestId,
+        envelope,
+      );
+      return;
+    }
+
     if (isWerewolfLifecycleClientCommand(envelope)) {
       try {
         const execution = await this.lifecycle.execute(
@@ -189,6 +212,97 @@ export class CloudflareRawWebSocketClientProtocol {
         requestId,
         "command_failed",
         commandFailureMessage(error),
+      );
+    }
+  }
+
+  private async handleRoomManagement(
+    webSocket: HibernationWebSocketLike,
+    playerId: string,
+    requestId: string,
+    envelope: ClientCommandEnvelope,
+  ): Promise<void> {
+    let parsed;
+    try {
+      parsed = parseRoomManagementClientCommandEnvelope(envelope);
+    } catch (error) {
+      this.sendFailure(
+        webSocket,
+        requestId,
+        "invalid_command",
+        error instanceof Error ? error.message : "命令格式无效",
+      );
+      return;
+    }
+
+    try {
+      const execution = await this.roomManagement.execute(playerId, parsed);
+      webSocket.send(encodeClientRawWebSocketFrame(
+        createClientRawWebSocketSuccessResponse(requestId, {
+          revision: execution.revision,
+          replayed: execution.replayed,
+          outcome: execution.outcome,
+        }),
+      ));
+
+      if (execution.replayed) return;
+
+      switch (execution.outcome.kind) {
+        case "removedPlayer":
+          emitCloudflareRoomRemoved(
+            this.realtime,
+            execution.snapshot?.metadata.roomId ?? "",
+            execution.outcome.playerId,
+          );
+          this.realtime.closePlayerSockets(
+            execution.outcome.playerId,
+            4004,
+            "removed from room",
+          );
+          break;
+
+        case "leftAndTransferred":
+          this.realtime.closePlayerSockets(
+            execution.outcome.leavingPlayerId,
+            1000,
+            "left room",
+          );
+          break;
+
+        case "leftRoom":
+          this.realtime.closePlayerSockets(
+            execution.outcome.leavingPlayerId,
+            1000,
+            "left room",
+          );
+          break;
+
+        case "closedRoom":
+          emitCloudflareRoomClosed(
+            this.realtime,
+            execution.outcome.roomId,
+          );
+          this.realtime.closeAllSockets(4005, "room closed");
+          return;
+
+        default:
+          break;
+      }
+
+      if (execution.snapshot) {
+        pushCloudflareAuthoritativeStates(
+          this.realtime,
+          execution.snapshot,
+        );
+      }
+    } catch (error) {
+      this.sendFailure(
+        webSocket,
+        requestId,
+        "command_failed",
+        error instanceof Error && error.message
+          ? error.message
+          : "操作失败，请重试",
       );
     }
   }
