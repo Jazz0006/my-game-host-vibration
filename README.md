@@ -150,7 +150,7 @@ Simulator Lab V2 默认建立 5–15 人 BotC 虚拟桌。每名虚拟玩家都�
 ## 长期产品边界
 
 - 狼人杀已验证当前平台基础；W3D3 与 MG0A–MG0D 已完成；BotC 已具备 B0A–B0B3 与 B0C1–B0C3A 后端基础，当前优先级转为 Simulator-first playable vertical slice，而不是继续让推荐算法深度领先于真实客户端可玩性；
-- 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；PV-0 已完成 shared Lobby authoritative interactions，PV-1 已完成最小 Trouble Brewing automatic setup + `botc.startGame` production path，当前 NEXT 为 PV-2 role reveal / confirm-role vertical slice；
+- 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；PV-0 已完成 shared Lobby authoritative interactions，PV-1 已完成最小 Trouble Brewing automatic setup + `botc.startGame` production path，PV-2 已完成 private role reveal + `botc.confirmRole` production path，当前 NEXT 为 PV-3 first-night playable UI；
 - 讨论、发言和社交推理仍在线下完成；
 - 断线、熄屏、切 App 和网络切换视为正常生命周期；
 - Room Owner 是房间管理/Recovery Controller，不等同于 Game Moderator/Storyteller；

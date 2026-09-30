@@ -160,6 +160,16 @@ describe("B0A BotC room/client projections", () => {
     });
     expect(JSON.stringify(drunkPlayer)).not.toContain('"actualRoleId":"drunk"');
 
+    const washerwomanPlayer = createGamePlayerStateEnvelope(snapshot, "p1");
+    expect(washerwomanPlayer).toMatchObject({
+      playerId: "p1",
+      payload: {
+        roleId: "washerwoman",
+      },
+    });
+    expect(JSON.stringify(washerwomanPlayer)).not.toContain('"roleId":"empath"');
+    expect(JSON.stringify(drunkPlayer)).not.toContain('"roleId":"washerwoman"');
+
     const ownerRoom = createGameRoomStateEnvelope(
       snapshot,
       "p1",

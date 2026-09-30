@@ -13,6 +13,7 @@ import {
 import type { RoomPlayer, RoomState } from "../../core/room/types.js";
 import {
   botcGameModule,
+  type BotcCommandOutcome,
   type BotcGameConfig,
   type BotcGameState,
 } from "../../games/botc/BotcGameModule.js";
@@ -32,7 +33,7 @@ import {
 import { CloudflareRandomProvider } from "./CloudflareRandomProvider.js";
 import type { RandomProvider } from "../../core/random/RandomProvider.js";
 
-type RoomReceipt = CommandReceipt<unknown>;
+type RoomReceipt = CommandReceipt<BotcRuntimeOutcome>;
 
 type BotcSnapshot = RoomSnapshot<
   BotcGameState,
@@ -55,8 +56,10 @@ export type CloudflareBotcCommandEnvironment = {
   now(): number;
 };
 
+type BotcRuntimeOutcome = { kind: "gameStarted" } | BotcCommandOutcome;
+
 export type CloudflareBotcCommandExecution = {
-  outcome: { kind: "gameStarted" };
+  outcome: BotcRuntimeOutcome;
   replayed: boolean;
   revision: number;
   snapshot: BotcSnapshot;
@@ -69,6 +72,10 @@ export type CloudflareBotcCommandDependencies = {
 
 const MODERATOR_SCOPE = "game-moderator";
 
+function playerScope(playerId: string): string {
+  return `player:${playerId}`;
+}
+
 function defaultEnvironment(): CloudflareBotcCommandEnvironment {
   return {
     random: new CloudflareRandomProvider(),
@@ -79,7 +86,7 @@ function defaultEnvironment(): CloudflareBotcCommandEnvironment {
 export class CloudflareBotcCommandRuntime {
   private readonly snapshots: CloudflareRoomSnapshotRepository<BotcSnapshot>;
   private readonly commands =
-    new RoomCommandRuntime<unknown, CloudflareBotcRoom>();
+    new RoomCommandRuntime<BotcRuntimeOutcome, CloudflareBotcRoom>();
   private readonly environment: CloudflareBotcCommandEnvironment;
 
   constructor(
@@ -104,9 +111,6 @@ export class CloudflareBotcCommandRuntime {
       item => item.id === authenticatedPlayerId,
     );
     if (!member) throw new Error("authenticated player is not a room member");
-    if (!hasGameModeratorControl(snapshot.gameModerator, member)) {
-      throw new Error("game command requires moderator authority");
-    }
 
     const restored = restoreRoomSnapshot(snapshot);
     const room: CloudflareBotcRoom = {
@@ -120,17 +124,25 @@ export class CloudflareBotcCommandRuntime {
           }),
     };
 
+    const isStart = envelope.type === "botc.startGame";
+    if (isStart && !hasGameModeratorControl(snapshot.gameModerator, member)) {
+      throw new Error("game command requires moderator authority");
+    }
+
+    const mutation: () => BotcRuntimeOutcome = isStart
+      ? () => this.startGame(room)
+      : () => this.confirmRole(room, authenticatedPlayerId);
     const execution = await this.commands.execute(
       room,
-      MODERATOR_SCOPE,
+      isStart ? MODERATOR_SCOPE : playerScope(authenticatedPlayerId),
       envelope.commandId,
-      () => this.startGame(room),
-      { resetReceiptHistory: true },
+      mutation,
+      { resetReceiptHistory: isStart },
     );
 
     if (execution.replayed) {
       return {
-        outcome: execution.outcome as { kind: "gameStarted" },
+        outcome: execution.outcome,
         replayed: true,
         revision: snapshot.revision,
         snapshot,
@@ -150,7 +162,7 @@ export class CloudflareBotcCommandRuntime {
 
     await this.snapshots.save(nextSnapshot);
     return {
-      outcome: execution.outcome as { kind: "gameStarted" },
+      outcome: execution.outcome,
       replayed: false,
       revision,
       snapshot: nextSnapshot,
@@ -194,5 +206,30 @@ export class CloudflareBotcCommandRuntime {
     room.updatedAt = this.environment.now();
 
     return { kind: "gameStarted" };
+  }
+
+  private confirmRole(
+    room: CloudflareBotcRoom,
+    playerId: string,
+  ): BotcCommandOutcome {
+    if (!room.game) throw new Error("BotC game has not started");
+
+    const now = this.environment.now();
+    const result = botcGameModule.handleCommand(
+      room.game,
+      {
+        playerId,
+        isModerator: false,
+        now,
+      },
+      { type: "confirmRole" },
+      { random: this.environment.random },
+    );
+    if (!result.outcome) {
+      throw new Error("BotC confirmRole produced no outcome");
+    }
+    room.game = result.state;
+    room.updatedAt = now;
+    return result.outcome;
   }
 }
