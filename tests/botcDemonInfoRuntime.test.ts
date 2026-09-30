@@ -197,7 +197,20 @@ describe("B0C2 Demon Info recommendation policy and runtime delivery", () => {
     );
 
     // 7+ first night begins with minion_info.
+    const minionView = module.getPlayerView(game, "p6", viewContext);
+    expect(minionView).toMatchObject({
+      mode: "night_wake",
+      nightStep: {
+        id: "minion_info",
+        kind: "system_info",
+      },
+      minionInfo: {
+        demonPlayerId: "p7",
+        fellowMinionPlayerIds: [],
+      },
+    });
     expect(module.getPlayerView(game, "p7", viewContext).demonInfo).toBeUndefined();
+    expect(module.getPlayerView(game, "p7", viewContext).minionInfo).toBeUndefined();
 
     module.handleCommand(
       game,
@@ -205,6 +218,8 @@ describe("B0C2 Demon Info recommendation policy and runtime delivery", () => {
       { type: "completeNightStep" },
       deps,
     );
+
+    expect(module.getPlayerView(game, "p6", viewContext).minionInfo).toBeUndefined();
 
     const demonView = module.getPlayerView(game, "p7", viewContext);
     expect(demonView).toMatchObject({

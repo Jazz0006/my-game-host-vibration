@@ -133,6 +133,12 @@ describe("MG0D WeChat game-specific product shells", () => {
     expect(game).not.toContain("/domain/");
     expect(game).not.toContain("/games/");
     expect(gameMarkup).toContain("我知道自己的身份了");
+    expect(gameMarkup).toContain("开始首夜");
+    expect(gameMarkup).toContain("完成当前夜间步骤");
+    expect(gameMarkup).toContain("请睁眼");
+    expect(gameMarkup).toContain("请闭眼等待");
+    expect(gameMarkup).toContain("MINION INFO");
+    expect(gameMarkup).toContain("DEMON INFO");
     expect(gameMarkup).toContain("authoritative PlayerView");
 
     const settings = text("miniprogram/pages/settings.js");

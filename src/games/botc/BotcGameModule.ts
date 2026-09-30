@@ -120,6 +120,11 @@ export type BotcPlayerNightStepView = {
   roleId?: TroubleBrewingRoleId;
 };
 
+export type BotcMinionInfoView = {
+  demonPlayerId: string;
+  fellowMinionPlayerIds: string[];
+};
+
 export type BotcDemonInfoView = {
   minionPlayerIds: string[];
   bluffRoles: Array<{
@@ -138,6 +143,7 @@ export type BotcPlayerView = {
   roleCategory?: BotcRoleCategory;
   roleConfirmed?: boolean;
   nightStep?: BotcPlayerNightStepView;
+  minionInfo?: BotcMinionInfoView;
   demonInfo?: BotcDemonInfoView;
 };
 
@@ -210,6 +216,20 @@ function ensureAutomaticDemonBluffs(
     dependencies.random,
   );
   commitDemonBluffs(state, recommendation.roleIds, "baseline_v1");
+}
+
+function minionInfoView(
+  state: BotcGameState,
+  playerId: string,
+): BotcMinionInfoView | undefined {
+  const facts = demonInfoFacts(state);
+  if (!facts.minionPlayerIds.includes(playerId)) return undefined;
+  return {
+    demonPlayerId: facts.demonPlayerId,
+    fellowMinionPlayerIds: facts.minionPlayerIds.filter(
+      minionPlayerId => minionPlayerId !== playerId,
+    ),
+  };
 }
 
 function demonInfoView(state: BotcGameState): BotcDemonInfoView | undefined {
@@ -574,6 +594,10 @@ export class BotcGameModule implements GameModule<
     if (state.phase === "first_night" || state.phase === "other_night") {
       const step = currentNightStep(state);
       if (step?.actorPlayerIds.includes(playerId)) {
+        const activeMinionInfo =
+          step.id === "minion_info"
+            ? minionInfoView(state, playerId)
+            : undefined;
         const activeDemonInfo =
           step.id === "demon_info" &&
           state.demonInfo?.demonPlayerId === playerId
@@ -583,6 +607,7 @@ export class BotcGameModule implements GameModule<
           ...base,
           mode: "night_wake",
           nightStep: playerNightStepView(step),
+          ...(activeMinionInfo ? { minionInfo: activeMinionInfo } : {}),
           ...(activeDemonInfo ? { demonInfo: activeDemonInfo } : {}),
         };
       }

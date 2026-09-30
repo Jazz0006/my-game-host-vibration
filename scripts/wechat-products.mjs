@@ -17,6 +17,8 @@ export const WECHAT_PRODUCTS = [
     projectName: "junjun-boardgame-botc",
     startCommand: "botc.startGame",
     confirmRoleCommand: "botc.confirmRole",
+    beginFirstNightCommand: "botc.beginFirstNight",
+    completeNightStepCommand: "botc.completeNightStep",
     gamePage: "/pages/game",
   },
 ];

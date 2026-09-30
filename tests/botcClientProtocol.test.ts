@@ -40,6 +40,26 @@ describe("PV-1/PV-2 BotC client protocol", () => {
     });
   });
 
+  it.each([
+    "botc.beginFirstNight",
+    "botc.completeNightStep",
+  ] as const)("accepts moderator night-orchestration command %s", type => {
+    const envelope = createClientCommandEnvelope(
+      type,
+      {},
+      `night-${type}`,
+    );
+
+    expect(isBotcClientCommand(envelope)).toBe(true);
+    expect(parseBotcClientCommandEnvelope(envelope)).toEqual({
+      protocolVersion: 1,
+      kind: "command",
+      commandId: `night-${type}`,
+      type,
+      payload: {},
+    });
+  });
+
   it("rejects malformed or non-BotC command envelopes", () => {
     expect(() => parseBotcClientCommandEnvelope({
       protocolVersion: 1,
