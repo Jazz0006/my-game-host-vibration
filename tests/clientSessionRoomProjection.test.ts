@@ -67,8 +67,8 @@ function roomProjection(gameStarted: boolean): ClientRoomProjection {
     viewer: { playerId: "p1", isHost: true, isGameModerator: false },
     gameModerator: { mode: "automatic" },
     players: [
-      { id: "p1", name: "Host", seat: 1, isHost: true },
-      { id: "p2", name: "Player 2", seat: 2, isHost: false },
+      { id: "p1", name: "Host", seat: 1, isHost: true, ready: false },
+      { id: "p2", name: "Player 2", seat: 2, isHost: false, ready: false },
     ],
     gameStarted,
   };

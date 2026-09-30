@@ -30,22 +30,75 @@
   border-bottom: 4rpx solid #254b34;
 }
 
+.room-meta {
+  margin-bottom: 16rpx;
+  color: #7b857f;
+  font-size: 21rpx;
+}
+
 .section {
-  padding: 28rpx 24rpx;
   border-radius: 24rpx;
   background: #ffffff;
+  overflow: hidden;
 }
 
 .section-title {
+  padding: 24rpx 24rpx 16rpx;
   font-size: 28rpx;
   font-weight: 700;
 }
 
-.section-copy {
-  margin-top: 14rpx;
-  color: #6f7972;
-  font-size: 22rpx;
-  line-height: 1.65;
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  padding: 20rpx 24rpx;
+  border-top: 1rpx solid #edf0ed;
+}
+
+.member-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.member-name {
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.owner-label {
+  margin-left: 10rpx;
+  padding: 3rpx 10rpx;
+  border-radius: 999rpx;
+  background: #e8efe9;
+  color: #31533c;
+  font-size: 18rpx;
+}
+
+.member-meta {
+  margin-top: 4rpx;
+  color: #8a948d;
+  font-size: 20rpx;
+}
+
+.member-actions {
+  display: flex;
+  gap: 8rpx;
+}
+
+.member-actions button {
+  margin: 0;
+}
+
+.read-only-note {
+  margin-top: 18rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 18rpx;
+  background: #eef2ef;
+  color: #68746c;
+  font-size: 21rpx;
+  line-height: 1.55;
 }
 
 .footnote {

@@ -213,11 +213,19 @@ describe("RoomCore", () => {
     expect(core.state.updatedAt).toBe(1);
   });
 
+  it("stores room-level player readiness without touching game state", () => {
+    const core = new RoomCore(room([player("p1", "Alice", 1, true)]));
+
+    expect(core.getPlayer("p1")?.ready).toBeUndefined();
+    expect(core.setPlayerReady("p1", true).ready).toBe(true);
+    expect(core.setPlayerReady("p1", false).ready).toBe(false);
+  });
+
   it("exposes public room members without resume credentials", () => {
     const core = new RoomCore(room([player("p1", "房主", 1, true)]));
 
     expect(core.publicPlayers()).toEqual([
-      { id: "p1", name: "房主", seat: 1, isHost: true },
+      { id: "p1", name: "房主", seat: 1, isHost: true, ready: false },
     ]);
     expect(core.publicPlayers()[0]).not.toHaveProperty("resumeTokenHash");
   });

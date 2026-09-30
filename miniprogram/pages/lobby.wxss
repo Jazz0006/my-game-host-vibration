@@ -75,6 +75,19 @@
   opacity: 0.45;
 }
 
+.seat {
+  transition:
+    left 160ms ease,
+    top 160ms ease,
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.seat-dragging {
+  transform: scale(1.07);
+  box-shadow: 0 10rpx 30rpx rgba(27, 48, 35, 0.22);
+}
+
 .seat-name {
   overflow: hidden;
   white-space: nowrap;
@@ -109,7 +122,18 @@
 
 .moderator-card {
   padding: 16rpx 12rpx 20rpx;
+  border-radius: 20rpx;
   text-align: center;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.moderator-drop-target {
+  background: #e5f0e8;
+  transform: scale(1.03);
+}
+
+.moderator-dragging {
+  background: #f0ead8;
 }
 
 .moderator-role {
@@ -121,6 +145,12 @@
   margin-top: 8rpx;
   font-size: 24rpx;
   color: #617067;
+}
+
+.moderator-hint {
+  margin-top: 8rpx;
+  font-size: 18rpx;
+  color: #8a958e;
 }
 
 .divider {

@@ -58,6 +58,7 @@ export class RoomBootstrapService<TGameState, TGameConfig> {
       name: requestedRoomPlayerName([], requestedName, this.now),
       seat: 1,
       isHost: true,
+      ready: false,
       resumeTokenHash: token.hash,
     };
     const now = this.now();
@@ -107,6 +108,7 @@ export class RoomBootstrapService<TGameState, TGameConfig> {
       id: this.options.createPlayerId(),
       name: requestedRoomPlayerName(room.players, requestedName, this.now),
       isHost: false,
+      ready: false,
       resumeTokenHash: token.hash,
     });
     const revision = nextRoomRevision(snapshot.revision);

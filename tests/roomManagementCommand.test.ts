@@ -64,6 +64,28 @@ function execute(
 }
 
 describe("W3C shared room-management semantics", () => {
+  it("owns per-player Ready state before the game starts", () => {
+    const room = createRoom();
+
+    expect(execute(room, "p2", {
+      type: "room.setReady",
+      ready: true,
+    })).toEqual({ kind: "updatedReady", ready: true });
+    expect(room.players.find(player => player.id === "p2")?.ready).toBe(true);
+
+    expect(execute(room, "p2", {
+      type: "room.setReady",
+      ready: false,
+    })).toEqual({ kind: "updatedReady", ready: false });
+    expect(room.players.find(player => player.id === "p2")?.ready).toBe(false);
+
+    room.game = { phase: "night" };
+    expect(() => execute(room, "p2", {
+      type: "room.setReady",
+      ready: true,
+    })).toThrow("游戏开始后不能修改准备状态");
+  });
+
   it("owns rename and seat movement with continuous seats", () => {
     const room = createRoom();
 

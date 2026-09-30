@@ -43,11 +43,12 @@ export class RoomCore<
   }
 
   publicPlayers(): PublicRoomPlayer[] {
-    return this.state.players.map(({ id, name, seat, isHost }) => ({
+    return this.state.players.map(({ id, name, seat, isHost, ready }) => ({
       id,
       name,
       seat,
       isHost,
+      ready: Boolean(ready),
     }));
   }
 
@@ -70,6 +71,7 @@ export class RoomCore<
       ...player,
       name: normalizedName,
       seat: this.state.players.length + 1,
+      ready: Boolean(player.ready),
     } as TPlayer;
     this.state.players.push(added);
     this.touch();
@@ -118,6 +120,13 @@ export class RoomCore<
     this.state.players.splice(adjustedIndex, 0, player);
     this.normalizeSeats();
     this.touch();
+  }
+
+  setPlayerReady(playerId: string, ready: boolean): TPlayer {
+    const player = this.requirePlayer(playerId);
+    player.ready = ready;
+    this.touch();
+    return player;
   }
 
   transferHost(targetPlayerId: string): void {

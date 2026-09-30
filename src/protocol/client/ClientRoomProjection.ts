@@ -5,6 +5,7 @@ export type ClientRoomProjectionPlayer = {
   name: string;
   seat: number;
   isHost: boolean;
+  ready: boolean;
 };
 
 export type ClientRoomProjection = {

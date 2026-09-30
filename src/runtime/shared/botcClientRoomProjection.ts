@@ -55,6 +55,7 @@ export function createBotcClientRoomProjection<
     name: player.name,
     seat: player.seat,
     isHost: player.isHost,
+    ready: Boolean(player.ready),
     connected: options.isPlayerConnected(player.id),
   }));
   const base = {

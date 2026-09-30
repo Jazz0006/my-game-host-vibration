@@ -45,9 +45,9 @@ B0C1 / B0C2 / B0C3A rules-information foundations ✅ checkpointed
   ↓
 SIM-0 Simulator Lab V2 foundation ✅
   ↓
-PV-0 shared Lobby production interactions ← CURRENT / NEXT
+PV-0 shared Lobby production interactions ✅
   ↓
-PV-1 minimal BotC Setup + production start path
+PV-1 minimal BotC Setup + production start path ← CURRENT / NEXT
   ↓
 PV-2 role reveal / confirm-role
   ↓

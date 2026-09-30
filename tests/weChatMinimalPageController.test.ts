@@ -94,7 +94,7 @@ describe("E3.6 minimal WeChat page controller", () => {
         gameType: "werewolf",
         viewer: { playerId: "p1", isHost: true, isGameModerator: false },
         gameModerator: { mode: "automatic" },
-        players: [{ id: "p1", name: "Host", seat: 1, isHost: true }],
+        players: [{ id: "p1", name: "Host", seat: 1, isHost: true, ready: false }],
         gameStarted: false,
       },
       roomRevision: 3,
