@@ -1,20 +1,20 @@
 import {
   BrowserRoomBootstrapClient,
   type BrowserRoomBootstrapFetchLike,
-} from "../../src/client/browser/BrowserRoomBootstrapClient.js";
+} from "../src/client/browser/BrowserRoomBootstrapClient.js";
 import {
   CloudflareRealtimeTransport,
   type BrowserFetchLike,
   type BrowserWebSocketFactory,
-} from "../../src/client/browser/CloudflareRealtimeTransport.js";
-import { ClientSession } from "../../src/client/runtime/ClientSession.js";
-import type { ClientRoomProjection } from "../../src/protocol/client/ClientRoomProjection.js";
+} from "../src/client/browser/CloudflareRealtimeTransport.js";
+import { ClientSession } from "../src/client/runtime/ClientSession.js";
+import type { ClientRoomProjection } from "../src/protocol/client/ClientRoomProjection.js";
 import {
   createClientCommandEnvelope,
   type ClientReconnectCredentials,
-} from "../../src/protocol/client/ClientProtocol.js";
-import type { RoomBootstrapCredentials } from "../../src/client/runtime/RoomBootstrapClientCore.js";
-import type { GameType } from "../../src/games/GameCatalog.js";
+} from "../src/protocol/client/ClientProtocol.js";
+import type { RoomBootstrapCredentials } from "../src/client/runtime/RoomBootstrapClientCore.js";
+import type { GameType } from "../src/games/GameCatalog.js";
 
 export type TestRoomClientTraceEntry = {
   sequence: number;
@@ -24,6 +24,8 @@ export type TestRoomClientTraceEntry = {
   revision?: number | null;
   detail?: string;
 };
+
+export type TestRoomClientListener = () => void;
 
 export type TestRoomClientOptions = {
   label: string;
@@ -52,7 +54,7 @@ function reconnectCredentials(
 }
 
 /**
- * Test-side client façade over the same public/runtime contracts used by a real
+ * Dev/test client façade over the same public/runtime contracts used by a real
  * Cloudflare browser client. It owns no room/game semantics and never reads a
  * Durable Object snapshot directly.
  */
@@ -60,6 +62,7 @@ export class TestRoomClient<TPlayerView = unknown> {
   private readonly bootstrap: BrowserRoomBootstrapClient;
   private readonly traceLimit: number;
   private readonly trace: TestRoomClientTraceEntry[] = [];
+  private readonly listeners = new Set<TestRoomClientListener>();
   private sequence = 0;
   private credentials: ClientReconnectCredentials | null = null;
   private session: ClientSession<TPlayerView> | null = null;
@@ -134,6 +137,7 @@ export class TestRoomClient<TPlayerView = unknown> {
           snapshot.authoritativeState.revision,
         );
       }
+      this.notify();
     });
     session.subscribeRoomState(snapshot => {
       if (snapshot.revision === null) return;
@@ -142,10 +146,12 @@ export class TestRoomClient<TPlayerView = unknown> {
         snapshot.generation,
         snapshot.revision,
       );
+      this.notify();
     });
 
     session.start(this.credentials);
     await this.waitForConnected(timeoutMs);
+    this.notify();
   }
 
   async reconnect(timeoutMs = DEFAULT_WAIT_TIMEOUT_MS): Promise<void> {
@@ -155,6 +161,7 @@ export class TestRoomClient<TPlayerView = unknown> {
     }
     session.reconnect();
     await this.waitForConnected(timeoutMs);
+    this.notify();
   }
 
   disconnect(): void {
@@ -162,6 +169,7 @@ export class TestRoomClient<TPlayerView = unknown> {
     if (!session) return;
     session.dispose();
     this.session = null;
+    this.notify();
   }
 
   async sendCommand<TPayload>(
@@ -237,6 +245,14 @@ export class TestRoomClient<TPlayerView = unknown> {
     return { ...this.credentials };
   }
 
+  subscribe(listener: TestRoomClientListener): () => void {
+    this.listeners.add(listener);
+    listener();
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
   getPlayerView(): TPlayerView | null {
     return this.requireSession().getAuthoritativeState().envelope?.payload ?? null;
   }
@@ -247,6 +263,10 @@ export class TestRoomClient<TPlayerView = unknown> {
 
   getRoomRevision(): number | null {
     return this.requireSession().getRoomState().revision;
+  }
+
+  getPlayerRevision(): number | null {
+    return this.requireSession().getAuthoritativeState().revision;
   }
 
   getConnectionState() {
@@ -329,6 +349,10 @@ export class TestRoomClient<TPlayerView = unknown> {
     if (this.trace.length > this.traceLimit) {
       this.trace.splice(0, this.trace.length - this.traceLimit);
     }
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) listener();
   }
 
   private formatTrace(): string {

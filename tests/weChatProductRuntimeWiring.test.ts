@@ -37,7 +37,8 @@ describe("MG0D WeChat product runtime wiring", () => {
   it("renders one fixed game identity per product without a lobby game selector", () => {
     const lobby = text("miniprogram/pages/lobby.js");
     const markup = text("miniprogram/pages/lobby.wxml");
-    expect(lobby).toContain("this._product.gameType");
+    expect(lobby).toContain("this._product.gameLabel");
+    expect(lobby).toContain("this._product.moderatorLabel");
     expect(lobby).toContain("this._product.startCommand");
     expect(lobby).toContain(".subscribe(");
     expect(lobby).toContain("view.room");

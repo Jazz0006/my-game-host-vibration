@@ -7,10 +7,6 @@
     <button class="icon-button" bindtap="onSettingsTap">⚙</button>
   </view>
 
-  <view class="preview-banner" wx:if="{{previewMode}}">
-    UI Preview · 本页暂不写入服务器状态
-  </view>
-
   <view class="table-stage">
     <view
       class="seat {{item.ready ? 'seat-ready' : ''}} {{item.connected === false ? 'seat-offline' : ''}}"
@@ -63,8 +59,4 @@
   >
     {{currentPlayerReady ? "✓ 已准备好" : "已准备好"}}
   </button>
-
-  <view class="hint" wx:if="{{previewMode}}">
-    下一 UI slice 再接：长按拖动排序、拖入/拖出主持位、authoritative commands。
-  </view>
 </view>

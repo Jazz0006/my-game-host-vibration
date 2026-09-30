@@ -103,8 +103,9 @@ describe("MG0D WeChat game-specific product shells", () => {
     const lobbyMarkup = text("miniprogram/pages/lobby.wxml");
     expect(lobby).toContain('require("../rounded-table-layout.js")');
     expect(lobby).toContain("applyLobbyModel");
-    expect(lobby).toContain("wx.vibrateShort");
-    expect(lobby).toContain('type: "heavy"');
+    expect(lobby).toContain("准备状态将在 lobby command slice 接入");
+    expect(lobby).not.toContain("wx.vibrateShort");
+    expect(lobby).not.toContain("previewMode");
     expect(lobby).not.toContain("PREVIEW_GAMES");
     expect(lobby).not.toContain("selectedGame");
     expect(lobby).not.toContain("onGameTap");

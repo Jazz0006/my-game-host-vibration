@@ -3,72 +3,113 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>对局实验室 · 无法官狼人杀助手</title>
+  <title>Simulator Lab V2 · BotC</title>
   <link rel="stylesheet" href="/dev/assets/lab.css">
 </head>
 <body>
   <header class="topbar">
     <div>
-      <p class="eyebrow">开发工具</p>
-      <h1>对局实验室</h1>
+      <p class="eyebrow">Simulator-first · production semantics</p>
+      <h1>Simulator Lab V2</h1>
+      <p class="subtitle">Blood on the Clocktower · Trouble Brewing development surface</p>
     </div>
-    <a href="/" class="back-link">返回玩家端</a>
+    <a href="/" class="back-link">返回产品首页</a>
   </header>
 
   <main>
-    <section class="toolbar" aria-label="添加虚拟玩家">
-      <label for="room-input">房间号</label>
-      <input id="room-input" class="room-input" inputmode="numeric" maxlength="4" autocomplete="off">
-      <button id="add-player" class="primary">添加虚拟玩家</button>
-      <span class="server-name-hint">玩家名字由服务器自动分配</span>
+    <section class="toolbar" aria-label="Simulator controls">
+      <label for="player-count">模拟玩家数</label>
+      <input id="player-count" type="number" min="5" max="15" value="8">
+      <button id="reset-simulator" class="primary">建立 / 重置 BotC 模拟桌</button>
       <div class="room-summary">
-        <span>当前房间</span>
-        <strong id="room-id">未选择</strong>
+        <span>Room</span><strong id="room-id">—</strong>
+        <span>Revision</span><strong id="room-revision">—</strong>
       </div>
     </section>
 
-    <section class="summary compact-summary" aria-label="虚拟玩家摘要">
-      <div><span>已添加</span><strong id="client-count">0</strong></div>
-      <div><span>在线</span><strong id="online-count">0</strong></div>
-    </section>
+    <div id="simulator-status" class="notice">
+      当前未建立模拟桌。这里不会直接修改 canonical state，也不会复制 BotC 规则。
+    </div>
 
-    <section class="toolbar" aria-label="身份恢复测试">
-      <label for="recovery-test-room">C4.3 身份恢复</label>
-      <input id="recovery-test-room" class="room-input" inputmode="numeric" maxlength="4" placeholder="4位房间号" autocomplete="off">
-      <input id="recovery-test-code" autocomplete="off" placeholder="房主生成的恢复码">
-      <button id="recovery-test-claim" class="primary">用新虚拟客户端接管</button>
-      <button id="recovery-test-disconnect" class="compact" disabled>断开恢复后的客户端</button>
-      <span id="recovery-test-status" class="server-name-hint">先让目标玩家离线，再在房主端生成恢复码。</span>
-    </section>
+    <section class="simulator-grid">
+      <article class="panel phone-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Real-client viewer</p>
+            <h2>接近真实手机的 Viewer</h2>
+          </div>
+          <select id="viewer-select" disabled aria-label="选择 Viewer"></select>
+        </div>
 
-    <div id="notice" class="notice" role="status">先在玩家端创建房间，再输入房间号添加虚拟玩家。</div>
+        <div class="phone-shell">
+          <div id="phone-connection" class="phone-connection">未建立模拟桌</div>
+          <div class="phone-title">
+            <strong id="phone-identity">选择或建立一个 Simulator room</strong>
+            <span>房间 <b id="phone-room">—</b></span>
+          </div>
+          <div class="phone-meta">
+            <span>说书人</span>
+            <strong id="phone-moderator">—</strong>
+          </div>
+          <div id="phone-players" class="phone-players"></div>
+          <div class="phone-private-title">仅此 Viewer 的 authoritative PlayerView</div>
+          <div id="phone-private" class="phone-private">暂无 authoritative PlayerView</div>
+        </div>
+      </article>
 
-    <section class="workspace">
-      <div class="players-area">
-        <div class="section-heading">
-          <h2>虚拟玩家</h2>
-          <div class="section-tools">
-            <button id="confirm-all-roles" class="compact" disabled>全部确认身份</button>
-            <span id="run-state">等待添加</span>
+      <article class="panel controls-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">N virtual clients</p>
+            <h2>虚拟玩家控制面板</h2>
           </div>
         </div>
-        <div id="players" class="player-grid">
-          <div class="empty-state">尚无虚拟玩家</div>
+        <div id="virtual-players" class="player-grid">
+          <div class="empty-state">尚未建立模拟桌。</div>
         </div>
-      </div>
+      </article>
 
-      <aside class="event-area">
-        <div class="section-heading">
-          <h2>加入日志</h2>
-          <button id="clear-log" class="compact">清空日志</button>
+      <aside class="panel inspector-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Storyteller / Debug</p>
+            <h2>Inspector</h2>
+          </div>
         </div>
-        <ol id="event-log" class="event-log" aria-live="polite"></ol>
+
+        <section class="inspector-section">
+          <h3>Game Moderator</h3>
+          <select id="moderator-select" disabled></select>
+          <div class="inline-actions">
+            <button id="set-moderator" disabled>设为 Human Storyteller</button>
+            <button id="automatic-moderator" disabled>恢复 Automatic</button>
+          </div>
+          <p class="hint">通过 production <code>room.setGameModerator</code> semantic command 更新，不读取 Durable Object 内部状态。</p>
+        </section>
+
+        <section class="inspector-section">
+          <h3>Semantic command</h3>
+          <input id="command-type" value="room.updateName" aria-label="Semantic command type">
+          <textarea id="command-payload" rows="3" aria-label="Command JSON">{"name":"Simulator Player"}</textarea>
+          <button id="send-command" disabled>由当前 Viewer 发送</button>
+        </section>
+
+        <section class="inspector-section">
+          <h3>Room / Public / Moderator projection</h3>
+          <pre id="room-projection"></pre>
+        </section>
+        <section class="inspector-section">
+          <h3>Selected PlayerView</h3>
+          <pre id="player-view"></pre>
+        </section>
+        <section class="inspector-section">
+          <h3>Bounded ClientSession trace</h3>
+          <pre id="trace"></pre>
+        </section>
       </aside>
     </section>
   </main>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/dev/assets/labBootstrap.js"></script>
-  <script type="module" src="/dev/assets/recoveryLab.js"></script>
+  <script type="module" src="/dev/assets/labV2.js"></script>
 </body>
 </html>

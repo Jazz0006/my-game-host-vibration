@@ -1,7 +1,7 @@
 # Simulator-first BotC Playable Vertical Slice Route (2026-09-30)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE IMPLEMENTATION HANDOFF — ACTIVE**  
+> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; SIM-0 COMPLETE, PV-0 NEXT**  
 > Route owner: current execution order is governed by V5; this document owns the detailed Simulator-first / playable-vertical-slice decomposition.  
 > Supersedes as NEXT: continuing directly from B0C3A into B0C3B recommendation depth.
 
@@ -128,9 +128,9 @@ Everything else should first be made reproducible without real hardware.
 
 ## 4. Simulator Lab V2 product
 
-The current `/dev/lab` is an early Node/Socket.IO Werewolf virtual-player tool. The WeChat `preview=1` path is a static local presentation preview. Neither should become the future authority.
+SIM-0 has now replaced the early Node/Socket.IO Werewolf `/dev/lab` and retired the static WeChat `preview=1` fake-state path. Those implementations are historical only and must not be revived as parallel authorities.
 
-Simulator Lab V2 should converge them around the current production seams.
+Simulator Lab V2 is the current daily development surface and is composed around production seams.
 
 ### 4.1 Core topology
 
@@ -219,26 +219,28 @@ When a developer needs an impossible shortcut, first ask whether the production 
 
 ## 5. Main implementation route
 
-### SIM-0 — Simulator Lab V2 foundation ← NEXT
+### SIM-0 — Simulator Lab V2 foundation ✅ COMPLETE
 
 Goal: establish the daily development surface before pushing more BotC behavior into phone UI.
 
 Deliver:
 
-- audit current `dev/lab`, static WeChat preview and TestRoomClient seams;
-- select the smallest shared simulator composition;
-- support game-neutral room creation/join and viewer switching;
-- show authoritative room projection and selected PlayerView;
-- provide N simplified virtual clients;
-- preserve bounded trace / revision evidence;
-- do not add new game rules.
+- audited and retired the legacy Node/Socket.IO `dev/lab`, source-string bootstrap patching, standalone recovery lab and old `npm run simulate` path;
+- moved the shared `TestRoomClient` and in-memory Cloudflare capability adapter to `dev/` so Simulator Lab and deterministic multiplayer tests consume one implementation;
+- established a BotC-focused dev coordinator that creates 5–15 independent clients through production bootstrap / Raw WebSocket / ClientSession / projection seams;
+- added a phone-size selected viewer, N simplified virtual-client controls, Human/Automatic Storyteller assignment, semantic-command entry, authoritative projection inspector and bounded trace;
+- added deterministic disconnect/reconnect controls over the existing ClientSession generation/revision semantics;
+- retired WeChat `preview=1` / `lobby-preview-state` fake data rather than maintaining a second lobby-state model;
+- added no new game rules, BotC lifecycle command or canonical-state injection.
 
 Acceptance:
 
-- one developer can create a BotC room with multiple simulated participants without real devices;
-- viewer can switch among at least two player identities and observe different private projections;
-- the lab uses production/runtime projection seams rather than copied game logic;
-- existing multiplayer tests remain authoritative for deterministic correctness.
+- one developer can create a 5–15 participant BotC room without real devices; the default UI starts from 8 participants;
+- viewer can switch among independently synchronized player identities and inspect each identity-bound authoritative room / PlayerView channel;
+- Human Storyteller assignment is performed through production `room.setGameModerator`, and authorized moderator projection is therefore obtained through the normal production projection path;
+- the lab uses production/runtime projection seams rather than copied game logic or direct Durable Object snapshot access;
+- existing multiplayer tests remain authoritative for deterministic correctness, and SIM-0 adds dedicated 8-client / moderator / disconnect-reconnect acceptance;
+- secret-differentiated role PlayerViews are intentionally deferred to PV-2, because BotC production start/role-reveal commands do not yet exist; SIM-0 does not add a test-only state injection merely to manufacture that evidence.
 
 ### PV-0 — Lobby production interaction closure
 
@@ -451,18 +453,28 @@ The correction is successful when:
 
 ## 10. Immediate handoff
 
-Do **not** start B0C3B next.
+Do **not** resume B0C3B merely because SIM-0 is complete.
+
+SIM-0 implementation result:
+
+```text
+/dev/lab browser surface
+  -> dev-only HTTP/SSE control channel
+  -> SimulatorLabCoordinator
+  -> dev/TestRoomClient + dev/InMemoryCloudflareMultiplayerHarness
+  -> production BrowserRoomBootstrapClient
+  -> production CloudflareRealtimeTransport / Raw WS core
+  -> production cloudflareWorker / GameRoomDurableObject
+  -> production room + game projection
+  -> ClientSession
+```
+
+The in-memory harness replaces only local Cloudflare network/storage/socket capabilities; production bootstrap, ticket, wire protocol, Durable Object, room commands, projection and ClientSession semantics still execute. This avoids adding browser CORS policy or a remote test namespace merely to support the daily lab.
+
+The old Node/Socket.IO lab, source-patching bootstrap, recovery lab, `npm run simulate`, and WeChat `preview=1` fake-state path have been retired.
 
 Immediate next task:
 
-> **SIM-0 — audit and implement the Simulator Lab V2 foundation over current TestRoomClient / ClientSession / production projection seams.**
+> **PV-0 — close shared Lobby production interactions over the now-stable Simulator Lab V2 surface.**
 
-First SIM-0 audit should explicitly compare:
-
-- legacy `dev/lab` Node/Socket.IO virtual-player implementation;
-- static WeChat `preview=1`;
-- `tests/multiplayer/TestRoomClient.ts`;
-- `InMemoryCloudflareMultiplayerHarness`;
-- production Browser/WeChat ClientSession composition.
-
-The goal is to choose one minimal reusable composition without importing legacy Werewolf-specific semantics into the new lab.
+PV-0 should implement authoritative Ready state/command and its capability hook, then wire player reorder, moderator assignment, transfer-host and remove-player UI without recreating local preview state.

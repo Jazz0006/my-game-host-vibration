@@ -105,13 +105,6 @@ Page({
     });
   },
 
-  onPreviewLobbyTap() {
-    const room = /^\d{4}$/.test(this.data.roomCode) ? this.data.roomCode : "6284";
-    wx.navigateTo({
-      url: `/pages/lobby?preview=1&room=${room}`,
-    });
-  },
-
   onOpenDiagnosticsTap() {
     wx.navigateTo({
       url: "/pages/diagnostics",

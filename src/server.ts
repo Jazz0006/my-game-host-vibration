@@ -68,6 +68,9 @@ type BasicAck = ClientAck<{ ok: true } | { ok: false; message: string }>;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const devDirectory = path.join(__dirname, "../dev");
+const mountSimulatorLab = process.env.NODE_ENV === "production"
+  ? undefined
+  : (await import("../dev/SimulatorLabServer.js")).mountSimulatorLab;
 
 function createRoomId(rooms: Map<string, Room>): string {
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -271,6 +274,7 @@ export function createGameServer() {
   app.use(express.static(path.join(__dirname, "../public")));
   if (process.env.NODE_ENV !== "production") {
     app.use("/dev/assets", express.static(devDirectory, { etag: false, maxAge: 0 }));
+    mountSimulatorLab?.(app);
     app.get("/dev/lab", (_req, res) => {
       res.setHeader("Cache-Control", "no-store");
       res.sendFile(path.join(devDirectory, "lab.html"));
@@ -592,12 +596,6 @@ export function createGameServer() {
           clearRemovedTestPrompt(membership.room, outcome.playerId);
           if (targetSocket) {
             emitClientRoomRemoved(targetSocket, membership.room.id);
-          }
-          if (process.env.NODE_ENV !== "production") {
-            io.emit("dev:player-removed", {
-              roomId: membership.room.id,
-              playerId: outcome.playerId,
-            });
           }
           if (targetSocket) void targetSocket.leave(membership.room.id);
           broadcastRoom(io, membership.room);

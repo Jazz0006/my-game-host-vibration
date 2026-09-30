@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GameType } from "../../src/games/GameCatalog.js";
-import { InMemoryCloudflareMultiplayerHarness } from "./InMemoryCloudflareMultiplayerHarness.js";
-import { TestRoomClient } from "./TestRoomClient.js";
+import { InMemoryCloudflareMultiplayerHarness } from "../../dev/InMemoryCloudflareMultiplayerHarness.js";
+import { TestRoomClient } from "../../dev/TestRoomClient.js";
 
 type LobbyView = {
   phase: string;
