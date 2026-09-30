@@ -44,9 +44,11 @@ Current product priorities:
 5. reconnect, app switching, screen lock, and network changes are normal lifecycle events;
 6. the system owns authoritative game flow and secret information;
 7. the host is primarily a recovery controller, not a hidden-information super-user;
-8. Werewolf is the current production game. W3D3 + MG0 shared-infrastructure admission work is complete; Blood on the Clocktower / Trouble Brewing B0 is the active production-expansion mainline. B0A–B0B3 are complete. B0C Rules/Information -> Storyteller Recommendation is active; B0C1 merged through PR #109, B0C2 merged through PR #110, B0C3A registration + truthful Washerwoman candidate boundary is locally GREEN, and B0C3B Washerwoman recommendation + authoritative commit/private delivery is next after merge.
+8. Werewolf is the current production game. W3D3 + MG0 shared-infrastructure admission work is complete; Blood on the Clocktower / Trouble Brewing remains the active production-expansion direction. B0A–B0B3 plus B0C1/B0C2/B0C3A provide reusable backend foundations, but deeper B0C recommendation work is **not** the current mainline.
 9. The WeChat product direction is two game-specific thin-client shells — working names `骏骏桌游-狼人` and `骏骏桌游-血染` — over one shared client/runtime/backend platform. Do not duplicate reconnect, identity, transport, room, recovery, persistence, or Cloudflare authority code per mini program.
 10. A room's `gameType` is fixed at room creation by the client product; the lobby no longer owns cross-game switching.
+11. Current implementation priority is **Simulator-first BotC Playable Vertical Slice**: establish the smallest end-to-end playable flow and production client wiring before adding more storyteller recommendation depth.
+12. Normal feature development defaults to **zero real devices**. Use automated multiplayer + Simulator Lab first, then WeChat Developer Tools, then escalate to one real device, two real devices + virtual players, and full-table acceptance only when the evidence requires hardware.
 
 Do not turn this repository into a general game-platform framework before real product needs justify it.
 
@@ -400,6 +402,22 @@ Existing coverage can be valid test-first evidence.
 Tests are maintained engineering assets, not an append-only archive. Retire or narrow tests when they only protect an obsolete implementation shape and the real contract is covered more directly elsewhere.
 
 Do not add a production abstraction solely to satisfy a process requirement for a new test seam.
+
+### Simulator-first and device escalation
+
+For normal product work, prefer the cheapest evidence layer that can faithfully prove the behavior:
+
+```text
+pure / contract tests
+-> TestRoomClient multiplayer scenarios
+-> Simulator Lab
+-> WeChat Developer Tools
+-> one real-device platform smoke
+-> two real devices + N virtual players when specifically required
+-> full-table milestone acceptance
+```
+
+The simulator and test harness must consume production protocol/projection/GameModule semantics rather than becoming parallel rules owners. Real devices are reserved for hardware/platform evidence such as vibration, true WeChat lifecycle, screen lock/process restart, network transitions, real touch/drag ergonomics, audio/Bluetooth behavior, and final table experience.
 
 ## 10. Local validation commands
 

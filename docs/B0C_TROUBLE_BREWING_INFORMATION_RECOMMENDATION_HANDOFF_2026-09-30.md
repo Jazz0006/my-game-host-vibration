@@ -285,14 +285,35 @@ pretest
   both WeChat product-shell build / verification PASS
 ```
 
-## Next after B0C3A merge
+## Route status after B0C3A
 
-B0C3B should complete the truthful Washerwoman vertical slice while preserving the new registration boundary:
+B0C3A is retained as a completed rules/information foundation, but direct continuation into B0C3B is no longer the current NEXT.
+
+2026-09-30 product-route correction:
+
+- backend BotC rules/recommendation maturity is ahead of the real playable client path;
+- B0C3B Washerwoman recommendation/commit work is therefore **DEFERRED AS MAINLINE**;
+- deeper Librarian / Investigator / poison-drunk recommendation work is also deferred;
+- when the playable path first needs Washerwoman information, the implementation may use the simplest rules-legal baseline over the B0C3A candidate set rather than blocking on recommendation quality;
+- the independent Recommendation Engine boundary remains intact and will be improved later.
+
+Current NEXT is:
+
+```text
+SIM-0 Simulator Lab V2 foundation
+-> BotC Playable Vertical Slice
+```
+
+Detailed current route:
+
+`docs/SIMULATOR_FIRST_BOTC_PLAYABLE_VERTICAL_SLICE_ROUTE_2026-09-30.md`
+
+The original B0C3B design below remains valid future work, but no longer determines execution order:
 
 1. define a Washerwoman Recommendation request over the distinct legal information candidates;
-2. implement a minimal independent baseline policy, without hard-coding registration rules into the policy;
+2. implement an independent policy without hard-coding registration rules into it;
 3. provide a moderator-only human selection/commit path;
-4. let Game Engine store the accepted visible information plus the chosen legal registration resolution for traceability;
-5. deliver the visible information only to the actual Washerwoman during the `role:washerwoman` first-night step and to ModeratorView;
+4. let Game Engine store the accepted visible information plus chosen legal registration resolution for traceability;
+5. deliver visible information only to the actual Washerwoman during `role:washerwoman` and to ModeratorView;
 6. keep PublicView and all other PlayerViews secret-safe;
-7. keep Drunk/poisoned misinformation deferred to a separate malfunction layer.
+7. keep Drunk/poisoned misinformation in its own Rules/Information malfunction layer.

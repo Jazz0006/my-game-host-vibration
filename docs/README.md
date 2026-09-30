@@ -19,12 +19,15 @@ Use these in this order:
 
 ## Current handoff
 
+- `docs/SIMULATOR_FIRST_BOTC_PLAYABLE_VERTICAL_SLICE_ROUTE_2026-09-30.md`
+  - **current detailed implementation route**;
+  - Simulator Lab V2 first, then BotC playable vertical integration;
+  - normal development defaults to zero real devices;
+  - B0C3B/deeper recommendation quality is deferred until the playable path needs it.
 - `docs/B0C_TROUBLE_BREWING_INFORMATION_RECOMMENDATION_HANDOFF_2026-09-30.md`
-  - current B0C Rules/Information -> Storyteller Recommendation decomposition;
-  - B0C1 Demon Info legality/recommendation-boundary merged through PR #109;
-  - B0C2 Demon Info recommendation/runtime merged through PR #110;
-  - B0C3A registration + truthful Washerwoman candidate boundary GREEN checkpoint;
-  - B0C3B Washerwoman recommendation + Game Engine commit/private delivery entry scope.
+  - B0C1/B0C2/B0C3A completed foundation and recommendation-boundary history;
+  - B0C3A registration + truthful Washerwoman candidate boundary is retained;
+  - direct continuation into B0C3B is superseded as NEXT by the Simulator-first playable route.
 - `docs/B0B_TROUBLE_BREWING_NIGHT_SEQUENCING_HANDOFF_2026-09-30.md`
   - completed B0B sequencing authority and B0C handoff.
 - `docs/B0B3_BOTC_OWNERSHIP_BOUNDARY_AUDIT_2026-09-30.md`
@@ -36,31 +39,40 @@ Use these in this order:
 ```text
 MG0 COMPLETE
   ↓
-B0 BotC / Trouble Brewing production entry
-  ├─ B0A module + setup/view contracts ✅ COMPLETE
-  ├─ B0B first-night / night sequencing ✅ COMPLETE
-  │   ├─ B0B1 canonical order + first-night progression ✅ MERGED
-  │   ├─ B0B2 later-night dynamic eligibility / progression ✅ COMPLETE
-  │   │   ├─ B0B2A recurring / conditional eligibility ✅ MERGED
-  │   │   └─ B0B2B immediate trigger / role-transition sequencing ✅ MERGED PR #107
-  │   └─ B0B3 ownership hardening + live runtime progression ✅ COMPLETE
-  └─ B0C Rules / Information → Storyteller Recommendation ← CURRENT
-      ├─ B0C1 Demon Info legal candidates + recommendation boundary ✅ MERGED PR #109
-      ├─ B0C2 recommendation policy + authoritative commit/private delivery ✅ MERGED PR #110
-      └─ B0C3 setup-information registration + Washerwoman ← CURRENT
-          ├─ B0C3A registration + truthful candidate boundary ✅ LOCAL GREEN
-          └─ B0C3B recommendation + authoritative commit/private delivery ← NEXT AFTER MERGE
+B0A–B0B3 BotC module / setup contract / night sequencing ✅
+  ↓
+B0C1 / B0C2 / B0C3A rules-information foundations ✅ checkpointed
+  ↓
+SIM-0 Simulator Lab V2 foundation ← CURRENT / NEXT
+  ↓
+PV-0 shared Lobby production interactions
+  ↓
+PV-1 minimal BotC Setup + production start path
+  ↓
+PV-2 role reveal / confirm-role
+  ↓
+PV-3 first-night playable UI
+  ↓
+PV-4 minimal day/night loop
+  ↓
+PV-5 simulator full-game acceptance
+  ↓
+PV-6 WeChat Developer Tools parity
+  ↓
+PV-7 staged real-device acceptance
 ```
+
+B0C3B and later storyteller recommendation depth remain valuable but are **deferred as mainline**. A playable step may use the simplest rules-legal baseline when recommendation quality is not yet mature.
 
 ## Parallel engineering route
 
 - `docs/多人自动化与真机测试战略_2026-09-30.md`
-  - platform-level multiplayer test strategy;
+  - platform-level multiplayer test strategy and direct support for the Simulator-first playable mainline;
   - virtual `TestRoomClient` / multi-client convergence / reconnect / idempotency / privacy plan;
-  - two-real-device + N-virtual-player smoke route and milestone full-table acceptance;
   - T0/T1/T2/T3 complete: seam audit, shared TestRoomClient, 10-client convergence, reconnect and deterministic fault injection;
-  - parallel NEXT: T4 privacy / projection matrix;
-  - this route is parallel to B0B and does **not** replace the V5 mainline NEXT.
+  - T4 privacy/projection work should follow stable SIM/PV contracts;
+  - T5 device tooling is an escalation toolkit, **not** a daily two-device requirement;
+  - default daily development uses zero real devices.
 - `docs/T0_MULTIPLAYER_HARNESS_SEAM_AUDIT_2026-09-30.md`
   - T0 owner/seam audit and existing-test map;
   - production-gap result: NONE for T1;
