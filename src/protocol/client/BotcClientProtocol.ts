@@ -6,11 +6,15 @@ import {
 
 export type BotcClientCommandEnvelope =
   | ClientCommandEnvelope<"botc.startGame", Record<string, never>>
-  | ClientCommandEnvelope<"botc.confirmRole", Record<string, never>>;
+  | ClientCommandEnvelope<"botc.confirmRole", Record<string, never>>
+  | ClientCommandEnvelope<"botc.beginFirstNight", Record<string, never>>
+  | ClientCommandEnvelope<"botc.completeNightStep", Record<string, never>>;
 
 export const BOTC_CLIENT_COMMAND_TYPES = [
   "botc.startGame",
   "botc.confirmRole",
+  "botc.beginFirstNight",
+  "botc.completeNightStep",
 ] as const;
 
 const TYPE_SET = new Set<string>(BOTC_CLIENT_COMMAND_TYPES);
@@ -48,21 +52,19 @@ export function parseBotcClientCommandEnvelope(
   }
 
   const commandId = requireCommandId(record.commandId);
-  if (record.type === "botc.startGame") {
-    return {
-      protocolVersion: CLIENT_PROTOCOL_VERSION,
-      kind: "command",
-      commandId,
-      type: "botc.startGame",
-      payload: {},
-    };
+  switch (record.type) {
+    case "botc.startGame":
+    case "botc.confirmRole":
+    case "botc.beginFirstNight":
+    case "botc.completeNightStep":
+      return {
+        protocolVersion: CLIENT_PROTOCOL_VERSION,
+        kind: "command",
+        commandId,
+        type: record.type,
+        payload: {},
+      };
+    default:
+      throw new Error("unsupported BotC client command type");
   }
-
-  return {
-    protocolVersion: CLIENT_PROTOCOL_VERSION,
-    kind: "command",
-    commandId,
-    type: "botc.confirmRole",
-    payload: {},
-  };
 }

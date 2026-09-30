@@ -334,7 +334,7 @@ PV-2 stops at **ready-to-proceed after all confirmations**. The actual `beginFir
 
 Validation checkpoint: `quality` PASS; 134 test files / 561 tests; Web client and both WeChat product shells build/verify PASS.
 
-### PV-3 — First-night playable UI
+### PV-3 — First-night playable UI ← IN PROGRESS
 
 Support the minimum first-night loop through production commands and views:
 
@@ -347,6 +347,33 @@ Support the minimum first-night loop through production commands and views:
 - dawn.
 
 Where recommendation quality is not yet implemented, use the simplest rules-legal baseline sufficient to exercise the flow.
+
+#### PV-3A — Production first-night orchestration ✅ COMPLETE
+
+PV-3A deliberately closes the transport/view orchestration before pretending that every role action is implemented:
+
+- added stable `botc.beginFirstNight` and `botc.completeNightStep` production commands;
+- both moderator commands reuse the existing `BotcGameModule` night-sequence owner, `hasGameModeratorControl`, moderator-scoped `RoomCommandRuntime` idempotency, RoomSnapshot revision persistence and authoritative state fan-out;
+- added standard 7+ player Minion Info to the existing private PlayerView owner: an actual Minion learns the actual Demon and fellow actual Minions; this does not leak into PublicView;
+- reused the already committed Demon Info/bluff baseline and private Demon-only delivery at the canonical `demon_info` step;
+- the shared WeChat game page now supports asleep/waiting, wake/attention with one heavy vibration per new wake step, private Minion/Demon info, Storyteller current-step/actor display, controller begin/advance controls and dawn;
+- Simulator acceptance runs seven production BotC clients from role confirmation through `minion_info`, `demon_info`, later wake steps and finally Day 1;
+- Human Storyteller authority is explicitly enforced for first-night begin/advance; Room Owner cannot issue those commands while a Human Storyteller is assigned.
+
+PV-3A is **not** completion of automatic first-night gameplay. The current night sequence intentionally owns only ordering/actors. Poisoner target/effect, Spy grimoire, Washerwoman/Librarian/Investigator/Chef/Empath/Fortune Teller information resolution, Butler choice, and similar role-specific input/information still need authoritative Rules/Information + command/view owners before Automatic Storyteller may advance those steps without human resolution.
+
+Validation checkpoint: `quality` PASS; 134 test files / 565 tests; Web client and both WeChat product shells build/verify PASS.
+
+#### PV-3B — Role action / information resolution ← NEXT
+
+Close the actual role-interaction contract behind the already-live night cursor:
+
+- classify each first-night role step as no-input private information, player target/choice, or moderator-resolved information;
+- add the smallest stable production request/response shapes and private PlayerView payloads required by those categories;
+- implement required target selection/acknowledgement without adding client-side rules or direct canonical mutation;
+- reuse existing Demon Info, registration, Washerwoman candidate and Recommendation seams where already available;
+- add missing rules/information owners only where the playable vertical slice requires them; do not resume broad B0C3B recommendation-depth work merely because a role needs a legal baseline;
+- only after every active first-night step has a rules-legal resolution path should PV-3 be marked complete and Automatic Storyteller be allowed to progress through the whole night without manual semantic gaps.
 
 ### PV-4 — Minimal day / night loop
 
@@ -500,12 +527,12 @@ The correction is successful when:
 
 ## 10. Immediate handoff
 
-Do **not** resume B0C3B merely because role reveal is now playable.
+Do **not** resume broad B0C3B merely because first-night orchestration is now production-connected.
 
-SIM-0 established the Simulator-first development surface. PV-0 closed the shared production Lobby contract. PV-1 closed the minimal production start path. PV-2 now closes the private role-reveal/confirmation path: each participant sees only their authoritative shown-role PlayerView, confirms through player-scoped `botc.confirmRole`, confirmation progress converges for all clients, and the Human Storyteller remains a spectator with ModeratorView rather than a role participant.
+SIM-0 established the Simulator-first development surface. PV-0 closed the shared production Lobby contract. PV-1 closed the minimal production start path. PV-2 closed private role reveal/confirmation. PV-3A now closes the first-night transport/orchestration shell: moderator-authorized begin/advance commands, asleep/wake PlayerViews, standard Minion/Demon private information, Storyteller step visibility and dawn all run through production ClientSession/Cloudflare/RoomSnapshot seams.
 
 Immediate next task:
 
-> **PV-3 — implement the first-night playable UI and production command path.**
+> **PV-3B — implement authoritative first-night role action / information resolution.**
 
-PV-3 should expose the already-existing `beginFirstNight` / night-sequence engine through stable BotC production commands and extend the thin game page to waiting/asleep, wake/attention, private information, required target selection/acknowledgement, step completion and dawn. Where recommendation quality is not yet available, continue to use the simplest rules-legal baseline; do not resume B0C3B merely to unblock the vertical slice.
+PV-3B must fill the semantic gaps inside the already-canonical night cursor rather than create another night engine. Start by classifying active Trouble Brewing first-night roles into target/choice vs private-information vs moderator-resolved steps, then provide rules-legal request/commit/PlayerView contracts for the minimum playable path. Existing information/recommendation owners should be reused; missing rules should be added narrowly. PV-3 remains IN PROGRESS until every role step the automatic path can encounter has a real resolution path.

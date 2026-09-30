@@ -224,6 +224,218 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
     expect(replay.state.roomRevision).toBe(10);
   });
 
+  it("orchestrates first-night wake/info steps through production commands until dawn", async () => {
+    coordinator = new SimulatorLabCoordinator();
+    let state = await coordinator.reset(7);
+    const owner = state.clients[0]!;
+
+    state = (
+      await coordinator.sendCommand(
+        owner.playerId,
+        "botc.startGame",
+        {},
+        "pv3a-start",
+      )
+    ).state;
+
+    for (const [index, client] of state.clients.entries()) {
+      state = (
+        await coordinator.sendCommand(
+          client.playerId,
+          "botc.confirmRole",
+          {},
+          `pv3a-confirm-${index + 1}`,
+        )
+      ).state;
+    }
+
+    const started = await coordinator.sendCommand(
+      owner.playerId,
+      "botc.beginFirstNight",
+      {},
+      "pv3a-begin-first-night",
+    );
+    state = started.state;
+    expect(started.result).toMatchObject({
+      replayed: false,
+      outcome: {
+        kind: "firstNightStarted",
+        firstStepId: "minion_info",
+        nightComplete: false,
+      },
+    });
+
+    const minion = state.clients.find(client => {
+      const view = client.playerView as { minionInfo?: unknown } | null;
+      return Boolean(view?.minionInfo);
+    });
+    expect(minion?.playerView).toMatchObject({
+      phase: "first_night",
+      mode: "night_wake",
+      nightStep: { id: "minion_info", kind: "system_info" },
+      minionInfo: {
+        demonPlayerId: expect.any(String),
+        fellowMinionPlayerIds: expect.any(Array),
+      },
+    });
+    expect(
+      state.clients.filter(client => {
+        const view = client.playerView as { minionInfo?: unknown } | null;
+        return Boolean(view?.minionInfo);
+      }),
+    ).toHaveLength(1);
+
+    state = (
+      await coordinator.sendCommand(
+        owner.playerId,
+        "botc.completeNightStep",
+        {},
+        "pv3a-complete-minion-info",
+      )
+    ).state;
+
+    const demon = state.clients.find(client => {
+      const view = client.playerView as { demonInfo?: unknown } | null;
+      return Boolean(view?.demonInfo);
+    });
+    expect(demon?.playerView).toMatchObject({
+      phase: "first_night",
+      mode: "night_wake",
+      nightStep: { id: "demon_info", kind: "system_info" },
+      demonInfo: {
+        minionPlayerIds: expect.any(Array),
+        bluffRoles: expect.arrayContaining([
+          expect.objectContaining({ id: expect.any(String) }),
+        ]),
+      },
+    });
+
+    let step = 0;
+    while (true) {
+      const projection = state.clients[0]!.roomProjection as
+        | { game?: { phase?: string } }
+        | null;
+      if (projection?.game?.phase !== "first_night") break;
+      step += 1;
+      expect(step).toBeLessThan(20);
+      state = (
+        await coordinator.sendCommand(
+          owner.playerId,
+          "botc.completeNightStep",
+          {},
+          `pv3a-complete-${step}`,
+        )
+      ).state;
+    }
+
+    for (const client of state.clients) {
+      expect(client.playerView).toMatchObject({
+        phase: "day",
+        mode: "day",
+      });
+      expect(client.roomProjection).toMatchObject({
+        game: {
+          phase: "day",
+          dayNumber: 1,
+          nightNumber: 1,
+        },
+      });
+    }
+  });
+
+  it("keeps first-night orchestration under Human Storyteller authority", async () => {
+    coordinator = new SimulatorLabCoordinator();
+    let state = await coordinator.reset(8);
+    const owner = state.clients[0]!;
+    const storyteller = state.clients[7]!;
+
+    state = await coordinator.setModerator(storyteller.playerId);
+
+    state = (
+      await coordinator.sendCommand(
+        storyteller.playerId,
+        "botc.startGame",
+        {},
+        "pv3a-human-start",
+      )
+    ).state;
+
+    const participants = state.clients.filter(
+      client => client.playerId !== storyteller.playerId,
+    );
+    for (const [index, client] of participants.entries()) {
+      state = (
+        await coordinator.sendCommand(
+          client.playerId,
+          "botc.confirmRole",
+          {},
+          `pv3a-human-confirm-${index + 1}`,
+        )
+      ).state;
+    }
+
+    await expect(
+      coordinator.sendCommand(
+        owner.playerId,
+        "botc.beginFirstNight",
+        {},
+        "pv3a-owner-must-not-begin",
+      ),
+    ).rejects.toThrow("game command requires moderator authority");
+
+    const started = await coordinator.sendCommand(
+      storyteller.playerId,
+      "botc.beginFirstNight",
+      {},
+      "pv3a-human-begin",
+    );
+    state = started.state;
+    expect(started.result).toMatchObject({
+      outcome: {
+        kind: "firstNightStarted",
+        firstStepId: "minion_info",
+        nightComplete: false,
+      },
+    });
+
+    await expect(
+      coordinator.sendCommand(
+        owner.playerId,
+        "botc.completeNightStep",
+        {},
+        "pv3a-owner-must-not-advance",
+      ),
+    ).rejects.toThrow("game command requires moderator authority");
+
+    const advanced = await coordinator.sendCommand(
+      storyteller.playerId,
+      "botc.completeNightStep",
+      {},
+      "pv3a-human-advance",
+    );
+    expect(advanced.result).toMatchObject({
+      outcome: {
+        kind: "nightStepCompleted",
+        completedStepId: "minion_info",
+        nextStepId: "demon_info",
+        nightComplete: false,
+      },
+    });
+    expect(
+      advanced.state.clients.find(
+        client => client.playerId === storyteller.playerId,
+      )?.roomProjection,
+    ).toMatchObject({
+      viewer: { isGameModerator: true },
+      game: {
+        phase: "first_night",
+        nightStep: {
+          id: "demon_info",
+        },
+      },
+    });
+  });
+
   it("gives BotC start authority to a human Storyteller and excludes them from roles", async () => {
     coordinator = new SimulatorLabCoordinator();
     let state = await coordinator.reset(6);

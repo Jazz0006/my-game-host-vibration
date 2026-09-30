@@ -124,20 +124,22 @@ export class CloudflareBotcCommandRuntime {
           }),
     };
 
-    const isStart = envelope.type === "botc.startGame";
-    if (isStart && !hasGameModeratorControl(snapshot.gameModerator, member)) {
+    const moderatorCommand = envelope.type !== "botc.confirmRole";
+    if (
+      moderatorCommand &&
+      !hasGameModeratorControl(snapshot.gameModerator, member)
+    ) {
       throw new Error("game command requires moderator authority");
     }
 
-    const mutation: () => BotcRuntimeOutcome = isStart
-      ? () => this.startGame(room)
-      : () => this.confirmRole(room, authenticatedPlayerId);
+    const mutation: () => BotcRuntimeOutcome = () =>
+      this.mutate(room, authenticatedPlayerId, envelope);
     const execution = await this.commands.execute(
       room,
-      isStart ? MODERATOR_SCOPE : playerScope(authenticatedPlayerId),
+      moderatorCommand ? MODERATOR_SCOPE : playerScope(authenticatedPlayerId),
       envelope.commandId,
       mutation,
-      { resetReceiptHistory: isStart },
+      { resetReceiptHistory: envelope.type === "botc.startGame" },
     );
 
     if (execution.replayed) {
@@ -208,6 +210,27 @@ export class CloudflareBotcCommandRuntime {
     return { kind: "gameStarted" };
   }
 
+  private mutate(
+    room: CloudflareBotcRoom,
+    authenticatedPlayerId: string,
+    envelope: BotcClientCommandEnvelope,
+  ): BotcRuntimeOutcome {
+    switch (envelope.type) {
+      case "botc.startGame":
+        return this.startGame(room);
+      case "botc.confirmRole":
+        return this.confirmRole(room, authenticatedPlayerId);
+      case "botc.beginFirstNight":
+        return this.executeModeratorGameCommand(room, {
+          type: "beginFirstNight",
+        });
+      case "botc.completeNightStep":
+        return this.executeModeratorGameCommand(room, {
+          type: "completeNightStep",
+        });
+    }
+  }
+
   private confirmRole(
     room: CloudflareBotcRoom,
     playerId: string,
@@ -227,6 +250,30 @@ export class CloudflareBotcCommandRuntime {
     );
     if (!result.outcome) {
       throw new Error("BotC confirmRole produced no outcome");
+    }
+    room.game = result.state;
+    room.updatedAt = now;
+    return result.outcome;
+  }
+
+  private executeModeratorGameCommand(
+    room: CloudflareBotcRoom,
+    command: { type: "beginFirstNight" } | { type: "completeNightStep" },
+  ): BotcCommandOutcome {
+    if (!room.game) throw new Error("BotC game has not started");
+
+    const now = this.environment.now();
+    const result = botcGameModule.handleCommand(
+      room.game,
+      {
+        isModerator: true,
+        now,
+      },
+      command,
+      { random: this.environment.random },
+    );
+    if (!result.outcome) {
+      throw new Error(`BotC ${command.type} produced no outcome`);
     }
     room.game = result.state;
     room.updatedAt = now;

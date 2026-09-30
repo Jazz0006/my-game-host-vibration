@@ -51,7 +51,9 @@ PV-1 minimal BotC Setup + production start path ✅
   ↓
 PV-2 role reveal / confirm-role ✅
   ↓
-PV-3 first-night playable UI ← CURRENT / NEXT
+PV-3 first-night playable UI ← IN PROGRESS
+  ├─ PV-3A production first-night orchestration ✅
+  └─ PV-3B role action / information resolution ← CURRENT / NEXT
   ↓
 PV-4 minimal day/night loop
   ↓

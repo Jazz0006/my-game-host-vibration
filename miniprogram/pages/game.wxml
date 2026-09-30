@@ -26,7 +26,43 @@
     <view class="eyebrow">STORYTELLER</view>
     <view class="storyteller-title">你是本局说书人</view>
     <view class="storyteller-copy">
-      你不参与角色分配。当前仅等待玩家完成身份确认。
+      你不参与角色分配。请根据 authoritative ModeratorView 主持当前阶段。
+    </view>
+    <view class="night-step" wx:if="{{moderatorStepId}}">
+      <view>当前夜间步骤：{{moderatorStepId}}</view>
+      <view wx:if="{{moderatorActorNames}}">行动玩家：{{moderatorActorNames}}</view>
+    </view>
+  </view>
+
+  <view class="night-card wake" wx:if="{{isNightWake}}">
+    <view class="eyebrow">WAKE</view>
+    <view class="night-title">请睁眼</view>
+    <view class="night-copy" wx:if="{{nightStepId}}">
+      当前步骤：{{nightStepId}}
+    </view>
+  </view>
+
+  <view class="night-card waiting" wx:if="{{isNightWaiting}}">
+    <view class="eyebrow">WAIT</view>
+    <view class="night-title">请闭眼等待</view>
+    <view class="night-copy">轮到你时手机会震动并显示私密信息。</view>
+  </view>
+
+  <view class="private-info-card" wx:if="{{minionDemonName}}">
+    <view class="eyebrow">MINION INFO</view>
+    <view class="private-info-line">恶魔：{{minionDemonName}}</view>
+    <view class="private-info-line" wx:if="{{fellowMinionNames}}">
+      其他爪牙：{{fellowMinionNames}}
+    </view>
+  </view>
+
+  <view class="private-info-card" wx:if="{{demonMinionNames || demonBluffNames}}">
+    <view class="eyebrow">DEMON INFO</view>
+    <view class="private-info-line" wx:if="{{demonMinionNames}}">
+      爪牙：{{demonMinionNames}}
+    </view>
+    <view class="private-info-line" wx:if="{{demonBluffNames}}">
+      三个伪装身份：{{demonBluffNames}}
     </view>
   </view>
 
@@ -46,6 +82,22 @@
     bindtap="onConfirmRoleTap"
   >
     我知道自己的身份了
+  </button>
+
+  <button
+    wx:if="{{canBeginFirstNight}}"
+    class="primary-button"
+    bindtap="onBeginFirstNightTap"
+  >
+    开始首夜
+  </button>
+
+  <button
+    wx:if="{{canCompleteNightStep}}"
+    class="secondary-button"
+    bindtap="onCompleteNightStepTap"
+  >
+    完成当前夜间步骤
   </button>
 
   <view class="privacy-note" wx:if="{{!isSpectator}}">
