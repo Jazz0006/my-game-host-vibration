@@ -27,6 +27,15 @@ import {
   type BotcCanonicalSetupAssignment,
   type BotcSetupAssignment,
 } from "./TroubleBrewingSetup.js";
+import {
+  createTroubleBrewingDemonInfoFacts,
+  type TroubleBrewingDemonInfoFacts,
+} from "./TroubleBrewingInformation.js";
+import {
+  createDemonBluffRecommendationRequest,
+  recommendDemonBluffsBaselineV1,
+  validateDemonBluffRecommendation,
+} from "./TroubleBrewingRecommendation.js";
 
 export type { BotcSetupAssignment } from "./TroubleBrewingSetup.js";
 
@@ -46,6 +55,15 @@ export type BotcGamePhase =
   | "day"
   | "other_night";
 
+export type BotcDemonInfoSelectionSource = "moderator" | "baseline_v1";
+
+export type BotcDemonInfoState = {
+  demonPlayerId: string;
+  minionPlayerIds: string[];
+  bluffRoleIds: TroubleBrewingRoleId[];
+  selectionSource: BotcDemonInfoSelectionSource;
+};
+
 export type BotcGameState = {
   scriptId: typeof TROUBLE_BREWING_SCRIPT_ID;
   phase: BotcGamePhase;
@@ -57,12 +75,14 @@ export type BotcGameState = {
   diedTonightPlayerIds: string[];
   executedAndDiedTodayPlayerId?: string;
   roleTransitions: TroubleBrewingOtherNightRoleTransition[];
+  demonInfo?: BotcDemonInfoState;
   nightStepIndex?: number;
   otherNightProgress?: TroubleBrewingOtherNightProgress;
 };
 
 export type BotcCommand =
   | { type: "confirmRole" }
+  | { type: "setDemonBluffs"; roleIds: TroubleBrewingRoleId[] }
   | { type: "beginFirstNight" }
   | { type: "beginOtherNight" }
   | { type: "completeNightStep" };
@@ -71,6 +91,11 @@ export type BotcCommandOutcome =
   | {
       kind: "roleConfirmed";
       allConfirmed: boolean;
+    }
+  | {
+      kind: "demonBluffsCommitted";
+      source: BotcDemonInfoSelectionSource;
+      roleIds: TroubleBrewingRoleId[];
     }
   | {
       kind: "firstNightStarted";
@@ -95,6 +120,15 @@ export type BotcPlayerNightStepView = {
   roleId?: TroubleBrewingRoleId;
 };
 
+export type BotcDemonInfoView = {
+  minionPlayerIds: string[];
+  bluffRoles: Array<{
+    id: TroubleBrewingRoleId;
+    name: string;
+    nameZh: string;
+  }>;
+};
+
 export type BotcPlayerView = {
   phase: BotcGamePhase;
   mode: "role_reveal" | "waiting" | "night_wake" | "day" | "spectator";
@@ -104,6 +138,7 @@ export type BotcPlayerView = {
   roleCategory?: BotcRoleCategory;
   roleConfirmed?: boolean;
   nightStep?: BotcPlayerNightStepView;
+  demonInfo?: BotcDemonInfoView;
 };
 
 export type BotcPublicView = {
@@ -119,10 +154,79 @@ export type BotcPublicView = {
 export type BotcModeratorView = BotcPublicView & {
   assignments: BotcCanonicalSetupAssignment[];
   nightStep?: BotcNightStep;
+  demonInfo?: BotcDemonInfoView;
 };
 
 function firstNightSequence(state: BotcGameState): BotcNightStep[] {
   return createTroubleBrewingFirstNightSequence(state.assignments);
+}
+
+function demonInfoFacts(state: BotcGameState): TroubleBrewingDemonInfoFacts {
+  return createTroubleBrewingDemonInfoFacts(state.assignments);
+}
+
+function demonBluffRecommendationRequest(
+  state: BotcGameState,
+  facts: TroubleBrewingDemonInfoFacts,
+) {
+  const drunk = state.assignments.find(
+    assignment => assignment.actualRoleId === "drunk",
+  );
+  return createDemonBluffRecommendationRequest(
+    facts,
+    drunk ? { shownDrunkRoleId: drunk.shownRoleId } : undefined,
+  );
+}
+
+function commitDemonBluffs(
+  state: BotcGameState,
+  roleIds: TroubleBrewingRoleId[],
+  selectionSource: BotcDemonInfoSelectionSource,
+): BotcDemonInfoState {
+  const facts = demonInfoFacts(state);
+  const request = demonBluffRecommendationRequest(state, facts);
+  const recommendation = validateDemonBluffRecommendation(request, { roleIds });
+
+  const committed: BotcDemonInfoState = {
+    demonPlayerId: facts.demonPlayerId,
+    minionPlayerIds: [...facts.minionPlayerIds],
+    bluffRoleIds: [...recommendation.roleIds],
+    selectionSource,
+  };
+  state.demonInfo = committed;
+  return committed;
+}
+
+function ensureAutomaticDemonBluffs(
+  state: BotcGameState,
+  dependencies: GameModuleDependencies,
+): void {
+  if (state.assignments.length < 7 || state.demonInfo) return;
+
+  const facts = demonInfoFacts(state);
+  const request = demonBluffRecommendationRequest(state, facts);
+  const recommendation = recommendDemonBluffsBaselineV1(
+    request,
+    dependencies.random,
+  );
+  commitDemonBluffs(state, recommendation.roleIds, "baseline_v1");
+}
+
+function demonInfoView(state: BotcGameState): BotcDemonInfoView | undefined {
+  const info = state.demonInfo;
+  if (!info) return undefined;
+
+  return {
+    minionPlayerIds: [...info.minionPlayerIds],
+    bluffRoles: info.bluffRoleIds.map(roleId => {
+      const role = troubleBrewingRole(roleId);
+      return {
+        id: role.id,
+        name: role.name,
+        nameZh: role.nameZh,
+      };
+    }),
+  };
 }
 
 function otherNightFacts(state: BotcGameState): TroubleBrewingOtherNightFacts {
@@ -232,7 +336,7 @@ export class BotcGameModule implements GameModule<
     state: BotcGameState,
     context: GameCommandContext,
     command: BotcCommand,
-    _dependencies: GameModuleDependencies,
+    dependencies: GameModuleDependencies,
   ): GameCommandResult<BotcGameState, BotcCommandOutcome> {
     switch (command.type) {
       case "confirmRole": {
@@ -256,6 +360,29 @@ export class BotcGameModule implements GameModule<
         };
       }
 
+      case "setDemonBluffs": {
+        if (!context.isModerator) {
+          throw new Error("Only the BotC moderator can set Demon bluffs");
+        }
+        if (state.phase !== "role_reveal") {
+          throw new Error("Demon bluffs can only be set before the first night");
+        }
+
+        const committed = commitDemonBluffs(
+          state,
+          command.roleIds,
+          "moderator",
+        );
+        return {
+          state,
+          outcome: {
+            kind: "demonBluffsCommitted",
+            source: committed.selectionSource,
+            roleIds: [...committed.bluffRoleIds],
+          },
+        };
+      }
+
       case "beginFirstNight": {
         if (!context.isModerator) {
           throw new Error("Only the BotC moderator can begin the first night");
@@ -266,6 +393,8 @@ export class BotcGameModule implements GameModule<
         if (state.confirmedRolePlayerIds.length !== state.assignments.length) {
           throw new Error("All BotC players must confirm their shown role first");
         }
+
+        ensureAutomaticDemonBluffs(state, dependencies);
 
         const sequence = firstNightSequence(state);
         const firstStep = sequence[0];
@@ -445,10 +574,16 @@ export class BotcGameModule implements GameModule<
     if (state.phase === "first_night" || state.phase === "other_night") {
       const step = currentNightStep(state);
       if (step?.actorPlayerIds.includes(playerId)) {
+        const activeDemonInfo =
+          step.id === "demon_info" &&
+          state.demonInfo?.demonPlayerId === playerId
+            ? demonInfoView(state)
+            : undefined;
         return {
           ...base,
           mode: "night_wake",
           nightStep: playerNightStepView(step),
+          ...(activeDemonInfo ? { demonInfo: activeDemonInfo } : {}),
         };
       }
       return {
@@ -468,6 +603,7 @@ export class BotcGameModule implements GameModule<
     _context: GameViewContext,
   ): BotcModeratorView {
     const step = currentNightStep(state);
+    const privateDemonInfo = demonInfoView(state);
     return {
       ...publicView(state),
       assignments: state.assignments.map(assignment => ({ ...assignment })),
@@ -479,6 +615,7 @@ export class BotcGameModule implements GameModule<
             },
           }
         : {}),
+      ...(privateDemonInfo ? { demonInfo: privateDemonInfo } : {}),
     };
   }
 

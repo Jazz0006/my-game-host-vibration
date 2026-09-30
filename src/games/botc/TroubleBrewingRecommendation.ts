@@ -1,3 +1,4 @@
+import type { RandomProvider } from "../../core/random/RandomProvider.js";
 import type { TroubleBrewingRoleId } from "./TroubleBrewing.js";
 import type { TroubleBrewingDemonInfoFacts } from "./TroubleBrewingInformation.js";
 
@@ -69,4 +70,43 @@ export function validateDemonBluffRecommendation(
   return {
     roleIds: [...recommendation.roleIds],
   };
+}
+
+/**
+ * First concrete automatic Storyteller policy for Demon bluffs.
+ *
+ * Baseline V1 intentionally keeps quality policy small:
+ * - if there are enough alternatives, avoid colliding with the Townsfolk role
+ *   currently shown to the Drunk;
+ * - otherwise sample three distinct roles from the rules-legal set.
+ *
+ * More sophisticated narrative/player-history scoring belongs in later
+ * Recommendation revisions, not Rules/Information or GameModule.
+ */
+export function recommendDemonBluffsBaselineV1(
+  request: DemonBluffRecommendationRequest,
+  random: Pick<RandomProvider, "randomInt">,
+): DemonBluffRecommendation {
+  const shownDrunkRoleId = request.optionalContext?.shownDrunkRoleId;
+  const withoutShownDrunk = shownDrunkRoleId
+    ? request.requiredContext.legalBluffRoleIds.filter(
+        roleId => roleId !== shownDrunkRoleId,
+      )
+    : [...request.requiredContext.legalBluffRoleIds];
+
+  const pool =
+    withoutShownDrunk.length >= request.requiredContext.bluffCount
+      ? [...withoutShownDrunk]
+      : [...request.requiredContext.legalBluffRoleIds];
+
+  const roleIds: TroubleBrewingRoleId[] = [];
+  while (roleIds.length < request.requiredContext.bluffCount) {
+    const index = random.randomInt(pool.length);
+    if (!Number.isInteger(index) || index < 0 || index >= pool.length) {
+      throw new Error("Demon bluff recommendation random index out of range");
+    }
+    roleIds.push(pool.splice(index, 1)[0]!);
+  }
+
+  return validateDemonBluffRecommendation(request, { roleIds });
 }
