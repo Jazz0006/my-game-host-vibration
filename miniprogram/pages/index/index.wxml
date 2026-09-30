@@ -33,9 +33,8 @@
   <view class="developer-card">
     <view class="developer-title">开发阶段快捷入口</view>
     <view class="developer-copy">
-      UI Preview 使用本地展示数据；Diagnostics 保留 E3.7 真机 lifecycle 验证。
+      Diagnostics 保留 E3.7 真机 lifecycle 验证；桌面 UI 与多客户端调试统一使用 Simulator Lab V2。
     </view>
-    <button class="preview-button" bindtap="onPreviewLobbyTap">预览方桌大厅</button>
     <button class="diagnostics-button" bindtap="onOpenDiagnosticsTap">E3.7 Diagnostics</button>
   </view>
 </view>

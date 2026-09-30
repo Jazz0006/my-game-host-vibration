@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { GameType } from "../../src/games/GameCatalog.js";
 import type { ClientRoomProjection } from "../../src/protocol/client/ClientRoomProjection.js";
-import { InMemoryCloudflareMultiplayerHarness } from "./InMemoryCloudflareMultiplayerHarness.js";
+import { InMemoryCloudflareMultiplayerHarness } from "../../dev/InMemoryCloudflareMultiplayerHarness.js";
 import {
   TestRoomClient,
   type TestRoomClientTraceEntry,
-} from "./TestRoomClient.js";
+} from "../../dev/TestRoomClient.js";
 
 type LobbyView = {
   phase: string;

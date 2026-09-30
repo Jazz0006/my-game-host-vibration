@@ -35,15 +35,6 @@
   background: #ffffff;
 }
 
-.preview-banner {
-  margin-bottom: 20rpx;
-  padding: 14rpx 18rpx;
-  border-radius: 14rpx;
-  background: #fff6d8;
-  color: #775b00;
-  font-size: 22rpx;
-}
-
 .table-stage {
   position: relative;
   width: 640rpx;
@@ -199,9 +190,3 @@
   background: #4f7e5e;
 }
 
-.hint {
-  padding: 20rpx 8rpx 0;
-  text-align: center;
-  font-size: 20rpx;
-  color: #929c95;
-}

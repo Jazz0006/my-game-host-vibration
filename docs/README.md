@@ -43,9 +43,9 @@ B0A–B0B3 BotC module / setup contract / night sequencing ✅
   ↓
 B0C1 / B0C2 / B0C3A rules-information foundations ✅ checkpointed
   ↓
-SIM-0 Simulator Lab V2 foundation ← CURRENT / NEXT
+SIM-0 Simulator Lab V2 foundation ✅
   ↓
-PV-0 shared Lobby production interactions
+PV-0 shared Lobby production interactions ← CURRENT / NEXT
   ↓
 PV-1 minimal BotC Setup + production start path
   ↓
@@ -70,13 +70,14 @@ B0C3B and later storyteller recommendation depth remain valuable but are **defer
   - platform-level multiplayer test strategy and direct support for the Simulator-first playable mainline;
   - virtual `TestRoomClient` / multi-client convergence / reconnect / idempotency / privacy plan;
   - T0/T1/T2/T3 complete: seam audit, shared TestRoomClient, 10-client convergence, reconnect and deterministic fault injection;
-  - T4 privacy/projection work should follow stable SIM/PV contracts;
+  - SIM-0 complete: shared dev/test harness now powers `/dev/lab` with phone viewer, N virtual clients, Storyteller/debug inspector and deterministic disconnect/reconnect;
+  - T4 privacy/projection work follows stable PV contracts, with secret-differentiated BotC coverage deferred until PV-2;
   - T5 device tooling is an escalation toolkit, **not** a daily two-device requirement;
   - default daily development uses zero real devices.
 - `docs/T0_MULTIPLAYER_HARNESS_SEAM_AUDIT_2026-09-30.md`
   - T0 owner/seam audit and existing-test map;
   - production-gap result: NONE for T1;
-  - T1 implementation contract: test-only Cloudflare/DO capability adapter + production bootstrap/Raw WS/ClientSession owners.
+  - T1 historical implementation contract: capability adapter + production bootstrap/Raw WS/ClientSession owners; SIM-0 later moved the shared client/harness implementation to `dev/` for one dev+test owner.
 
 ## Historical / superseded documents
 

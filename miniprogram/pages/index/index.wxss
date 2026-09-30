@@ -107,15 +107,8 @@
   line-height: 1.55;
 }
 
-.preview-button,
 .diagnostics-button {
   border-radius: 18rpx;
-  background: #eef3ef;
-  color: #294b35;
-}
-
-.diagnostics-button {
-  margin-top: 12rpx;
   background: #f4f4f4;
   color: #5d6560;
 }

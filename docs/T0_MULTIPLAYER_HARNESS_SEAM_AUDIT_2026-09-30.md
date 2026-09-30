@@ -52,6 +52,8 @@ The test harness may fake platform/network capabilities, but it must not fake:
 
 ## 3. Recommended test directory
 
+Historical T0/T1 recommendation:
+
 ```text
 tests/multiplayer/
   TestRoomClient.ts
@@ -62,6 +64,8 @@ tests/multiplayer/
   games/            # only thin semantic-command helpers when truly needed
   trace/            # only if bounded trace support grows beyond TestRoomClient
 ```
+
+T1 correctly avoided a general framework package. During SIM-0, the two reusable implementation files moved to `dev/TestRoomClient.ts` and `dev/InMemoryCloudflareMultiplayerHarness.ts` so deterministic tests and the human-facing Simulator Lab V2 consume one dev+test owner; the scenario tests remain under `tests/multiplayer/`.
 
 T1 should not create a general test framework package or production helper merely for directory symmetry.
 

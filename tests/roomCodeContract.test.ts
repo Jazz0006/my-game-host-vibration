@@ -37,12 +37,12 @@ describe("four-digit room code contract", () => {
     expect(result.roomId).toMatch(/^\d{4}$/u);
   });
 
-  it("keeps web recovery and the lab on the same room and command contracts", () => {
+  it("keeps web recovery codes stable while Simulator Lab V2 uses its own production-seam coordinator", () => {
     const indexHtml = source("public/index.html");
     const recoveryUi = source("public/recoveryIdentity.js");
     const labHtml = source("dev/lab.html");
-    const labBootstrap = source("dev/labBootstrap.js");
-    const recoveryLab = source("dev/recoveryLab.js");
+    const labClient = source("dev/labV2.js");
+    const coordinator = source("dev/SimulatorLabCoordinator.ts");
 
     expect(indexHtml).toContain('id="room-input" inputmode="numeric" maxlength="4"');
     expect(indexHtml).toContain('id="recovery-room-input" inputmode="numeric" maxlength="4"');
@@ -51,15 +51,13 @@ describe("four-digit room code contract", () => {
     expect(recoveryUi).toContain('/^\\d{4}$/u');
     expect(recoveryUi).toContain('recoveryCodeInput.maxLength = 6');
     expect(recoveryUi).toContain('/^\\d{6}$/u');
-    expect(labHtml).toContain('maxlength="4"');
-    expect(labBootstrap).toContain('.replace("\\\\d{6}", "\\\\d{4}")');
-    expect(labBootstrap).toContain('source.includes("/^\\\\d{4}$/u")');
-    expect(labBootstrap).toContain('commandId: crypto.randomUUID()');
-    expect(labBootstrap).toContain('Function(source)();');
-    expect(labBootstrap).toContain('实验室启动失败');
-    expect(labBootstrap).toContain('createButton("模拟掉线"');
-    expect(recoveryLab).toContain('/^\\d{4}$/u');
-    expect(recoveryLab).toContain('/^\\d{6}$/u');
-    expect(recoveryLab).toContain('"player:claim-identity-recovery"');
+
+    expect(labHtml).toContain("Simulator Lab V2");
+    expect(labHtml).toContain('id="player-count" type="number" min="5" max="15" value="8"');
+    expect(labHtml).toContain('src="/dev/assets/labV2.js"');
+    expect(labClient).toContain('"/dev/simulator/api/reset"');
+    expect(coordinator).toContain('gameType: "botc"');
+    expect(coordinator).toContain('"room.setGameModerator"');
+    expect(coordinator).not.toContain("/snapshot");
   });
 });

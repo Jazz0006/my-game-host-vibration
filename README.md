@@ -126,31 +126,26 @@ UI intention
 
 private authoritative PlayerView 通过 `client:state` 同步；transient effect/lifecycle 通过 `client:event` 传递。E2 已锁定 `raw production Werewolf game commands = 0`。E3.2a–E3.5 已建立微信 ticket/Raw WS、reconnect、same-commandId retry 与 native effects；E3.6 进一步加入 transport-neutral public room projection、Cloudflare start/restart lifecycle、next-actor action alert，以及微信 credential storage/lifecycle/native composition/minimal page-controller。fake-`wx` vertical test 已跑通 lobby → command → effect → background reconnect。E3.7A 已提供可直接导入微信开发者工具的 `miniprogram/` shell，以及 TS7 bundler-mode typecheck + esbuild CommonJS runtime build；E3.7B 已在真实 Developer Tools + 手机上完成 production create/join、双端 authoritative push、foreground/background、飞行模式断网恢复、stored-session 恢复与 heavy vibration capability 验收。W3D3 已将一次性 identity-recovery grant、失败尝试限制和 resume credential rotation 收敛到 game-neutral shared owner，并在 Cloudflare DO storage 中持久化；恢复后旧 resume token 以及用旧 credential 签发但尚未消费的 WebSocket ticket 都不能继续接管会话。MG0A 已加入 `werewolf | botc` GameCatalog admission seam；create/join 均由客户端产品固定 gameType，错误游戏客户端不能加入另一类房间。MG0B1 进一步让 BotC lobby 复用同一 Cloudflare ticket / Hibernation WebSocket / sync / reconnect / room-management 路径；MG0B2 再把具体游戏 command/lifecycle/recovery/timeout 编排移出 shared Raw WebSocket bridge，改由 gameType registry 选择 game-specific handler。MG0C 已把 Room Owner 与 Game Moderator 拆为独立 authority：owner 负责房间管理与 recovery，`Automatic | Human(playerId)` moderator assignment 独立持久化；只有 Human Moderator 获得 secret moderator view，且不计入实际玩家/角色分配，Automatic 模式下 owner 仅保留当前 Werewolf 控制入口而不获得 secret view。stale-generation fencing 继续由专门自动化测试覆盖。Room management 与 Moderator assignment 已 authoritative；Ready 与拖动排序仍属于后续 lobby-command/UI slices。2026-09-29 产品方向调整后，微信不再在同一小程序 Lobby 中切换游戏；`骏骏桌游-狼人` 与 `骏骏桌游-血染` 作为两个 game-specific 薄壳共享同一 ClientSession / transport / reconnect / backend，房间在创建时固定 gameType。
 
-## 多玩家模拟器
+## Simulator Lab V2
 
-先启动服务器，再在另一个终端运行：
-
-```bash
-npm run simulate
-```
-
-可指定人数或服务器地址：
-
-```bash
-npm run simulate -- --players 12 --url http://127.0.0.1:3001
-```
-
-## 对局实验室
-
-开发环境启动后可访问：
+开发环境启动后访问：
 
 ```text
 http://localhost:3000/dev/lab
 ```
 
-当 `NODE_ENV=production` 时，`/dev/lab` 和实验室静态资源不会开放。
+`NODE_ENV=production` 时不会开放 Simulator Lab 或其 dev API。
 
-当前 `/dev/lab` 仍是早期 Node/Socket.IO 狼人杀实验室。SIM-0 将其收敛为 Simulator Lab V2：基于当前 TestRoomClient / ClientSession / production projection seams，提供一个接近真实手机客户端的 viewer、N 个简化虚拟玩家和开发期 Storyteller/debug inspector。正常开发默认不需要真机。
+Simulator Lab V2 默认建立 5–15 人 BotC 虚拟桌。每名虚拟玩家都有独立的 production `ClientSession`，并通过共享 `BrowserRoomBootstrapClient -> CloudflareRealtimeTransport -> GameRoomDurableObject` 语义链路运行；本地只替换 Cloudflare network/storage capability，不复制 GameModule 规则或 projection。页面提供：
+
+- 一个接近手机尺寸的 selected-viewer；
+- N 个简化虚拟玩家控制卡；
+- Human/Automatic Storyteller assignment；
+- semantic-command 调试入口；
+- authoritative room / PlayerView / bounded ClientSession trace inspector；
+- deterministic disconnect/reconnect 操作。
+
+日常 BotC 功能开发默认使用该 Lab + 自动化多人测试，不再使用旧 Node/Socket.IO `npm run simulate` 或旧狼人杀 `/dev/lab` 实现，也不要求真机。
 
 ## 长期产品边界
 

@@ -13,8 +13,7 @@
     "pretest": "npm run build:client && npm run build:wechat",
     "test": "vitest run",
     "check:file-sizes": "node scripts/check-source-file-sizes.mjs",
-    "verify:flow": "node scripts/verify-flow.mjs",
-    "simulate": "node scripts/simulate-game.mjs"
+    "verify:flow": "node scripts/verify-flow.mjs"
   },
   "keywords": [],
   "author": "",

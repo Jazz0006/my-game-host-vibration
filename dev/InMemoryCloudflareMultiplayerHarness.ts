@@ -2,20 +2,20 @@ import type {
   BrowserFetchLike,
   BrowserWebSocketFactory,
   BrowserWebSocketLike,
-} from "../../src/client/browser/CloudflareRealtimeTransport.js";
+} from "../src/client/browser/CloudflareRealtimeTransport.js";
 import {
   CloudflareRoomRealtime,
   type HibernationWebSocketLike,
-} from "../../src/runtime/cloudflare/CloudflareRoomRealtime.js";
-import { GameRoomDurableObject } from "../../src/runtime/cloudflare/GameRoomDurableObject.js";
+} from "../src/runtime/cloudflare/CloudflareRoomRealtime.js";
+import { GameRoomDurableObject } from "../src/runtime/cloudflare/GameRoomDurableObject.js";
 import {
   cloudflareWorker,
   type CloudflareEnv,
-} from "../../src/runtime/cloudflare/worker.js";
+} from "../src/runtime/cloudflare/worker.js";
 import type {
   DurableObjectNamespaceLike,
   DurableObjectStubLike,
-} from "../../src/runtime/cloudflare/roomRouting.js";
+} from "../src/runtime/cloudflare/roomRouting.js";
 
 class MemoryStorage {
   private readonly values = new Map<string, unknown>();
