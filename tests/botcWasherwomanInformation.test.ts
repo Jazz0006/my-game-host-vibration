@@ -71,6 +71,7 @@ describe("B0C3A Trouble Brewing registration + Washerwoman truthful information"
     ]);
 
     expect(candidates).toContainEqual({
+      candidateId: "washerwoman:chef:washerwoman:chef",
       learnedRoleId: "chef",
       shownPlayerIds: ["washerwoman", "chef"],
       legalResolutions: [
@@ -81,6 +82,7 @@ describe("B0C3A Trouble Brewing registration + Washerwoman truthful information"
       ],
     });
     expect(candidates).toContainEqual({
+      candidateId: "washerwoman:chef:chef:baron",
       learnedRoleId: "chef",
       shownPlayerIds: ["chef", "baron"],
       legalResolutions: [
@@ -104,6 +106,7 @@ describe("B0C3A Trouble Brewing registration + Washerwoman truthful information"
     ]);
 
     expect(candidates).toContainEqual({
+      candidateId: "washerwoman:ravenkeeper:chef:spy",
       learnedRoleId: "ravenkeeper",
       shownPlayerIds: ["chef", "spy"],
       legalResolutions: [
@@ -115,6 +118,7 @@ describe("B0C3A Trouble Brewing registration + Washerwoman truthful information"
     });
 
     expect(candidates).toContainEqual({
+      candidateId: "washerwoman:chef:chef:spy",
       learnedRoleId: "chef",
       shownPlayerIds: ["chef", "spy"],
       legalResolutions: [
@@ -139,6 +143,7 @@ describe("B0C3A Trouble Brewing registration + Washerwoman truthful information"
     ]);
 
     expect(candidates).toContainEqual({
+      candidateId: "washerwoman:empath:empath:drunk",
       learnedRoleId: "empath",
       shownPlayerIds: ["empath", "drunk"],
       legalResolutions: [

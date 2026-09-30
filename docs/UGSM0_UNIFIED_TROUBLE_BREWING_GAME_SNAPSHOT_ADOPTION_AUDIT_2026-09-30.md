@@ -201,7 +201,7 @@ This preserves the current Simulator-first route while avoiding a future schema 
 
 ## 7. PV-3B2 integration requirement
 
-PV-3B2 remains the current gameplay NEXT, but it now has an additional architecture gate.
+PV-3B2 remains subject to the unified-model architecture gate, but the live cross-project audit has clarified that **semantic alignment and V1 wire-schema evolution are separate concerns**.
 
 For Washerwoman / Librarian / Investigator / Chef / Empath information results:
 
@@ -209,22 +209,24 @@ For Washerwoman / Librarian / Investigator / Chef / Empath information results:
 Rules / Information
   -> legal result/candidate domain
   -> simple rules-legal baseline choice where recommendation depth is deferred
-  -> authoritative commit in BotcGameState
-  -> canonical snapshot reflects KNOWN(result)
+  -> authoritative commit in BotcGameState/session history
+  -> canonical information semantics align across projects
   -> PlayerView exposes only the recipient-safe private result
+  -> shared snapshot wire schema evolves only through coordinated versioning
 ```
 
-Before commit, if the ability/result is applicable but no result has been chosen, the canonical snapshot must be able to express `UNCOMMITTED`.
+CampBoardGameHost currently keeps `TroubleBrewingGameSnapshotV1` deliberately narrow. Therefore PV-3B2 must **not** unilaterally append delivered-information fields to the V1 JSON contract merely to satisfy this repository. The immediate compatibility requirement is that committed/uncommitted information, reliability, semantic truth and registration provenance have explicit canonical meanings that can be projected into a future coordinated snapshot version without reinterpretation.
 
-Poisoning/drunkenness and later misinformation selection must remain separate concepts:
+Poisoning/drunkenness and later misinformation selection remain separate concepts:
 
 - impairment source/lifetime is a canonical game fact;
 - the legal information domain belongs to Rules / Information;
 - recommendation chooses among allowed outcomes when policy is needed;
-- Game Engine commits the accepted result;
-- snapshot records the committed/uncommitted state.
+- Game Engine commits the accepted result and its provenance;
+- PlayerView does not expose hidden reliability/truth metadata;
+- cross-project snapshot/schema owners coordinate any later delivered-information wire field and golden fixture.
 
-PV-3B2 must not introduce a second private "information state" that cannot be projected into the shared snapshot model.
+Thus PV-3B2 must not create a competing semantic model, but it also must not fork the frozen V1 wire format. This clarification supersedes the earlier wording that required V1 itself to immediately contain each delivered information result.
 
 ---
 
@@ -263,6 +265,8 @@ Important compatibility decision: this online runtime currently has no authorita
 Current online setup is already committed before `BotcGameState` exists, so the current projector emits SETUP_COMMITTED/RUNTIME snapshots only. The V1 type still supports SETUP_PRECOMMIT + UNCOMMITTED exactly; a future DLB intermediate owner can add that projector without changing the schema.
 
 Validation: `typecheck` PASS; full `npm test` PASS with 137 test files / 574 tests; Web client and both WeChat product shells build/verify PASS.
+
+PV-3B2A follow-up (2026-10-01): the first durable Washerwoman information-result flow has now been implemented without changing the frozen V1 wire schema. A fresh CampBoardGameHost `main` audit at `4593f79186d0af388e2d1c25e272462c576f5548` confirmed V1 is still deliberately narrow, while Host information semantics already model reliability, semantic truth and registration provenance. This repository therefore keeps delivered information in authoritative runtime/session history aligned to those semantics, but does not fork `TroubleBrewingGameSnapshotV1`. Any future delivered-information snapshot field must be introduced as a coordinated cross-project schema evolution with matching fixtures.
 
 ### UGSM-2 — semantic-equivalence fixtures
 

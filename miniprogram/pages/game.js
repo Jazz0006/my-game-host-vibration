@@ -70,7 +70,9 @@ function statusForView(playerView, allConfirmed, controller) {
 
   if (playerView.phase === "first_night" || playerView.phase === "other_night") {
     if (playerView.mode === "night_wake") {
-      return "请睁眼，查看当前夜间信息或按说书人指示行动。";
+      return playerView.privateInformation
+        ? "请查看你的私密信息，确认记住后继续。"
+        : "请睁眼，查看当前夜间信息或按说书人指示行动。";
     }
     if (playerView.mode === "spectator") {
       return controller
@@ -100,6 +102,8 @@ Page({
     isSpectator: false,
     canConfirmRole: false,
     canBeginFirstNight: false,
+    canCommitNightInformation: false,
+    canAcknowledgeNightInformation: false,
     canCompleteNightStep: false,
     isNightWake: false,
     isNightWaiting: false,
@@ -115,6 +119,8 @@ Page({
     fellowMinionNames: "",
     demonMinionNames: "",
     demonBluffNames: "",
+    privateInformationRoleName: "",
+    privateInformationPlayerNames: "",
     confirmedRoles: 0,
     playerCount: 0,
     allConfirmed: false,
@@ -203,9 +209,22 @@ Page({
       phase === "role_reveal" &&
       allConfirmed
     );
+    const informationDecision =
+      game &&
+      game.informationDecision &&
+      typeof game.informationDecision === "object"
+        ? game.informationDecision
+        : null;
+    const canCommitNightInformation = Boolean(
+      this._product.commitNightInformationCommand &&
+      controller &&
+      informationDecision &&
+      !informationDecision.committed
+    );
     const canCompleteNightStep = Boolean(
       this._product.completeNightStepCommand &&
       controller &&
+      !informationDecision &&
       (phase === "first_night" || phase === "other_night")
     );
     const nightStep =
@@ -254,6 +273,16 @@ Page({
       playerView && playerView.demonInfo && typeof playerView.demonInfo === "object"
         ? playerView.demonInfo
         : null;
+    const privateInformation =
+      playerView &&
+      playerView.privateInformation &&
+      typeof playerView.privateInformation === "object"
+        ? playerView.privateInformation
+        : null;
+    const canAcknowledgeNightInformation = Boolean(
+      this._product.acknowledgeNightInformationCommand &&
+      privateInformation
+    );
     const isNightWake = Boolean(
       playerView && playerView.mode === "night_wake"
     );
@@ -293,6 +322,8 @@ Page({
       isSpectator,
       canConfirmRole,
       canBeginFirstNight,
+      canCommitNightInformation,
+      canAcknowledgeNightInformation,
       canCompleteNightStep,
       isNightWake,
       isNightWaiting,
@@ -328,6 +359,19 @@ Page({
         demonInfo && Array.isArray(demonInfo.bluffRoles)
           ? demonInfo.bluffRoles
               .map(role => role.nameZh || role.name || role.id)
+              .join("、")
+          : "",
+      privateInformationRoleName:
+        privateInformation && privateInformation.learnedRole
+          ? privateInformation.learnedRole.nameZh ||
+            privateInformation.learnedRole.name ||
+            privateInformation.learnedRole.id ||
+            ""
+          : "",
+      privateInformationPlayerNames:
+        privateInformation && Array.isArray(privateInformation.shownPlayerIds)
+          ? privateInformation.shownPlayerIds
+              .map(playerId => playerName(room, playerId))
               .join("、")
           : "",
       confirmedRoles,
@@ -370,6 +414,24 @@ Page({
       this._product.beginFirstNightCommand,
       {},
       "进入首夜…"
+    );
+  },
+
+  onCommitNightInformationTap() {
+    if (!this.data.canCommitNightInformation) return;
+    return this.sendProductCommand(
+      this._product.commitNightInformationCommand,
+      {},
+      "生成信息…"
+    );
+  },
+
+  onAcknowledgeNightInformationTap() {
+    if (!this.data.canAcknowledgeNightInformation) return;
+    return this.sendProductCommand(
+      this._product.acknowledgeNightInformationCommand,
+      {},
+      "确认信息…"
     );
   },
 

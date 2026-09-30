@@ -92,6 +92,20 @@
     </view>
   </view>
 
+  <view class="private-info-card" wx:if="{{privateInformationRoleName}}">
+    <view class="eyebrow">PRIVATE INFO</view>
+    <view class="private-info-line">
+      {{privateInformationPlayerNames}} 中有 1 人是 {{privateInformationRoleName}}
+    </view>
+    <button
+      wx:if="{{canAcknowledgeNightInformation}}"
+      class="primary-button"
+      bindtap="onAcknowledgeNightInformationTap"
+    >
+      我记住这条信息了
+    </button>
+  </view>
+
   <view class="progress-card">
     <view class="progress-label">身份确认进度</view>
     <view class="progress-value">{{confirmedRoles}} / {{playerCount}}</view>
@@ -116,6 +130,14 @@
     bindtap="onBeginFirstNightTap"
   >
     开始首夜
+  </button>
+
+  <button
+    wx:if="{{canCommitNightInformation}}"
+    class="primary-button"
+    bindtap="onCommitNightInformationTap"
+  >
+    提交当前私密信息
   </button>
 
   <button

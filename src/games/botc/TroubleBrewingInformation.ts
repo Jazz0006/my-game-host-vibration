@@ -65,16 +65,48 @@ export function createTroubleBrewingDemonInfoFacts(
   };
 }
 
-export type TroubleBrewingWasherwomanInformationResolution = {
+export type TroubleBrewingPairInformationResolution = {
   matchingPlayerId: string;
   matchSource: TroubleBrewingCharacterRegistrationSource;
 };
 
+export type TroubleBrewingWasherwomanInformationResolution =
+  TroubleBrewingPairInformationResolution;
+
+export type TroubleBrewingInformationReliability =
+  | "reliable"
+  | "drunk"
+  | "poisoned";
+
+export type TroubleBrewingSemanticTruth =
+  | "true"
+  | "false"
+  | "partially_true"
+  | "not_applicable";
+
 export type TroubleBrewingWasherwomanInformationCandidate = {
+  candidateId: string;
   learnedRoleId: TroubleBrewingRoleId;
   shownPlayerIds: [string, string];
   legalResolutions: TroubleBrewingWasherwomanInformationResolution[];
 };
+
+export type TroubleBrewingPairInformationResult = {
+  kind: "pair";
+  abilityRoleId: TroubleBrewingRoleId;
+  recipientPlayerId: string;
+  learnedRoleId: TroubleBrewingRoleId;
+  shownPlayerIds: [string, string];
+  reliability: TroubleBrewingInformationReliability;
+  semanticTruth: TroubleBrewingSemanticTruth;
+  selectedCandidateId: string;
+  selectedResolution: TroubleBrewingPairInformationResolution;
+};
+
+export type TroubleBrewingWasherwomanInformationResult =
+  TroubleBrewingPairInformationResult & {
+    abilityRoleId: "washerwoman";
+  };
 
 /**
  * Generates all distinct truthful Washerwoman information choices for the
@@ -135,6 +167,7 @@ export function createTroubleBrewingWasherwomanInformationCandidates(
         }
 
         candidates.set(key, {
+          candidateId: `washerwoman:${registration.roleId}:${shownPlayerIds[0]}:${shownPlayerIds[1]}`,
           learnedRoleId: registration.roleId,
           shownPlayerIds,
           legalResolutions: [resolution],

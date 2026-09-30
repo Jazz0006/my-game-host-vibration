@@ -34,11 +34,16 @@ import {
 } from "./TroubleBrewingSetup.js";
 import {
   createTroubleBrewingDemonInfoFacts,
+  createTroubleBrewingWasherwomanInformationCandidates,
   type TroubleBrewingDemonInfoFacts,
+  type TroubleBrewingInformationReliability,
+  type TroubleBrewingPairInformationResult,
 } from "./TroubleBrewingInformation.js";
 import {
   createDemonBluffRecommendationRequest,
+  createWasherwomanInformationRecommendationRequest,
   recommendDemonBluffsBaselineV1,
+  recommendWasherwomanInformationBaselineV1,
   validateDemonBluffRecommendation,
 } from "./TroubleBrewingRecommendation.js";
 
@@ -69,6 +74,17 @@ export type BotcDemonInfoState = {
   selectionSource: BotcDemonInfoSelectionSource;
 };
 
+export type BotcNightInformationSelectionSource = "baseline_v1";
+
+export type BotcNightInformationState = {
+  stepId: BotcNightStep["id"];
+  nightNumber: number;
+  recipientPlayerId: string;
+  result: TroubleBrewingPairInformationResult;
+  selectionSource: BotcNightInformationSelectionSource;
+  acknowledged: boolean;
+};
+
 export type BotcGameState = {
   scriptId: typeof TROUBLE_BREWING_SCRIPT_ID;
   phase: BotcGamePhase;
@@ -81,6 +97,7 @@ export type BotcGameState = {
   executedAndDiedTodayPlayerId?: string;
   roleTransitions: TroubleBrewingOtherNightRoleTransition[];
   demonInfo?: BotcDemonInfoState;
+  informationHistory: BotcNightInformationState[];
   poisonedPlayerId?: string;
   butlerMasterPlayerId?: string;
   nightStepIndex?: number;
@@ -93,6 +110,8 @@ export type BotcCommand =
   | { type: "beginFirstNight" }
   | { type: "beginOtherNight" }
   | { type: "submitNightChoice"; playerIds: string[] }
+  | { type: "commitNightInformation" }
+  | { type: "acknowledgeNightInformation" }
   | { type: "completeNightStep" };
 
 export type BotcCommandOutcome =
@@ -119,6 +138,19 @@ export type BotcCommandOutcome =
       kind: "nightChoiceCommitted";
       completedStepId: BotcNightStep["id"];
       selectedPlayerIds: string[];
+      nextStepId?: BotcNightStep["id"];
+      nightComplete: boolean;
+    }
+  | {
+      kind: "nightInformationCommitted";
+      stepId: BotcNightStep["id"];
+      recipientPlayerId: string;
+      candidateId: string;
+      selectionSource: BotcNightInformationSelectionSource;
+    }
+  | {
+      kind: "nightInformationAcknowledged";
+      completedStepId: BotcNightStep["id"];
       nextStepId?: BotcNightStep["id"];
       nightComplete: boolean;
     }
@@ -150,6 +182,24 @@ export type BotcDemonInfoView = {
   }>;
 };
 
+export type BotcPrivateInformationView = {
+  kind: "pair";
+  abilityRoleId: TroubleBrewingRoleId;
+  learnedRole: {
+    id: TroubleBrewingRoleId;
+    name: string;
+    nameZh: string;
+  };
+  shownPlayerIds: [string, string];
+};
+
+export type BotcModeratorInformationDecisionView = {
+  stepId: BotcNightStep["id"];
+  recipientPlayerId: string;
+  roleId: TroubleBrewingRoleId;
+  committed: boolean;
+};
+
 export type BotcPlayerView = {
   phase: BotcGamePhase;
   mode: "role_reveal" | "waiting" | "night_wake" | "day" | "spectator";
@@ -161,6 +211,7 @@ export type BotcPlayerView = {
   nightStep?: BotcPlayerNightStepView;
   minionInfo?: BotcMinionInfoView;
   demonInfo?: BotcDemonInfoView;
+  privateInformation?: BotcPrivateInformationView;
 };
 
 export type BotcPublicView = {
@@ -181,6 +232,8 @@ export type BotcModeratorView = BotcPublicView & {
     butlerMasterPlayerId?: string;
   };
   demonInfo?: BotcDemonInfoView;
+  informationDecision?: BotcModeratorInformationDecisionView;
+  currentInformation?: BotcNightInformationState;
 };
 
 function firstNightSequence(state: BotcGameState): BotcNightStep[] {
@@ -266,6 +319,134 @@ function demonInfoView(state: BotcGameState): BotcDemonInfoView | undefined {
         nameZh: role.nameZh,
       };
     }),
+  };
+}
+
+function washerwomanInformationStep(
+  step: BotcNightStep | undefined,
+): Extract<BotcNightStep, { kind: "role" }> | undefined {
+  if (step?.kind !== "role" || step.roleId !== "washerwoman") return undefined;
+  return step;
+}
+
+function currentInformationState(
+  state: BotcGameState,
+  step: BotcNightStep | undefined = currentNightStep(state),
+): BotcNightInformationState | undefined {
+  if (!step) return undefined;
+  for (let index = state.informationHistory.length - 1; index >= 0; index -= 1) {
+    const item = state.informationHistory[index]!;
+    if (
+      item.nightNumber === state.nightNumber &&
+      item.stepId === step.id &&
+      step.actorPlayerIds.includes(item.recipientPlayerId)
+    ) {
+      return item;
+    }
+  }
+  return undefined;
+}
+
+function informationReliability(
+  state: BotcGameState,
+  step: Extract<BotcNightStep, { kind: "role" }>,
+  recipientPlayerId: string,
+): TroubleBrewingInformationReliability {
+  if (step.actorSource === "shown_drunk") return "drunk";
+  if (state.poisonedPlayerId === recipientPlayerId) return "poisoned";
+  return "reliable";
+}
+
+function commitCurrentWasherwomanInformation(
+  state: BotcGameState,
+): BotcNightInformationState {
+  const step = washerwomanInformationStep(currentNightStep(state));
+  if (!step) {
+    throw new Error("Active BotC night step does not support committed information yet");
+  }
+  const recipientPlayerId = step.actorPlayerIds[0];
+  if (!recipientPlayerId || step.actorPlayerIds.length !== 1) {
+    throw new Error("Washerwoman information requires exactly one active recipient");
+  }
+  if (currentInformationState(state, step)) {
+    throw new Error("Active BotC night information is already committed");
+  }
+
+  const reliability = informationReliability(state, step, recipientPlayerId);
+  const legalCandidates =
+    createTroubleBrewingWasherwomanInformationCandidates(state.assignments);
+  const request = createWasherwomanInformationRecommendationRequest(
+    recipientPlayerId,
+    reliability,
+    legalCandidates,
+  );
+  const recommendation = recommendWasherwomanInformationBaselineV1(request);
+  const selected = legalCandidates.find(
+    candidate => candidate.candidateId === recommendation.candidateId,
+  );
+  if (!selected) {
+    throw new Error("Washerwoman recommendation selected a missing legal candidate");
+  }
+
+  const selectedResolution = [...selected.legalResolutions].sort((left, right) =>
+    `${left.matchingPlayerId}:${left.matchSource}`.localeCompare(
+      `${right.matchingPlayerId}:${right.matchSource}`,
+    ),
+  )[0];
+  if (!selectedResolution) {
+    throw new Error("Washerwoman information candidate has no legal resolution");
+  }
+
+  const committed: BotcNightInformationState = {
+    stepId: step.id,
+    nightNumber: state.nightNumber,
+    recipientPlayerId,
+    result: {
+      kind: "pair",
+      abilityRoleId: "washerwoman",
+      recipientPlayerId,
+      learnedRoleId: selected.learnedRoleId,
+      shownPlayerIds: [...selected.shownPlayerIds] as [string, string],
+      reliability,
+      semanticTruth: "true",
+      selectedCandidateId: selected.candidateId,
+      selectedResolution: { ...selectedResolution },
+    },
+    selectionSource: "baseline_v1",
+    acknowledged: false,
+  };
+  state.informationHistory.push(committed);
+  return committed;
+}
+
+function privateInformationView(
+  information: BotcNightInformationState,
+): BotcPrivateInformationView {
+  const learnedRole = troubleBrewingRole(information.result.learnedRoleId);
+  return {
+    kind: information.result.kind,
+    abilityRoleId: information.result.abilityRoleId,
+    learnedRole: {
+      id: learnedRole.id,
+      name: learnedRole.name,
+      nameZh: learnedRole.nameZh,
+    },
+    shownPlayerIds: [...information.result.shownPlayerIds] as [string, string],
+  };
+}
+
+function moderatorInformationDecision(
+  state: BotcGameState,
+  step: BotcNightStep | undefined,
+): BotcModeratorInformationDecisionView | undefined {
+  const informationStep = washerwomanInformationStep(step);
+  const recipientPlayerId = informationStep?.actorPlayerIds[0];
+  if (!informationStep || !recipientPlayerId) return undefined;
+  return {
+    stepId: informationStep.id,
+    recipientPlayerId,
+    roleId: "washerwoman",
+    committed: Boolean(currentInformationState(state, informationStep)),
   };
 }
 
@@ -442,6 +623,7 @@ export class BotcGameModule implements GameModule<
       deadPlayerIds: [],
       diedTonightPlayerIds: [],
       roleTransitions: [],
+      informationHistory: [],
     };
   }
 
@@ -621,6 +803,56 @@ export class BotcGameModule implements GameModule<
         };
       }
 
+      case "commitNightInformation": {
+        if (!context.isModerator) {
+          throw new Error("Only the BotC moderator can commit night information");
+        }
+        const committed = commitCurrentWasherwomanInformation(state);
+        return {
+          state,
+          outcome: {
+            kind: "nightInformationCommitted",
+            stepId: committed.stepId,
+            recipientPlayerId: committed.recipientPlayerId,
+            candidateId: committed.result.selectedCandidateId,
+            selectionSource: committed.selectionSource,
+          },
+        };
+      }
+
+      case "acknowledgeNightInformation": {
+        if (!context.playerId) {
+          throw new Error("player command requires playerId");
+        }
+        const step = currentNightStep(state);
+        const informationStep = washerwomanInformationStep(step);
+        if (
+          !informationStep ||
+          !informationStep.actorPlayerIds.includes(context.playerId)
+        ) {
+          throw new Error(
+            "Only the active BotC information recipient can acknowledge this information",
+          );
+        }
+        const information = currentInformationState(state, informationStep);
+        if (!information || information.acknowledged) {
+          throw new Error("Active BotC night information is not ready for acknowledgement");
+        }
+        information.acknowledged = true;
+        const advanced = advanceCurrentNightStep(state);
+        return {
+          state,
+          outcome: {
+            kind: "nightInformationAcknowledged",
+            completedStepId: advanced.completedStepId,
+            ...(advanced.nextStepId
+              ? { nextStepId: advanced.nextStepId }
+              : {}),
+            nightComplete: advanced.nightComplete,
+          },
+        };
+      }
+
       case "completeNightStep": {
         if (!context.isModerator) {
           throw new Error("Only the BotC moderator can complete a night step");
@@ -629,6 +861,14 @@ export class BotcGameModule implements GameModule<
         const step = currentNightStep(state);
         if (!step) {
           throw new Error("There is no active BotC night step");
+        }
+        if (washerwomanInformationStep(step)) {
+          const information = currentInformationState(state, step);
+          throw new Error(
+            information
+              ? "Active BotC information step requires player acknowledgement"
+              : "Active BotC information step requires an authoritative information commit",
+          );
         }
         const actorPlayerId = step.actorPlayerIds[0];
         if (
@@ -696,6 +936,13 @@ export class BotcGameModule implements GameModule<
           state.demonInfo?.demonPlayerId === playerId
             ? demonInfoView(state)
             : undefined;
+        const activeInformation = currentInformationState(state, step);
+        const privateInformation =
+          activeInformation &&
+          !activeInformation.acknowledged &&
+          activeInformation.recipientPlayerId === playerId
+            ? privateInformationView(activeInformation)
+            : undefined;
         return {
           ...base,
           mode: "night_wake",
@@ -706,6 +953,7 @@ export class BotcGameModule implements GameModule<
           ),
           ...(activeMinionInfo ? { minionInfo: activeMinionInfo } : {}),
           ...(activeDemonInfo ? { demonInfo: activeDemonInfo } : {}),
+          ...(privateInformation ? { privateInformation } : {}),
         };
       }
       return {
@@ -726,6 +974,8 @@ export class BotcGameModule implements GameModule<
   ): BotcModeratorView {
     const step = currentNightStep(state);
     const privateDemonInfo = demonInfoView(state);
+    const informationDecision = moderatorInformationDecision(state, step);
+    const currentInformation = currentInformationState(state, step);
     const nightEffects =
       state.poisonedPlayerId || state.butlerMasterPlayerId
         ? {
@@ -750,6 +1000,24 @@ export class BotcGameModule implements GameModule<
           }
         : {}),
       ...(privateDemonInfo ? { demonInfo: privateDemonInfo } : {}),
+      ...(informationDecision ? { informationDecision } : {}),
+      ...(currentInformation
+        ? {
+            currentInformation: {
+              ...currentInformation,
+              result: {
+                ...currentInformation.result,
+                shownPlayerIds: [...currentInformation.result.shownPlayerIds] as [
+                  string,
+                  string,
+                ],
+                selectedResolution: {
+                  ...currentInformation.result.selectedResolution,
+                },
+              },
+            },
+          }
+        : {}),
     };
   }
 
