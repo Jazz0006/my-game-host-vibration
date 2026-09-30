@@ -47,9 +47,9 @@ SIM-0 Simulator Lab V2 foundation ✅
   ↓
 PV-0 shared Lobby production interactions ✅
   ↓
-PV-1 minimal BotC Setup + production start path ← CURRENT / NEXT
+PV-1 minimal BotC Setup + production start path ✅
   ↓
-PV-2 role reveal / confirm-role
+PV-2 role reveal / confirm-role ← CURRENT / NEXT
   ↓
 PV-3 first-night playable UI
   ↓

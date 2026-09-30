@@ -3,6 +3,7 @@ import type { GameType } from "../../games/GameCatalog.js";
 import type { ClientCommandEnvelope } from "../../protocol/client/ClientProtocol.js";
 import type { CloudflareRoomRealtime, HibernationWebSocketLike } from "./CloudflareRoomRealtime.js";
 import type { DurableObjectStorageLike } from "./CloudflareRoomSnapshotRepository.js";
+import { CloudflareBotcGameCommandHandler } from "./CloudflareBotcGameCommandHandler.js";
 import { CloudflareWerewolfGameCommandHandler } from "./CloudflareWerewolfGameCommandHandler.js";
 
 export type CloudflareGameCommandHandler = {
@@ -30,6 +31,6 @@ export function createCloudflareGameCommandHandler(
     case "werewolf":
       return new CloudflareWerewolfGameCommandHandler(storage, realtime);
     case "botc":
-      return undefined;
+      return new CloudflareBotcGameCommandHandler(storage, realtime);
   }
 }

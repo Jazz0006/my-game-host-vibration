@@ -15,6 +15,7 @@ export const WECHAT_PRODUCTS = [
     gameLabel: "血染钟楼",
     moderatorLabel: "说书人",
     projectName: "junjun-boardgame-botc",
+    startCommand: "botc.startGame",
   },
 ];
 
