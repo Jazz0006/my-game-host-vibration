@@ -5,16 +5,16 @@
 Current implementation branch:
 
 ```text
-agent/b0b2-botc-other-night-sequencing
+agent/b0b2b-botc-trigger-role-transition-sequencing
 ```
 
-Fresh live `main` at B0B2 entry:
+Fresh live `main` at B0B2B entry:
 
 ```text
-2095c8b6beb42e95fc7a21ae5473d061dc9af379
+14c71aac18eb7c7e29f0c6f6050fdc695809fe63
 ```
 
-B0A merged through PR #100. B0B1 merged through PR #102. Mutable Git / PR / CI facts must still be rechecked live before any write.
+B0A merged through PR #100. B0B1 merged through PR #102. B0B2A merged through PR #103. Mutable Git / PR / CI facts must still be rechecked live before any write.
 
 Standing merge authorization remains active: accepted-scope PRs may be merged automatically once exact-head, required checks, mergeability, unresolved-thread, and final-diff gates pass.
 
@@ -62,9 +62,9 @@ https://wiki.bloodontheclocktower.com/Scarlet_Woman
 B0B first-night / night sequencing
   ├─ B0B1 canonical order + first-night progression ✅ MERGED
   ├─ B0B2 later-night dynamic eligibility / progression ← CURRENT
-  │   ├─ B0B2A recurring / conditional eligibility planner ✅ LOCAL GREEN
-  │   └─ B0B2B immediate trigger / role-transition sequencing ← NEXT AFTER MERGE
-  └─ B0B3 runtime command/interaction wiring if still required after B0B2
+  │   ├─ B0B2A recurring / conditional eligibility planner ✅ MERGED
+  │   └─ B0B2B immediate trigger / role-transition sequencing ✅ LOCAL GREEN
+  └─ B0B3 live runtime progression / command integration ← NEXT AFTER MERGE
 ```
 
 B0C remains the owner of concrete information payload generation and Storyteller Intelligence boundaries.
@@ -165,15 +165,52 @@ npm test
 
 The full test command also passed the Web client build and both WeChat product-shell build/verification steps.
 
-## B0B2B next scope
+## B0B2B implemented scope
 
-After B0B2A is merged from fresh live `main`:
+Production:
 
-1. model the minimum concrete Trouble Brewing role-transition facts needed by sequencing;
-2. support immediate Demon-death transitions without turning the night sheet into a generic rules DSL;
-3. cover Scarlet Woman becoming Imp after a qualifying Demon death;
-4. preserve the Imp self-kill rule that a newly created Imp does not attack again that same night;
-5. ensure death-trigger steps such as Ravenkeeper can enter the remaining night flow after earlier actions change state;
-6. keep information payloads, poisoning truth/misinformation, registration decisions and Storyteller recommendations outside sequencing;
-7. add focused tests, then full `typecheck + npm test`;
+```text
+src/games/botc/TroubleBrewingNightSequence.ts
+```
+
+Tests:
+
+```text
+tests/botcNightRoleTransitions.test.ts
+```
+
+B0B2B accepts only role-transition facts that authoritative Trouble Brewing rules have already resolved. Sequencing owns their placement, not the decision that they occurred:
+
+- a qualifying Scarlet Woman -> Imp transition emits a private role-change notification at the Scarlet Woman slot and then gives that player the subsequent Imp action;
+- an Imp self-kill keeps the acting Imp's current action, then immediately emits the successor's Imp role-change notification;
+- the successor created by an Imp self-kill does not receive a second Imp action that same night;
+- Scarlet Woman -> Imp followed by that new Imp self-killing in the same night is represented as one Scarlet Woman notification, one Imp action, then one successor notification;
+- transition references are validated against authoritative assignments and require an alive Minion successor for Imp self-kill;
+- no information payload, poisoning truth/misinformation, registration decision or Storyteller recommendation is added here.
+
+Local validation:
+
+```text
+npm run typecheck
+  PASS
+
+npm test
+  PASS
+  124 test files
+  513 tests
+```
+
+The full test command also passed the Web client build and both WeChat product-shell build/verification steps.
+
+## B0B3 next scope
+
+After B0B2B is merged from fresh live `main`:
+
+1. integrate other-night sequencing into `BotcGameModule` without indexing into a pre-filtered frozen list;
+2. use a stable canonical cursor / completed-step identity so live facts can be re-evaluated after each action;
+3. allow newly eligible later steps such as Ravenkeeper to appear after an earlier night action changes authoritative state;
+4. expose role-change notifications only to their actor and authoritative moderator view; PublicView remains secret-safe;
+5. keep role-action semantics and concrete information generation outside the sequencing runtime until their owning slices exist;
+6. avoid temporary moderator-only "inject arbitrary death/transition" commands that would become production technical debt;
+7. add focused progression/privacy tests, then full `typecheck + npm test`;
 8. merge automatically when normal gates pass.

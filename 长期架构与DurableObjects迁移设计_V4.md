@@ -783,15 +783,16 @@ BotC / Trouble Brewing Production Expansion
   ├─ B0A module + setup/view contracts ✅
   ├─ B0B first-night / night sequencing ← CURRENT
   │   ├─ B0B1 canonical order + first-night progression ✅
-  │   └─ B0B2 later-night dynamic eligibility / progression ← CURRENT
-  │       ├─ B0B2A recurring / conditional eligibility ✅
-  │       └─ B0B2B immediate trigger / role-transition sequencing ← NEXT
+  │   ├─ B0B2 later-night dynamic eligibility / progression
+  │   │   ├─ B0B2A recurring / conditional eligibility ✅
+  │   │   └─ B0B2B immediate trigger / role-transition sequencing ✅
+  │   └─ B0B3 live runtime progression / command integration ← NEXT
   └─ B0C+ information / storyteller intelligence slices
         ↓
 Production Web cutover / Reliability hardening — deferred, risk-driven
 ```
 
-E2 与 E3.1–E3.7B 已完成，包括第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle、native composition、Developer Tools 工程壳/构建链与真实设备 lifecycle 验收。后续 W3D3 与 MG0A–MG0D 也已完成：identity recovery 已 game-neutral，room runtime/command dispatch 已具备第二游戏边界，Owner/Moderator 已拆分，微信发布形态已由一个 shared shell source 生成 `骏骏桌游-狼人` / `骏骏桌游-血染` 两个独立产品工程。当前已进入 BotC / Trouble Brewing production expansion；B0A 已建立真实 BotC GameModule、Trouble Brewing setup contract 与 authoritative views；B0B1 已建立 canonical night order 与 first-night progression；B0B2A 已建立 live recurring/conditional eligibility，明确 Ravenkeeper/Undertaker 条件与 dead-player 行为，并把 Scarlet Woman / Imp 的即时角色变化留给 B0B2B trigger/role-transition sequencing；Storyteller Intelligence 继续保持为独立层。Production Web cutover 与 Reliability hardening 不再作为 BotC 前置。微信 runtime 继续由 `tsconfig.wechat` 做 bundler-mode typecheck，再由显式 `esbuild` owner 为两个 generated product package 打出 CommonJS runtime bundle；生成产物不成为第二份源码。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 与 E3.1–E3.7B 已完成，包括第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle、native composition、Developer Tools 工程壳/构建链与真实设备 lifecycle 验收。后续 W3D3 与 MG0A–MG0D 也已完成：identity recovery 已 game-neutral，room runtime/command dispatch 已具备第二游戏边界，Owner/Moderator 已拆分，微信发布形态已由一个 shared shell source 生成 `骏骏桌游-狼人` / `骏骏桌游-血染` 两个独立产品工程。当前已进入 BotC / Trouble Brewing production expansion；B0A 已建立真实 BotC GameModule、Trouble Brewing setup contract 与 authoritative views；B0B1 已建立 canonical night order 与 first-night progression；B0B2A 已建立 live recurring/conditional eligibility；B0B2B 已建立 Scarlet Woman -> Imp 与 Imp self-kill 的即时 role-transition sequencing，并保持 rules decision 与 night ordering 分离；下一步 B0B3 把 live eligibility / transition timeline 接入 BotC runtime progression，同时避免使用会因动态状态变化而失效的 frozen filtered-list index；Storyteller Intelligence 继续保持为独立层。Production Web cutover 与 Reliability hardening 不再作为 BotC 前置。微信 runtime 继续由 `tsconfig.wechat` 做 bundler-mode typecheck，再由显式 `esbuild` owner 为两个 generated product package 打出 CommonJS runtime bundle；生成产物不成为第二份源码。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 

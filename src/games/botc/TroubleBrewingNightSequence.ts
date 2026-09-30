@@ -14,6 +14,10 @@ export type BotcNightAssignment = {
   shownRoleId: TroubleBrewingRoleId;
 };
 
+export type BotcNightRoleTransitionKind =
+  | "scarlet_woman_to_imp"
+  | "imp_self_kill_to_imp";
+
 export type BotcNightStep =
   | {
       id: BotcNightSystemStepId;
@@ -25,7 +29,14 @@ export type BotcNightStep =
       kind: "role";
       roleId: TroubleBrewingRoleId;
       actorPlayerIds: string[];
-      actorSource: "actual" | "shown_drunk";
+      actorSource: "actual" | "shown_drunk" | "role_transition";
+    }
+  | {
+      id: `role_change:${BotcNightRoleTransitionKind}`;
+      kind: "role_change_info";
+      roleId: "imp";
+      actorPlayerIds: string[];
+      transitionKind: BotcNightRoleTransitionKind;
     };
 
 export const TROUBLE_BREWING_FIRST_NIGHT_ROLE_ORDER = [
@@ -128,11 +139,23 @@ export function createTroubleBrewingFirstNightSequence(
   return steps;
 }
 
+export type TroubleBrewingOtherNightRoleTransition =
+  | {
+      kind: "scarlet_woman_to_imp";
+      playerId: string;
+    }
+  | {
+      kind: "imp_self_kill_to_imp";
+      previousImpPlayerId: string;
+      newImpPlayerId: string;
+    };
+
 export type TroubleBrewingOtherNightFacts = {
   assignments: readonly BotcNightAssignment[];
   deadPlayerIds: readonly string[];
   diedTonightPlayerIds: readonly string[];
   executedAndDiedTodayPlayerId?: string;
+  roleTransitions?: readonly TroubleBrewingOtherNightRoleTransition[];
 };
 
 function otherNightActor(
@@ -173,20 +196,175 @@ function otherNightActor(
   }
 }
 
+function assignmentForPlayer(
+  facts: TroubleBrewingOtherNightFacts,
+  playerId: string,
+): BotcNightAssignment {
+  const assignment = facts.assignments.find(item => item.playerId === playerId);
+  if (!assignment) {
+    throw new Error("BotC night transition references a non-player");
+  }
+  return assignment;
+}
+
+function roleTransitionFacts(
+  facts: TroubleBrewingOtherNightFacts,
+): {
+  scarletWoman?: Extract<
+    TroubleBrewingOtherNightRoleTransition,
+    { kind: "scarlet_woman_to_imp" }
+  >;
+  impSelfKill?: Extract<
+    TroubleBrewingOtherNightRoleTransition,
+    { kind: "imp_self_kill_to_imp" }
+  >;
+} {
+  const transitions = facts.roleTransitions ?? [];
+  const scarletWomen = transitions.filter(
+    transition => transition.kind === "scarlet_woman_to_imp",
+  );
+  const impSelfKills = transitions.filter(
+    transition => transition.kind === "imp_self_kill_to_imp",
+  );
+
+  if (scarletWomen.length > 1 || impSelfKills.length > 1) {
+    throw new Error("Trouble Brewing night contains duplicate role transitions");
+  }
+
+  const scarletWoman = scarletWomen[0];
+  if (scarletWoman) {
+    const assignment = assignmentForPlayer(facts, scarletWoman.playerId);
+    if (assignment.actualRoleId !== "scarlet_woman") {
+      throw new Error("Scarlet Woman transition must reference the Scarlet Woman");
+    }
+  }
+
+  const impSelfKill = impSelfKills[0];
+  if (impSelfKill) {
+    const previousImp = assignmentForPlayer(
+      facts,
+      impSelfKill.previousImpPlayerId,
+    );
+    const newImp = assignmentForPlayer(facts, impSelfKill.newImpPlayerId);
+    if (impSelfKill.previousImpPlayerId === impSelfKill.newImpPlayerId) {
+      throw new Error("Imp self-kill successor must be a different player");
+    }
+    if (
+      !scarletWoman &&
+      previousImp.actualRoleId !== "imp"
+    ) {
+      throw new Error("Imp self-kill transition must reference the acting Imp");
+    }
+    if (
+      troubleBrewingRole(newImp.actualRoleId).category !== "minion" ||
+      facts.deadPlayerIds.includes(impSelfKill.newImpPlayerId)
+    ) {
+      throw new Error("Imp self-kill transition requires an alive Minion successor");
+    }
+    if (
+      scarletWoman &&
+      impSelfKill.previousImpPlayerId !== scarletWoman.playerId
+    ) {
+      throw new Error(
+        "Imp self-kill transition must follow the Scarlet Woman successor when both transitions occur",
+      );
+    }
+  }
+
+  return {
+    ...(scarletWoman ? { scarletWoman } : {}),
+    ...(impSelfKill ? { impSelfKill } : {}),
+  };
+}
+
+function roleChangeInfoStep(
+  transitionKind: BotcNightRoleTransitionKind,
+  playerId: string,
+): BotcNightStep {
+  return {
+    id: `role_change:${transitionKind}`,
+    kind: "role_change_info",
+    roleId: "imp",
+    actorPlayerIds: [playerId],
+    transitionKind,
+  };
+}
+
+function impActionStep(
+  facts: TroubleBrewingOtherNightFacts,
+  scarletWoman: Extract<
+    TroubleBrewingOtherNightRoleTransition,
+    { kind: "scarlet_woman_to_imp" }
+  > | undefined,
+  impSelfKill: Extract<
+    TroubleBrewingOtherNightRoleTransition,
+    { kind: "imp_self_kill_to_imp" }
+  > | undefined,
+): BotcNightStep | undefined {
+  if (impSelfKill) {
+    return {
+      id: "role:imp",
+      kind: "role",
+      roleId: "imp",
+      actorPlayerIds: [impSelfKill.previousImpPlayerId],
+      actorSource: "role_transition",
+    };
+  }
+
+  if (scarletWoman) {
+    return facts.deadPlayerIds.includes(scarletWoman.playerId)
+      ? undefined
+      : {
+          id: "role:imp",
+          kind: "role",
+          roleId: "imp",
+          actorPlayerIds: [scarletWoman.playerId],
+          actorSource: "role_transition",
+        };
+  }
+
+  return otherNightActor(facts, "imp");
+}
+
 /**
- * Projects currently eligible ordinary Trouble Brewing other-night steps.
+ * Projects the currently known Trouble Brewing other-night timeline.
  *
- * This is deliberately a live eligibility projection, not a frozen plan.
- * Callers may re-evaluate it after authoritative state changes during the
- * night. Immediate character-change/interrupt triggers are kept out of this
- * function so the night sheet never becomes a fake generic rules engine.
+ * Ordinary wake eligibility is re-evaluatable from live authoritative facts.
+ * The only role changes represented here are concrete Trouble Brewing
+ * transitions that have already been resolved by game rules. This keeps
+ * sequencing responsible for order without making the night sheet decide why
+ * a character change occurred.
  */
 export function createTroubleBrewingOtherNightSequence(
   facts: TroubleBrewingOtherNightFacts,
 ): BotcNightStep[] {
   const steps: BotcNightStep[] = [];
+  const { scarletWoman, impSelfKill } = roleTransitionFacts(facts);
 
   for (const roleId of TROUBLE_BREWING_OTHER_NIGHT_ROLE_ORDER) {
+    if (roleId === "scarlet_woman") {
+      if (scarletWoman) {
+        steps.push(
+          roleChangeInfoStep("scarlet_woman_to_imp", scarletWoman.playerId),
+        );
+      }
+      continue;
+    }
+
+    if (roleId === "imp") {
+      const impStep = impActionStep(facts, scarletWoman, impSelfKill);
+      if (impStep) steps.push(impStep);
+      if (impSelfKill) {
+        steps.push(
+          roleChangeInfoStep(
+            "imp_self_kill_to_imp",
+            impSelfKill.newImpPlayerId,
+          ),
+        );
+      }
+      continue;
+    }
+
     const step = otherNightActor(facts, roleId);
     if (step) steps.push(step);
   }
