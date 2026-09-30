@@ -231,14 +231,29 @@ describe("B0B Trouble Brewing night sequence", () => {
       ),
     ).toThrow("Only the BotC moderator");
 
-    const advanced = module.handleCommand(
+    const committed = module.handleCommand(
       game,
       moderatorContext,
-      { type: "completeNightStep" },
+      { type: "commitNightInformation" },
+      dependencies,
+    );
+    expect(committed.outcome).toMatchObject({
+      kind: "nightInformationCommitted",
+      stepId: "role:washerwoman",
+      recipientPlayerId: "p1",
+    });
+    expect(
+      module.getPlayerView(game, "p1", fivePlayerViewContext).privateInformation,
+    ).toBeDefined();
+
+    const advanced = module.handleCommand(
+      game,
+      playerContext("p1"),
+      { type: "acknowledgeNightInformation" },
       dependencies,
     );
     expect(advanced.outcome).toEqual({
-      kind: "nightStepCompleted",
+      kind: "nightInformationAcknowledged",
       completedStepId: "role:washerwoman",
       nextStepId: "role:empath",
       nightComplete: false,

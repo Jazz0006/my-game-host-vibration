@@ -1,7 +1,7 @@
 # Simulator-first BotC Playable Vertical Slice Route (2026-09-30)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; UGSM-1 COMPLETE, PV-3B2 NEXT**  
+> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-3B2A COMPLETE, PV-3B2B NEXT**  
 > Route owner: current execution order is governed by V5; this document owns the detailed Simulator-first / playable-vertical-slice decomposition.  
 > Supersedes as NEXT: continuing directly from B0C3A into B0C3B recommendation depth.
 
@@ -404,16 +404,40 @@ UGSM-0 is complete in `docs/UGSM0_UNIFIED_TROUBLE_BREWING_GAME_SNAPSHOT_ADOPTION
 
 UGSM-1 is complete: `src/games/botc/TroubleBrewingGameSnapshot.ts` independently owns the frozen V1 contract/codec, while `TroubleBrewingGameSnapshotProjection.ts` provides the pure `BotcGameState + explicit projection context -> TroubleBrewingGameSnapshotV1` runtime adapter; JSON field order remains Host-compatible. The projector does not invent `gameSeed` or missing revision semantics; those values remain explicit caller context / NOT_APPLICABLE until this runtime has authoritative producers. Validation: typecheck PASS; full test PASS, 137 files / 574 tests; Web and both WeChat product shells build/verify PASS.
 
-##### PV-3B2 — First-night information resolution ← NEXT
+##### PV-3B2 — First-night information resolution ← IN PROGRESS
 
-With UGSM-1 accepted, implement the information-bearing Townsfolk path before Fortune Teller/Spy specialization:
+With UGSM-1 accepted, implement the information-bearing Townsfolk path before Fortune Teller/Spy specialization.
 
-- establish one private information-result shape owned by BotC Rules/Information, not by the WeChat page;
-- cover Washerwoman, Librarian, Investigator, Chef and Empath first-night results using canonical setup/seat/registration facts;
-- incorporate current Poisoner state into whether an information ability is healthy vs malfunctioning, while keeping the simplest rules-legal misinformation baseline separate from future recommendation-quality work;
-- commit the chosen authoritative result to game state before exposing it in PlayerView, so reconnect/replay returns the same information rather than recomputing it;
-- advance each information step only after its result is committed/acknowledged;
-- continue reusing the existing registration and Washerwoman candidate owners rather than rebuilding them.
+###### PV-3B2A — Washerwoman information runtime ✅ COMPLETE
+
+The first reusable pair-information vertical slice now establishes the production contract:
+
+- Rules / Information owns the legal Washerwoman candidate domain and stable candidate IDs;
+- Recommendation owns a versioned deterministic baseline selection (`baseline_v1`) without narrative-quality scoring;
+- GameModule owns authoritative commit / acknowledgement / night-cursor advancement only;
+- canonical runtime history persists the selected pair result, reliability (`reliable` / `drunk` / `poisoned`), semantic truth and exact registration resolution so reconnect/replay never recomputes the delivered result;
+- player private projection exposes only what the player is allowed to see: learned role + two shown players; reliability, semantic truth and registration proof remain moderator/history-only so Drunk/Poisoned status is never leaked;
+- information steps cannot be skipped with generic moderator `completeNightStep`: an authoritative result must be committed first and the active recipient must acknowledge it before the night cursor advances;
+- Automatic Storyteller commits the baseline information in the same authoritative Cloudflare mutation that enters the information step; Human Storyteller retains explicit commit authority and the Room Owner cannot substitute for the designated Storyteller;
+- protocol/runtime adds semantic `botc.commitNightInformation` and `botc.acknowledgeNightInformation` commands with the existing commandId idempotency path;
+- shared WeChat game UI renders generic pair information and acknowledgement controls without a Washerwoman-specific page branch;
+- Simulator first-night orchestration now drives private-information acknowledgement before player-target choice / generic moderator advance.
+
+Cross-project compatibility note: CampBoardGameHost live `main` (`4593f79186d0af388e2d1c25e272462c576f5548` when audited) still keeps `TroubleBrewingGameSnapshotV1` deliberately narrow. PV-3B2A therefore does **not** independently alter the V1 wire schema. Runtime information history is aligned with the Host's reliability / semantic-truth / registration semantics; a future delivered-information snapshot extension remains coordinated cross-project work rather than a Web-Host-only schema fork.
+
+Validation checkpoint: `quality` PASS; 139 test files / 580 tests; Web client and both WeChat product shells build/verify PASS. Cloudflare acceptance covers automatic same-revision commit, private/public secrecy, Human Storyteller authority and idempotent acknowledgement replay.
+
+###### PV-3B2B — Librarian + Investigator pair information ← NEXT
+
+Reuse the PV-3B2A lifecycle rather than adding role-specific runtime paths:
+
+- add Rules/Information candidate domains for Librarian and Investigator, including legal zero-Outsider Librarian semantics where applicable;
+- reuse one pair-information result / private-view / acknowledgement shape;
+- preserve registration provenance and explicit reliability/truth state;
+- keep automatic selection as a simple versioned rules-legal baseline;
+- do not expand into Fortune Teller dual-target/Red Herring or Spy Grimoire.
+
+After pair-information reuse is proven, continue PV-3B2 with Chef / Empath numeric information as a separate shape.
 
 Fortune Teller dual-target + Red Herring/result semantics and Spy Grimoire remain later PV-3B sub-slices because they require distinct interaction/private-view contracts.
 

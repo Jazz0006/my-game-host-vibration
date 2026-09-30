@@ -42,6 +42,7 @@ describe("PV-1/PV-2/PV-3 BotC client protocol", () => {
 
   it.each([
     "botc.beginFirstNight",
+    "botc.commitNightInformation",
     "botc.completeNightStep",
   ] as const)("accepts moderator night-orchestration command %s", type => {
     const envelope = createClientCommandEnvelope(
@@ -56,6 +57,23 @@ describe("PV-1/PV-2/PV-3 BotC client protocol", () => {
       kind: "command",
       commandId: `night-${type}`,
       type,
+      payload: {},
+    });
+  });
+
+  it("accepts a stable player information-acknowledgement command", () => {
+    const envelope = createClientCommandEnvelope(
+      "botc.acknowledgeNightInformation",
+      {},
+      "night-info-ack-1",
+    );
+
+    expect(isBotcClientCommand(envelope)).toBe(true);
+    expect(parseBotcClientCommandEnvelope(envelope)).toEqual({
+      protocolVersion: 1,
+      kind: "command",
+      commandId: "night-info-ack-1",
+      type: "botc.acknowledgeNightInformation",
       payload: {},
     });
   });

@@ -1,6 +1,10 @@
 import type { RandomProvider } from "../../core/random/RandomProvider.js";
 import type { TroubleBrewingRoleId } from "./TroubleBrewing.js";
-import type { TroubleBrewingDemonInfoFacts } from "./TroubleBrewingInformation.js";
+import type {
+  TroubleBrewingDemonInfoFacts,
+  TroubleBrewingInformationReliability,
+  TroubleBrewingWasherwomanInformationCandidate,
+} from "./TroubleBrewingInformation.js";
 
 export type DemonBluffRecommendationOptionalContext = {
   /**
@@ -109,4 +113,85 @@ export function recommendDemonBluffsBaselineV1(
   }
 
   return validateDemonBluffRecommendation(request, { roleIds });
+}
+
+export type WasherwomanInformationRecommendationRequest = {
+  decisionPoint: "washerwoman_information";
+  requiredContext: {
+    recipientPlayerId: string;
+    reliability: TroubleBrewingInformationReliability;
+    legalCandidates: TroubleBrewingWasherwomanInformationCandidate[];
+  };
+};
+
+export type WasherwomanInformationRecommendation = {
+  candidateId: string;
+};
+
+/**
+ * Creates the Recommendation-layer request from the rules-owned Washerwoman
+ * candidate domain. Reliability is explicit context, but does not alter the
+ * rules-owned healthy candidate set in PV-3B2A.
+ */
+export function createWasherwomanInformationRecommendationRequest(
+  recipientPlayerId: string,
+  reliability: TroubleBrewingInformationReliability,
+  legalCandidates: readonly TroubleBrewingWasherwomanInformationCandidate[],
+): WasherwomanInformationRecommendationRequest {
+  if (!recipientPlayerId.trim()) {
+    throw new Error("Washerwoman information recipient cannot be blank");
+  }
+  if (legalCandidates.length === 0) {
+    throw new Error("Washerwoman information requires at least one legal candidate");
+  }
+  return {
+    decisionPoint: "washerwoman_information",
+    requiredContext: {
+      recipientPlayerId,
+      reliability,
+      legalCandidates: legalCandidates.map(candidate => ({
+        ...candidate,
+        shownPlayerIds: [...candidate.shownPlayerIds] as [string, string],
+        legalResolutions: candidate.legalResolutions.map(resolution => ({
+          ...resolution,
+        })),
+      })),
+    },
+  };
+}
+
+export function validateWasherwomanInformationRecommendation(
+  request: WasherwomanInformationRecommendationRequest,
+  recommendation: WasherwomanInformationRecommendation,
+): WasherwomanInformationRecommendation {
+  if (
+    !request.requiredContext.legalCandidates.some(
+      candidate => candidate.candidateId === recommendation.candidateId,
+    )
+  ) {
+    throw new Error("Washerwoman recommendation must select a legal information candidate");
+  }
+  return { candidateId: recommendation.candidateId };
+}
+
+/**
+ * Minimal automatic Storyteller baseline for PV-3B2A.
+ *
+ * It deliberately has no narrative scoring. The stable candidate ID ordering
+ * makes reconnect/replay deterministic, and unreliable abilities may still
+ * receive truthful information because that is rules-legal. Richer impaired
+ * misinformation selection remains a future versioned recommendation policy.
+ */
+export function recommendWasherwomanInformationBaselineV1(
+  request: WasherwomanInformationRecommendationRequest,
+): WasherwomanInformationRecommendation {
+  const selected = [...request.requiredContext.legalCandidates].sort((left, right) =>
+    left.candidateId.localeCompare(right.candidateId),
+  )[0];
+  if (!selected) {
+    throw new Error("Washerwoman baseline has no legal candidate");
+  }
+  return validateWasherwomanInformationRecommendation(request, {
+    candidateId: selected.candidateId,
+  });
 }

@@ -126,7 +126,8 @@ export class CloudflareBotcCommandRuntime {
 
     const moderatorCommand =
       envelope.type !== "botc.confirmRole" &&
-      envelope.type !== "botc.submitNightChoice";
+      envelope.type !== "botc.submitNightChoice" &&
+      envelope.type !== "botc.acknowledgeNightInformation";
     if (
       moderatorCommand &&
       !hasGameModeratorControl(snapshot.gameModerator, member)
@@ -134,8 +135,11 @@ export class CloudflareBotcCommandRuntime {
       throw new Error("game command requires moderator authority");
     }
 
-    const mutation: () => BotcRuntimeOutcome = () =>
-      this.mutate(room, authenticatedPlayerId, envelope);
+    const mutation: () => BotcRuntimeOutcome = () => {
+      const outcome = this.mutate(room, authenticatedPlayerId, envelope);
+      this.commitAutomaticInformationIfRequired(room);
+      return outcome;
+    };
     const execution = await this.commands.execute(
       room,
       moderatorCommand ? MODERATOR_SCOPE : playerScope(authenticatedPlayerId),
@@ -228,9 +232,15 @@ export class CloudflareBotcCommandRuntime {
           authenticatedPlayerId,
           envelope.payload.playerIds,
         );
+      case "botc.acknowledgeNightInformation":
+        return this.acknowledgeNightInformation(room, authenticatedPlayerId);
       case "botc.beginFirstNight":
         return this.executeModeratorGameCommand(room, {
           type: "beginFirstNight",
+        });
+      case "botc.commitNightInformation":
+        return this.executeModeratorGameCommand(room, {
+          type: "commitNightInformation",
         });
       case "botc.completeNightStep":
         return this.executeModeratorGameCommand(room, {
@@ -293,9 +303,74 @@ export class CloudflareBotcCommandRuntime {
     return result.outcome;
   }
 
+  private commitAutomaticInformationIfRequired(
+    room: CloudflareBotcRoom,
+  ): void {
+    if (room.gameModerator.mode !== "automatic" || !room.game) return;
+
+    const context = {
+      players: gameParticipantPlayers(room).map(({ id, name, seat }) => ({
+        id,
+        name,
+        seat,
+      })),
+    };
+    const moderatorView = botcGameModule.getModeratorView(room.game, context);
+    if (
+      !moderatorView.informationDecision ||
+      moderatorView.informationDecision.committed
+    ) {
+      return;
+    }
+
+    const now = this.environment.now();
+    const result = botcGameModule.handleCommand(
+      room.game,
+      {
+        isModerator: true,
+        now,
+      },
+      { type: "commitNightInformation" },
+      { random: this.environment.random },
+    );
+    if (!result.outcome || result.outcome.kind !== "nightInformationCommitted") {
+      throw new Error("Automatic BotC information commit produced no commit outcome");
+    }
+    room.game = result.state;
+    room.updatedAt = now;
+  }
+
+  private acknowledgeNightInformation(
+    room: CloudflareBotcRoom,
+    playerId: string,
+  ): BotcCommandOutcome {
+    if (!room.game) throw new Error("BotC game has not started");
+
+    const now = this.environment.now();
+    const result = botcGameModule.handleCommand(
+      room.game,
+      {
+        playerId,
+        isModerator: false,
+        now,
+      },
+      { type: "acknowledgeNightInformation" },
+      { random: this.environment.random },
+    );
+    if (!result.outcome) {
+      throw new Error("BotC acknowledgeNightInformation produced no outcome");
+    }
+    room.game = result.state;
+    room.updatedAt = now;
+    return result.outcome;
+  }
+
   private executeModeratorGameCommand(
     room: CloudflareBotcRoom,
-    command: { type: "beginFirstNight" } | { type: "completeNightStep" },
+    command:
+      | { type: "beginFirstNight" }
+      | { type: "commitNightInformation" }
+      | { type: "completeNightStep" },
   ): BotcCommandOutcome {
     if (!room.game) throw new Error("BotC game has not started");
 

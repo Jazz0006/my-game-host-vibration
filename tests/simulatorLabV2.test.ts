@@ -319,6 +319,14 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
       step += 1;
       expect(step).toBeLessThan(20);
 
+      const informationActor = state.clients.find(client => {
+        const view = client.playerView as
+          | {
+              privateInformation?: unknown;
+            }
+          | null;
+        return Boolean(view?.privateInformation);
+      });
       const choiceActor = state.clients.find(client => {
         const view = client.playerView as
           | {
@@ -335,7 +343,19 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
         );
       });
 
-      if (choiceActor) {
+      if (informationActor) {
+        expect(JSON.stringify(informationActor.playerView)).not.toContain(
+          '"reliability"',
+        );
+        state = (
+          await coordinator.sendCommand(
+            informationActor.playerId,
+            "botc.acknowledgeNightInformation",
+            {},
+            `pv3b2a-info-ack-${step}`,
+          )
+        ).state;
+      } else if (choiceActor) {
         const view = choiceActor.playerView as {
           nightStep: {
             choice: {

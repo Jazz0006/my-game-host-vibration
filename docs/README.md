@@ -62,7 +62,9 @@ PV-3 first-night playable UI ← IN PROGRESS
        ├─ PV-3B1 single-target player choice ✅
        ├─ UGSM-0 canonical snapshot adoption audit ✅
        ├─ UGSM-1 exact V1 snapshot contract + pure projector ✅
-       └─ PV-3B2 first-night information resolution ← CURRENT / NEXT
+       └─ PV-3B2 first-night information resolution ← IN PROGRESS
+            ├─ PV-3B2A Washerwoman information runtime ✅
+            └─ PV-3B2B Librarian + Investigator pair information ← CURRENT / NEXT
   ↓
 PV-4 minimal day/night loop
   ↓

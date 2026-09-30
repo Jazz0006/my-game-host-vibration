@@ -128,11 +128,23 @@ describe("PV-3B1 Trouble Brewing player night choices", () => {
     });
     expect(state.poisonedPlayerId).toBe("p4");
 
-    for (const stepId of [
+    expect(module.getModeratorView(state, viewContext).nightStep?.id).toBe(
       "role:washerwoman",
-      "role:chef",
-      "role:empath",
-    ]) {
+    );
+    module.handleCommand(
+      state,
+      moderatorContext,
+      { type: "commitNightInformation" },
+      dependencies,
+    );
+    module.handleCommand(
+      state,
+      playerContext("p4"),
+      { type: "acknowledgeNightInformation" },
+      dependencies,
+    );
+
+    for (const stepId of ["role:chef", "role:empath"]) {
       expect(module.getModeratorView(state, viewContext).nightStep?.id).toBe(stepId);
       module.handleCommand(
         state,
@@ -205,7 +217,19 @@ describe("PV-3B1 Trouble Brewing player night choices", () => {
       { type: "submitNightChoice", playerIds: ["p4"] },
       dependencies,
     );
-    for (let index = 0; index < 3; index += 1) {
+    module.handleCommand(
+      state,
+      moderatorContext,
+      { type: "commitNightInformation" },
+      dependencies,
+    );
+    module.handleCommand(
+      state,
+      playerContext("p4"),
+      { type: "acknowledgeNightInformation" },
+      dependencies,
+    );
+    for (let index = 0; index < 2; index += 1) {
       module.handleCommand(
         state,
         moderatorContext,
