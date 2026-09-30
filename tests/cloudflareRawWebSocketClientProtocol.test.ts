@@ -407,7 +407,10 @@ describe("E3.2b Cloudflare Raw WebSocket client protocol bridge", () => {
       kind: "response",
       requestId: "botc-game-command",
       ok: false,
-      error: expect.objectContaining({ code: "game_command_unavailable" }),
+      error: expect.objectContaining({
+        code: "invalid_command",
+        message: "unsupported BotC client command type",
+      }),
     }));
     expect((await new CloudflareRoomSnapshotRepository(storage).load())?.revision).toBe(6);
   });

@@ -98,4 +98,122 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
     expect(recovered?.roomRevision).toBe(8);
     expect(recovered?.generation).toBeGreaterThan(1);
   });
+
+  it("starts Trouble Brewing through the production BotC command handler", async () => {
+    coordinator = new SimulatorLabCoordinator();
+    let state = await coordinator.reset(8);
+    const owner = state.clients[0]!;
+
+    const started = await coordinator.sendCommand(
+      owner.playerId,
+      "botc.startGame",
+      {},
+      "pv1-start",
+    );
+    state = started.state;
+
+    expect(started.result).toMatchObject({
+      revision: 8,
+      replayed: false,
+      outcome: { kind: "gameStarted" },
+    });
+    expect(state.roomRevision).toBe(8);
+    const visibleRoles = new Set<string>();
+    for (const client of state.clients) {
+      expect(client.roomProjection).toMatchObject({
+        gameType: "botc",
+        gameStarted: true,
+        game: {
+          scriptId: "trouble-brewing",
+          phase: "role_reveal",
+          playerCount: 8,
+        },
+      });
+      expect(client.playerView).toMatchObject({
+        phase: "role_reveal",
+        mode: "role_reveal",
+        roleConfirmed: false,
+      });
+      const roleId = (client.playerView as { roleId?: string } | null)?.roleId;
+      expect(roleId).toBeTruthy();
+      visibleRoles.add(roleId!);
+      expect(JSON.stringify(client.playerView)).not.toContain("actualRoleId");
+    }
+
+    expect(visibleRoles.size).toBe(8);
+    expect(JSON.stringify(owner.roomProjection)).not.toContain("assignments");
+
+    const replay = await coordinator.sendCommand(
+      owner.playerId,
+      "botc.startGame",
+      {},
+      "pv1-start",
+    );
+    expect(replay.result).toMatchObject({
+      revision: 8,
+      replayed: true,
+      outcome: { kind: "gameStarted" },
+    });
+    expect(replay.state.roomRevision).toBe(8);
+  });
+
+  it("gives BotC start authority to a human Storyteller and excludes them from roles", async () => {
+    coordinator = new SimulatorLabCoordinator();
+    let state = await coordinator.reset(6);
+    const owner = state.clients[0]!;
+    const storyteller = state.clients[5]!;
+
+    state = await coordinator.setModerator(storyteller.playerId);
+    expect(state.roomRevision).toBe(6);
+
+    await expect(
+      coordinator.sendCommand(
+        owner.playerId,
+        "botc.startGame",
+        {},
+        "owner-must-not-start",
+      ),
+    ).rejects.toThrow("game command requires moderator authority");
+
+    const started = await coordinator.sendCommand(
+      storyteller.playerId,
+      "botc.startGame",
+      {},
+      "human-storyteller-start",
+    );
+    state = started.state;
+    expect(state.roomRevision).toBe(7);
+
+    const storytellerState = state.clients.find(
+      client => client.playerId === storyteller.playerId,
+    )!;
+    const ownerState = state.clients.find(
+      client => client.playerId === owner.playerId,
+    )!;
+
+    expect(storytellerState.playerView).toEqual({
+      phase: "role_reveal",
+      mode: "spectator",
+    });
+    expect(storytellerState.roomProjection).toMatchObject({
+      viewer: { isGameModerator: true },
+      gameStarted: true,
+      game: {
+        playerCount: 5,
+        assignments: expect.arrayContaining([
+          expect.objectContaining({ playerId: owner.playerId }),
+        ]),
+      },
+    });
+    const storytellerProjection = storytellerState.roomProjection as
+      | { game?: { assignments?: unknown[] } }
+      | null;
+    expect(storytellerProjection?.game?.assignments).toHaveLength(5);
+
+    expect(ownerState.playerView).toMatchObject({
+      phase: "role_reveal",
+      mode: "role_reveal",
+    });
+    expect(JSON.stringify(ownerState.roomProjection)).not.toContain("assignments");
+  });
 });

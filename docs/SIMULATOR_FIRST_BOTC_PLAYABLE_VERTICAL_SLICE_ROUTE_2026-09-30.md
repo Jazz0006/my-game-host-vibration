@@ -267,7 +267,7 @@ Primary validation: Simulator Lab + focused/client tests. Simulator acceptance n
 Validation checkpoint: `quality` PASS; 132 test files / 543 tests; Web client and both WeChat product shells build/verify PASS.  
 Real-device requirement: none for correctness; later one-device touch/vibration smoke remains an escalation check.
 
-### PV-1 — Minimal BotC Setup + production start path
+### PV-1 — Minimal BotC Setup + production start path ✅ COMPLETE
 
 Deliver the smallest playable Trouble Brewing start:
 
@@ -280,6 +280,27 @@ Deliver the smallest playable Trouble Brewing start:
 - no advanced setup recommendation requirement.
 
 Human Storyteller manual controls may be added only where needed for the playable path.
+
+Implementation result:
+
+- fixed production script remains Trouble Brewing;
+- added a minimal automatic setup generator that samples the official base category counts, deliberately excludes Baron from this baseline, and delegates final canonical legality to the existing `normalizeTroubleBrewingSetup` owner rather than creating a second setup-rules implementation;
+- if Drunk is selected, the baseline chooses a Townsfolk shown role that is not actually in play, preserving the existing actual/shown separation;
+- added stable `botc.startGame` client protocol and a Cloudflare BotC game-command handler/runtime;
+- start authority reuses `hasGameModeratorControl`: Automatic mode is started by Room Owner, Human mode only by the designated Storyteller;
+- Human Storyteller remains a room member but is excluded from role assignment through the existing `gameParticipantPlayers` owner;
+- start command reuses `RoomCommandRuntime` commandId idempotency, persisted RoomSnapshot revisioning, production projection, and ClientSession fan-out;
+- the BotC WeChat product shell now has `startCommand: "botc.startGame"`; the existing Lobby button therefore reaches the production BotC start path without game-specific page logic;
+- no advanced setup recommendation policy, Baron selection policy, manual role editor, or role-reveal UI was added in PV-1.
+
+Simulator acceptance now proves:
+
+- an 8-player BotC room transitions from Lobby to canonical `role_reveal` through the production command handler;
+- ordinary clients receive only their own PlayerView and Room Owner does not gain assignment secrets;
+- replaying the same `botc.startGame` commandId returns the original outcome without advancing revision;
+- in Human Storyteller mode the Owner is denied game start, the designated Storyteller can start, receives ModeratorView, and is excluded from the five-player role assignment.
+
+Validation checkpoint: `quality` PASS; 134 test files / 559 tests; Web client and both WeChat product shells build/verify PASS.
 
 ### PV-2 — Role reveal / confirmation vertical slice
 
@@ -465,12 +486,12 @@ The correction is successful when:
 
 ## 10. Immediate handoff
 
-Do **not** resume B0C3B merely because the shared Lobby is now complete.
+Do **not** resume B0C3B merely because the production BotC start path now exists.
 
-SIM-0 established the Simulator-first development surface. PV-0 then closed the shared production Lobby contract: authoritative Ready, direct table reorder, human/automatic moderator drag, and owner room-management UI now all use production room commands/projections.
+SIM-0 established the Simulator-first development surface. PV-0 closed the shared production Lobby contract. PV-1 now closes the minimal production start path: fixed Trouble Brewing, rules-legal baseline automatic setup, canonical actual/shown assignments, stable `botc.startGame`, Cloudflare BotC command runtime, moderator authority, idempotent persistence, and authoritative role-reveal projections.
 
 Immediate next task:
 
-> **PV-1 — implement the minimal BotC Setup + production start path.**
+> **PV-2 — implement the role reveal / confirm-role vertical slice.**
 
-PV-1 should add the smallest rules-legal Trouble Brewing start vertical slice: fixed Trouble Brewing script, legal automatic roster/setup, canonical actual/shown assignments, a stable BotC start semantic command and Cloudflare BotC command handler. Recommendation depth remains non-blocking; use the simplest rules-legal baseline where needed.
+PV-2 should wire the already-existing BotC `role_reveal` PlayerView into the client UI and add the stable production confirmation command path. The acceptance target is start game → each participant sees only their own shown role → each confirms → confirmations converge → moderator/automatic control can proceed. Privacy evidence must explicitly cover Drunk shown-vs-actual separation, cross-player secrecy, and Room Owner remaining on PublicView.

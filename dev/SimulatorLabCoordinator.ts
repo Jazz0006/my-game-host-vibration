@@ -133,13 +133,14 @@ export class SimulatorLabCoordinator {
     playerId: string,
     type: string,
     payload: unknown,
+    commandId = `sim-${crypto.randomUUID()}`,
   ): Promise<{ result: unknown; state: SimulatorLabState }> {
     if (!type.trim()) throw new Error("Semantic command type is required");
     const actor = this.requireClient(playerId);
     const result = await actor.client.sendCommand(
       type.trim(),
       payload,
-      `sim-${crypto.randomUUID()}`,
+      commandId,
     );
     await this.waitForOnlineClients(commandRevision(result));
     this.emit();

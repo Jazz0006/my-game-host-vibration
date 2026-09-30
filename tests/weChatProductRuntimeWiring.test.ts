@@ -20,6 +20,7 @@ describe("MG0D WeChat product runtime wiring", () => {
     expect(werewolf).toContain('"gameType": "werewolf"');
     expect(werewolf).toContain('"startCommand": "werewolf.startGame"');
     expect(botc).toContain('"gameType": "botc"');
+    expect(botc).toContain('"startCommand": "botc.startGame"');
     expect(botc).not.toContain("werewolf.startGame");
   });
 
