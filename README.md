@@ -14,38 +14,18 @@
 
 ## 当前开发状态
 
-截至 2026-09-29，主线阶段状态：
+截至 2026-09-30，主线阶段状态：
 
 ```text
-C1–C4  Reconnect / Recovery                     ✅
-D1–D5  Cloudflare / Durable Objects foundation ✅
-E1     Client Protocol Boundary                ✅
-E2.1   Web Command Transport Adapter           ✅
-E2.2   Client Runtime / Connection FSM         ✅
-E2.3   Legacy Realtime Boundary Contraction    ✅
-E3.1   WeChat transport / ClientSession audit   ✅
-E3.2a  Pre-connect credential / ticket seam     ✅
-E3.2b  Raw WebSocket stable wire + CF bridge    ✅
-E3.2c  Minimal WeChat realtime transport        ✅
-E3.3   WeChat state sync + reconnect PoC        ✅
-E3.4   WeChat command ACK / retry PoC           ✅
-E3.5   WeChat vibration / audio adapter         ✅
-E3.6   Minimal native WeChat vertical slice     ✅
-E3.7A  WeChat Developer Tools shell/build        ✅
-E3.7B  WeChat real-device lifecycle validation   ✅
-W3D1   Cloudflare recovery command parity         ✅
-W3D2   Cloudflare interaction-timeout parity      ✅
-W3D3   Game-neutral identity recovery               ✅
-MG0A   GameCatalog / fixed game admission           ✅
-MG0B1  Game-neutral lobby/realtime projection       ✅
-MG0B2  Game command dispatch seam                    ✅
-MG0C   Room Owner / Game Moderator authority split  ✅
-MG0D   Game-specific WeChat product shells          ✅
+C1–C4 / D1–D5 / E1–E3 / W3D3 platform foundation ✅
 MG0    Second-game admission hardening              COMPLETE ✅
-B0A    Trouble Brewing module + setup/view contracts ← CURRENT
-BotC   Trouble Brewing production expansion         IN PROGRESS
-W3E+   Production Web Cloudflare cutover           deferred / not a BotC prerequisite
-R1     Reliability Hardening / Effect Outbox       risk-driven
+B0A–B0B3 BotC module / setup contract / sequencing COMPLETE ✅
+B0C1–B0C3A rules-information foundations           CHECKPOINTED ✅
+SIM0   Simulator Lab V2 foundation                  ← CURRENT / NEXT
+PV0–PV7 BotC Playable Vertical Slice                PLANNED
+B0C3B+ deeper Storyteller Recommendation            deferred as mainline
+W3E+   Production Web Cloudflare cutover            deferred / not a BotC prerequisite
+R1     Reliability Hardening / Effect Outbox        risk-driven
 ```
 
 HEAD、working tree、remote、PR/CI 都是可变事实，不在 README 固化具体 commit；开始开发前必须重新查询 live state。
@@ -170,9 +150,11 @@ http://localhost:3000/dev/lab
 
 当 `NODE_ENV=production` 时，`/dev/lab` 和实验室静态资源不会开放。
 
+当前 `/dev/lab` 仍是早期 Node/Socket.IO 狼人杀实验室。SIM-0 将其收敛为 Simulator Lab V2：基于当前 TestRoomClient / ClientSession / production projection seams，提供一个接近真实手机客户端的 viewer、N 个简化虚拟玩家和开发期 Storyteller/debug inspector。正常开发默认不需要真机。
+
 ## 长期产品边界
 
-- 狼人杀已验证当前平台基础；W3D3 与 MG0A–MG0D 已完成，MG0 second-game admission hardening 整体 COMPLETE；当前 B0A 正在建立 Trouble Brewing authoritative module、setup contract 与 player/moderator/public views；
+- 狼人杀已验证当前平台基础；W3D3 与 MG0A–MG0D 已完成；BotC 已具备 B0A–B0B3 与 B0C1–B0C3A 后端基础，当前优先级转为 Simulator-first playable vertical slice，而不是继续让推荐算法深度领先于真实客户端可玩性；
 - 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；
 - 讨论、发言和社交推理仍在线下完成；
 - 断线、熄屏、切 App 和网络切换视为正常生命周期；
