@@ -7,8 +7,6 @@ import type {
 } from "../../core/game/GameModule.js";
 import {
   TROUBLE_BREWING_SCRIPT_ID,
-  isTroubleBrewingRoleId,
-  troubleBrewingExpectedCounts,
   troubleBrewingRole,
   type BotcRoleCategory,
   type TroubleBrewingRoleId,
@@ -16,16 +14,24 @@ import {
 import {
   createTroubleBrewingFirstNightSequence,
   type BotcNightStep,
+  type TroubleBrewingOtherNightFacts,
+  type TroubleBrewingOtherNightRoleTransition,
 } from "./TroubleBrewingNightSequence.js";
+import {
+  advanceTroubleBrewingOtherNightProgress,
+  startTroubleBrewingOtherNightProgress,
+  type TroubleBrewingOtherNightProgress,
+} from "./TroubleBrewingNightProgression.js";
+import {
+  normalizeTroubleBrewingSetup,
+  type BotcCanonicalSetupAssignment,
+  type BotcSetupAssignment,
+} from "./TroubleBrewingSetup.js";
+
+export type { BotcSetupAssignment } from "./TroubleBrewingSetup.js";
 
 export type BotcGameConfig = {
   scriptId: typeof TROUBLE_BREWING_SCRIPT_ID;
-};
-
-export type BotcSetupAssignment = {
-  playerId: string;
-  actualRoleId: TroubleBrewingRoleId;
-  shownRoleId?: TroubleBrewingRoleId;
 };
 
 export type BotcCreateInput = {
@@ -34,26 +40,31 @@ export type BotcCreateInput = {
   assignments: readonly BotcSetupAssignment[];
 };
 
-export type BotcGamePhase = "role_reveal" | "first_night" | "day";
+export type BotcGamePhase =
+  | "role_reveal"
+  | "first_night"
+  | "day"
+  | "other_night";
 
 export type BotcGameState = {
   scriptId: typeof TROUBLE_BREWING_SCRIPT_ID;
   phase: BotcGamePhase;
-  assignments: Array<{
-    playerId: string;
-    actualRoleId: TroubleBrewingRoleId;
-    shownRoleId: TroubleBrewingRoleId;
-  }>;
+  assignments: BotcCanonicalSetupAssignment[];
   confirmedRolePlayerIds: string[];
   dayNumber: number;
   nightNumber: number;
   deadPlayerIds: string[];
+  diedTonightPlayerIds: string[];
+  executedAndDiedTodayPlayerId?: string;
+  roleTransitions: TroubleBrewingOtherNightRoleTransition[];
   nightStepIndex?: number;
+  otherNightProgress?: TroubleBrewingOtherNightProgress;
 };
 
 export type BotcCommand =
   | { type: "confirmRole" }
   | { type: "beginFirstNight" }
+  | { type: "beginOtherNight" }
   | { type: "completeNightStep" };
 
 export type BotcCommandOutcome =
@@ -63,6 +74,11 @@ export type BotcCommandOutcome =
     }
   | {
       kind: "firstNightStarted";
+      firstStepId?: BotcNightStep["id"];
+      nightComplete: boolean;
+    }
+  | {
+      kind: "otherNightStarted";
       firstStepId?: BotcNightStep["id"];
       nightComplete: boolean;
     }
@@ -101,127 +117,74 @@ export type BotcPublicView = {
 };
 
 export type BotcModeratorView = BotcPublicView & {
-  assignments: Array<{
-    playerId: string;
-    actualRoleId: TroubleBrewingRoleId;
-    shownRoleId: TroubleBrewingRoleId;
-  }>;
+  assignments: BotcCanonicalSetupAssignment[];
   nightStep?: BotcNightStep;
 };
-
-function unique(values: readonly string[], message: string): void {
-  if (new Set(values).size !== values.length) throw new Error(message);
-}
-
-function normalizeAssignments(
-  input: BotcCreateInput,
-): BotcGameState["assignments"] {
-  if (input.config.scriptId !== TROUBLE_BREWING_SCRIPT_ID) {
-    throw new Error("Only Trouble Brewing is supported in B0");
-  }
-  if (input.assignments.length !== input.playerIds.length) {
-    throw new Error("BotC setup must assign exactly one role to every player");
-  }
-
-  unique(input.playerIds, "BotC player IDs must be unique");
-  unique(
-    input.assignments.map(assignment => assignment.playerId),
-    "BotC setup contains duplicate player assignments",
-  );
-
-  const playerIds = new Set(input.playerIds);
-  const normalized = input.assignments.map(assignment => {
-    if (!playerIds.has(assignment.playerId)) {
-      throw new Error("BotC setup assignment references a non-player");
-    }
-    if (!isTroubleBrewingRoleId(assignment.actualRoleId)) {
-      throw new Error("BotC setup contains an unknown actual role");
-    }
-
-    if (assignment.actualRoleId === "drunk") {
-      if (!assignment.shownRoleId) {
-        throw new Error("Drunk setup requires a shown Townsfolk role");
-      }
-      const shown = troubleBrewingRole(assignment.shownRoleId);
-      if (shown.category !== "townsfolk") {
-        throw new Error("Drunk shown role must be a Townsfolk");
-      }
-      return {
-        playerId: assignment.playerId,
-        actualRoleId: assignment.actualRoleId,
-        shownRoleId: assignment.shownRoleId,
-      };
-    }
-
-    if (
-      assignment.shownRoleId !== undefined &&
-      assignment.shownRoleId !== assignment.actualRoleId
-    ) {
-      throw new Error("Only the Drunk may be shown a different setup role");
-    }
-    return {
-      playerId: assignment.playerId,
-      actualRoleId: assignment.actualRoleId,
-      shownRoleId: assignment.actualRoleId,
-    };
-  });
-
-  unique(
-    normalized.map(assignment => assignment.actualRoleId),
-    "Trouble Brewing setup cannot contain duplicate actual characters",
-  );
-
-  const actualRoles = normalized.map(assignment => assignment.actualRoleId);
-  const drunk = normalized.find(assignment => assignment.actualRoleId === "drunk");
-  if (drunk && actualRoles.includes(drunk.shownRoleId)) {
-    throw new Error("Drunk shown Townsfolk character must not be actually in play");
-  }
-
-  const expected = troubleBrewingExpectedCounts(input.playerIds.length, actualRoles);
-  const actual: Record<BotcRoleCategory, number> = {
-    townsfolk: 0,
-    outsider: 0,
-    minion: 0,
-    demon: 0,
-  };
-  for (const roleId of actualRoles) {
-    actual[troubleBrewingRole(roleId).category] += 1;
-  }
-  for (const category of Object.keys(actual) as BotcRoleCategory[]) {
-    if (actual[category] !== expected[category]) {
-      throw new Error(
-        `Illegal Trouble Brewing setup: expected ${expected[category]} ${category}, got ${actual[category]}`,
-      );
-    }
-  }
-
-  return normalized;
-}
 
 function firstNightSequence(state: BotcGameState): BotcNightStep[] {
   return createTroubleBrewingFirstNightSequence(state.assignments);
 }
 
-function currentNightStep(state: BotcGameState): BotcNightStep | undefined {
-  if (state.phase !== "first_night" || state.nightStepIndex === undefined) {
-    return undefined;
-  }
-  return firstNightSequence(state)[state.nightStepIndex];
+function otherNightFacts(state: BotcGameState): TroubleBrewingOtherNightFacts {
+  return {
+    assignments: state.assignments,
+    deadPlayerIds: state.deadPlayerIds,
+    diedTonightPlayerIds: state.diedTonightPlayerIds,
+    ...(state.executedAndDiedTodayPlayerId
+      ? { executedAndDiedTodayPlayerId: state.executedAndDiedTodayPlayerId }
+      : {}),
+    roleTransitions: state.roleTransitions,
+  };
 }
 
-function playerNightStepView(
-  step: BotcNightStep,
-): BotcPlayerNightStepView {
-  return step.kind === "role"
+function currentNightStep(state: BotcGameState): BotcNightStep | undefined {
+  if (state.phase === "first_night") {
+    if (state.nightStepIndex === undefined) return undefined;
+    return firstNightSequence(state)[state.nightStepIndex];
+  }
+
+  if (state.phase === "other_night") {
+    return state.otherNightProgress?.activeStep;
+  }
+
+  return undefined;
+}
+
+function playerNightStepView(step: BotcNightStep): BotcPlayerNightStepView {
+  return step.kind === "system_info"
     ? {
         id: step.id,
         kind: step.kind,
-        roleId: step.roleId,
       }
     : {
         id: step.id,
         kind: step.kind,
+        roleId: step.roleId,
       };
+}
+
+function commitResolvedRoleTransitions(state: BotcGameState): void {
+  for (const transition of state.roleTransitions) {
+    const newImpPlayerId =
+      transition.kind === "scarlet_woman_to_imp"
+        ? transition.playerId
+        : transition.newImpPlayerId;
+    const assignment = state.assignments.find(
+      item => item.playerId === newImpPlayerId,
+    );
+    if (!assignment) {
+      throw new Error("BotC role transition references a non-player");
+    }
+    assignment.actualRoleId = "imp";
+    assignment.shownRoleId = "imp";
+  }
+}
+
+function clearCompletedOtherNightFacts(state: BotcGameState): void {
+  state.diedTonightPlayerIds = [];
+  state.roleTransitions = [];
+  delete state.executedAndDiedTodayPlayerId;
+  delete state.otherNightProgress;
 }
 
 function publicView(state: BotcGameState): BotcPublicView {
@@ -248,14 +211,20 @@ export class BotcGameModule implements GameModule<
   readonly type = "botc";
 
   createGame(input: BotcCreateInput, _dependencies: GameModuleDependencies): BotcGameState {
+    if (input.config.scriptId !== TROUBLE_BREWING_SCRIPT_ID) {
+      throw new Error("Only Trouble Brewing is supported in B0");
+    }
+
     return {
       scriptId: TROUBLE_BREWING_SCRIPT_ID,
       phase: "role_reveal",
-      assignments: normalizeAssignments(input),
+      assignments: normalizeTroubleBrewingSetup(input.playerIds, input.assignments),
       confirmedRolePlayerIds: [],
       dayNumber: 0,
       nightNumber: 0,
       deadPlayerIds: [],
+      diedTonightPlayerIds: [],
+      roleTransitions: [],
     };
   }
 
@@ -326,41 +295,115 @@ export class BotcGameModule implements GameModule<
         };
       }
 
-      case "completeNightStep": {
+      case "beginOtherNight": {
         if (!context.isModerator) {
-          throw new Error("Only the BotC moderator can complete a night step");
+          throw new Error("Only the BotC moderator can begin another night");
         }
-        const step = currentNightStep(state);
-        if (!step || state.nightStepIndex === undefined) {
-          throw new Error("There is no active BotC night step");
+        if (state.phase !== "day") {
+          throw new Error("BotC other night can only begin from day");
         }
 
-        const sequence = firstNightSequence(state);
-        const nextStep = sequence[state.nightStepIndex + 1];
-        if (!nextStep) {
-          state.phase = "day";
-          state.dayNumber = 1;
-          delete state.nightStepIndex;
+        state.diedTonightPlayerIds = [];
+        const progress = startTroubleBrewingOtherNightProgress(otherNightFacts(state));
+        state.nightNumber += 1;
+
+        if (!progress.activeStep) {
+          state.dayNumber += 1;
+          clearCompletedOtherNightFacts(state);
           return {
             state,
             outcome: {
-              kind: "nightStepCompleted",
-              completedStepId: step.id,
+              kind: "otherNightStarted",
               nightComplete: true,
             },
           };
         }
 
-        state.nightStepIndex += 1;
+        state.phase = "other_night";
+        state.otherNightProgress = progress;
         return {
           state,
           outcome: {
-            kind: "nightStepCompleted",
-            completedStepId: step.id,
-            nextStepId: nextStep.id,
+            kind: "otherNightStarted",
+            firstStepId: progress.activeStep.id,
             nightComplete: false,
           },
         };
+      }
+
+      case "completeNightStep": {
+        if (!context.isModerator) {
+          throw new Error("Only the BotC moderator can complete a night step");
+        }
+
+        if (state.phase === "first_night") {
+          const step = currentNightStep(state);
+          if (!step || state.nightStepIndex === undefined) {
+            throw new Error("There is no active BotC night step");
+          }
+
+          const sequence = firstNightSequence(state);
+          const nextStep = sequence[state.nightStepIndex + 1];
+          if (!nextStep) {
+            state.phase = "day";
+            state.dayNumber = 1;
+            delete state.nightStepIndex;
+            return {
+              state,
+              outcome: {
+                kind: "nightStepCompleted",
+                completedStepId: step.id,
+                nightComplete: true,
+              },
+            };
+          }
+
+          state.nightStepIndex += 1;
+          return {
+            state,
+            outcome: {
+              kind: "nightStepCompleted",
+              completedStepId: step.id,
+              nextStepId: nextStep.id,
+              nightComplete: false,
+            },
+          };
+        }
+
+        if (state.phase === "other_night" && state.otherNightProgress?.activeStep) {
+          const advanced = advanceTroubleBrewingOtherNightProgress(
+            otherNightFacts(state),
+            state.otherNightProgress,
+          );
+          state.otherNightProgress = advanced.progress;
+
+          if (!advanced.nextStep) {
+            state.phase = "day";
+            state.dayNumber += 1;
+            commitResolvedRoleTransitions(state);
+            clearCompletedOtherNightFacts(state);
+            return {
+              state,
+              outcome: {
+                kind: "nightStepCompleted",
+                completedStepId: advanced.completedStep.id,
+                nightComplete: true,
+              },
+            };
+          }
+
+          return {
+            state,
+            outcome: {
+              kind: "nightStepCompleted",
+              completedStepId: advanced.completedStep.id,
+              nextStepId: advanced.nextStep.id,
+              nightComplete: false,
+            },
+          };
+        }
+
+        throw new Error("There is no active BotC night step");
       }
     }
   }
@@ -373,14 +416,22 @@ export class BotcGameModule implements GameModule<
     const assignment = state.assignments.find(item => item.playerId === playerId);
     if (!assignment) return { phase: state.phase, mode: "spectator" };
 
-    const shownRole = troubleBrewingRole(assignment.shownRoleId);
+    const activeStep = currentNightStep(state);
+    const visibleRoleId =
+      activeStep?.actorPlayerIds.includes(playerId) &&
+      activeStep.kind !== "system_info" &&
+      (activeStep.kind === "role_change_info" ||
+        activeStep.actorSource === "role_transition")
+        ? activeStep.roleId
+        : assignment.shownRoleId;
+    const visibleRole = troubleBrewingRole(visibleRoleId);
     const confirmed = state.confirmedRolePlayerIds.includes(playerId);
     const base = {
       phase: state.phase,
-      roleId: shownRole.id,
-      roleName: shownRole.name,
-      roleNameZh: shownRole.nameZh,
-      roleCategory: shownRole.category,
+      roleId: visibleRole.id,
+      roleName: visibleRole.name,
+      roleNameZh: visibleRole.nameZh,
+      roleCategory: visibleRole.category,
       roleConfirmed: confirmed,
     };
 
@@ -391,7 +442,7 @@ export class BotcGameModule implements GameModule<
       };
     }
 
-    if (state.phase === "first_night") {
+    if (state.phase === "first_night" || state.phase === "other_night") {
       const step = currentNightStep(state);
       if (step?.actorPlayerIds.includes(playerId)) {
         return {
@@ -440,3 +491,4 @@ export class BotcGameModule implements GameModule<
 }
 
 export const botcGameModule = new BotcGameModule();
+

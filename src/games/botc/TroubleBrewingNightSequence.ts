@@ -162,38 +162,65 @@ function otherNightActor(
   facts: TroubleBrewingOtherNightFacts,
   roleId: TroubleBrewingRoleId,
 ): BotcNightStep | undefined {
-  const step = actorForRole(facts.assignments, roleId);
-  if (!step || step.kind !== "role") return undefined;
-
-  const actorPlayerId = step.actorPlayerIds[0];
-  if (!actorPlayerId) return undefined;
-
-  switch (roleId) {
-    case "ravenkeeper":
-      // The Ravenkeeper is the explicit Trouble Brewing exception to the normal
-      // dead-players-have-no-ability rule: dying at night triggers the wake.
-      return facts.diedTonightPlayerIds.includes(actorPlayerId)
-        ? step
-        : undefined;
-
-    case "undertaker":
-      return !facts.deadPlayerIds.includes(actorPlayerId) &&
-        facts.executedAndDiedTodayPlayerId !== undefined
-        ? step
-        : undefined;
-
-    case "scarlet_woman":
-      // Scarlet Woman is not a recurring night action. Her ability changes
-      // character immediately when a qualifying Demon death occurs; the
-      // resulting character-change notification belongs to B0B2B trigger /
-      // role-transition sequencing rather than ordinary eligibility.
-      return undefined;
-
-    default:
-      return facts.deadPlayerIds.includes(actorPlayerId)
-        ? undefined
-        : step;
+  if (roleId === "scarlet_woman") {
+    // Scarlet Woman is not a recurring night action. Her ability changes
+    // character immediately when a qualifying Demon death occurs; the
+    // resulting character-change notification belongs to B0B2B trigger /
+    // role-transition sequencing rather than ordinary eligibility.
+    return undefined;
   }
+
+  const candidates: Array<{
+    playerId: string;
+    source: "actual" | "shown_drunk";
+  }> = [
+    ...facts.assignments
+      .filter(assignment => assignment.actualRoleId === roleId)
+      .map(assignment => ({
+        playerId: assignment.playerId,
+        source: "actual" as const,
+      })),
+    ...facts.assignments
+      .filter(
+        assignment =>
+          assignment.actualRoleId === "drunk" &&
+          assignment.shownRoleId === roleId,
+      )
+      .map(assignment => ({
+        playerId: assignment.playerId,
+        source: "shown_drunk" as const,
+      })),
+  ];
+
+  const actor = candidates.find(candidate => {
+    switch (roleId) {
+      case "ravenkeeper":
+        // The Ravenkeeper is the explicit Trouble Brewing exception to the
+        // normal dead-players-have-no-ability rule: dying at night triggers it.
+        return facts.diedTonightPlayerIds.includes(candidate.playerId);
+
+      case "undertaker":
+        return (
+          !facts.deadPlayerIds.includes(candidate.playerId) &&
+          facts.executedAndDiedTodayPlayerId !== undefined
+        );
+
+      default:
+        // Runtime role changes may leave a dead former character and an alive
+        // successor sharing the same current character ID. Eligibility must
+        // therefore choose an alive actor rather than the first setup match.
+        return !facts.deadPlayerIds.includes(candidate.playerId);
+    }
+  });
+
+  if (!actor) return undefined;
+  return {
+    id: `role:${roleId}`,
+    kind: "role",
+    roleId,
+    actorPlayerIds: [actor.playerId],
+    actorSource: actor.source,
+  };
 }
 
 function assignmentForPlayer(

@@ -155,6 +155,27 @@ describe("B0B2A Trouble Brewing other-night eligibility", () => {
     ]);
   });
 
+  it("chooses the alive current Imp when a dead former Imp appears first", () => {
+    expect(
+      createTroubleBrewingOtherNightSequence({
+        assignments: [
+          assignment("old-imp", "imp"),
+          assignment("new-imp", "imp"),
+        ],
+        deadPlayerIds: ["old-imp"],
+        diedTonightPlayerIds: [],
+      }),
+    ).toEqual([
+      {
+        id: "role:imp",
+        kind: "role",
+        roleId: "imp",
+        actorPlayerIds: ["new-imp"],
+        actorSource: "actual",
+      },
+    ]);
+  });
+
   it("does not treat Scarlet Woman as an ordinary recurring wake", () => {
     expect(
       createTroubleBrewingOtherNightSequence({

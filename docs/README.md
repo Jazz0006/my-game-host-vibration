@@ -13,9 +13,12 @@ Use these in this order:
 ## Current handoff
 
 - `docs/B0B_TROUBLE_BREWING_NIGHT_SEQUENCING_HANDOFF_2026-09-30.md`
-  - current B0B decomposition and sequencing authority;
-  - B0B1/B0B2A merged checkpoints and B0B2B local GREEN evidence;
-  - B0B3 live runtime progression / command-integration entry scope.
+  - completed B0B decomposition and sequencing authority;
+  - B0B1/B0B2A/B0B2B merged checkpoints;
+  - B0B3 ownership hardening + live runtime progression COMPLETE checkpoint and B0C handoff.
+- `docs/B0B3_BOTC_OWNERSHIP_BOUNDARY_AUDIT_2026-09-30.md`
+  - Setup Generation / Canonical Truth / Game Engine / Rules-Information / Recommendation ownership contract;
+  - B0A/B0B boundary findings and B0B3 implementation guardrails.
 
 ## Current product route
 
@@ -24,13 +27,13 @@ MG0 COMPLETE
   ↓
 B0 BotC / Trouble Brewing production entry
   ├─ B0A module + setup/view contracts ✅ COMPLETE
-  ├─ B0B first-night / night sequencing ← CURRENT
+  ├─ B0B first-night / night sequencing ✅ COMPLETE
   │   ├─ B0B1 canonical order + first-night progression ✅ MERGED
-  │   ├─ B0B2 later-night dynamic eligibility / progression ← CURRENT
+  │   ├─ B0B2 later-night dynamic eligibility / progression ✅ COMPLETE
   │   │   ├─ B0B2A recurring / conditional eligibility ✅ MERGED
-  │   │   └─ B0B2B immediate trigger / role-transition sequencing ✅ LOCAL GREEN
-  │   └─ B0B3 live runtime progression / command integration ← NEXT AFTER MERGE
-  └─ B0C+ information / storyteller intelligence
+  │   │   └─ B0B2B immediate trigger / role-transition sequencing ✅ MERGED PR #107
+  │   └─ B0B3 ownership hardening + live runtime progression ✅ COMPLETE
+  └─ B0C Rules / Information → Storyteller Recommendation ← NEXT
 ```
 
 ## Parallel engineering route

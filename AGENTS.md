@@ -44,7 +44,7 @@ Current product priorities:
 5. reconnect, app switching, screen lock, and network changes are normal lifecycle events;
 6. the system owns authoritative game flow and secret information;
 7. the host is primarily a recovery controller, not a hidden-information super-user;
-8. Werewolf is the current production game. W3D3 + MG0 shared-infrastructure admission work is complete; Blood on the Clocktower / Trouble Brewing B0 is the active production-expansion mainline. B0A, B0B1 and B0B2A are merged; B0B2B immediate trigger / role-transition sequencing is locally complete, and B0B3 live runtime progression / command integration is next.
+8. Werewolf is the current production game. W3D3 + MG0 shared-infrastructure admission work is complete; Blood on the Clocktower / Trouble Brewing B0 is the active production-expansion mainline. B0A–B0B3 are complete; B0C Rules/Information -> Storyteller Recommendation separation is the next BotC slice.
 9. The WeChat product direction is two game-specific thin-client shells — working names `骏骏桌游-狼人` and `骏骏桌游-血染` — over one shared client/runtime/backend platform. Do not duplicate reconnect, identity, transport, room, recovery, persistence, or Cloudflare authority code per mini program.
 10. A room's `gameType` is fixed at room creation by the client product; the lobby no longer owns cross-game switching.
 
@@ -137,18 +137,49 @@ Do not import Android UI/runtime ownership, offline Host state management, netwo
 
 **CampBoardGameHost may inform game semantics and algorithms, but it does not define this repository's runtime architecture.**
 
-For BotC work, keep the runtime boundary explicit:
+For BotC work, keep the runtime and game-internal ownership boundaries explicit:
 
 ```text
 Room Runtime
-  -> membership / owner / identity / command / state / revision / persistence / delivery
+  -> membership / owner / identity / command transport / revision / persistence / delivery
 
-BotC GameModule
-  -> game semantics / setup / night sequencing / interactions / player-host-public views
+BotC Setup Generation / Setup Contract
+  -> script/role legality, legal roster construction or validation, canonical actual/shown setup facts
+  -> does NOT advance gameplay or rank storyteller choices
 
-BotC storyteller intelligence
-  -> legal-information candidate generation / recommendation / trace / replay
+Canonical BotC Session / Truth
+  -> accepted setup plus authoritative evolving game facts
+
+BotC Game Engine / GameModule
+  -> phase + command orchestration, consumes owned rule-resolution results,
+     advances authoritative session state, projects Player/Moderator/Public views
+  -> does NOT become the owner of setup search, information truth policy, or recommendation ranking
+
+BotC Rules / Information Resolution
+  -> ability legality/effects, registration, poisoning/drunkenness truth handling,
+     legal information candidates from authoritative truth
+  -> does NOT rank narrative/storyteller preference
+
+BotC Storyteller Recommendation
+  -> read-only recommendation requests over explicit required + optional context,
+     candidate ranking, rationale / DecisionTrace / replay
+  -> never mutates canonical session state directly
 ```
+
+Data flow should remain one-way at decision boundaries:
+
+```text
+Setup Generation
+  -> Canonical Session / Truth
+  -> Game Engine
+  -> Rules / Information Resolution
+  -> Recommendation request context
+  -> Storyteller Recommendation
+  -> chosen decision returned to Game Engine
+  -> authoritative commit to Canonical Session / Truth
+```
+
+A recommendation may influence a storyteller decision, but only the Game Engine may commit the accepted decision to authoritative game state. Do not let `BotcGameModule` grow setup search, information generation, or recommendation policy simply because it is the orchestration façade.
 
 Room Owner and Game Moderator/Storyteller are distinct authorities. A human BotC storyteller may require full game-secret visibility while the room owner remains a privacy-safe recovery/management role. Automatic storyteller mode is also distinct from room ownership.
 
