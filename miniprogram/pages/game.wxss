@@ -48,6 +48,7 @@
 .role-card,
 .storyteller-card,
 .night-card,
+.night-choice-card,
 .private-info-card,
 .progress-card {
   border-radius: 28rpx;
@@ -113,6 +114,7 @@
 }
 
 .night-card,
+.night-choice-card,
 .private-info-card {
   margin-top: 22rpx;
   padding: 32rpx 28rpx;
@@ -137,6 +139,43 @@
   color: #677169;
   font-size: 22rpx;
   line-height: 1.55;
+}
+
+.night-choice-card {
+  background: #ffffff;
+}
+
+.choice-title {
+  margin-top: 10rpx;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.choice-note {
+  margin-top: 8rpx;
+  color: #7b857f;
+  font-size: 20rpx;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.choice-option {
+  margin: 0;
+  border-radius: 18rpx;
+  background: #f0f3f1;
+  color: #38443c;
+  font-size: 22rpx;
+}
+
+.choice-option.selected {
+  background: #dcecdf;
+  color: #245239;
+  box-shadow: inset 0 0 0 2rpx #5d8d6a;
 }
 
 .private-info-card {

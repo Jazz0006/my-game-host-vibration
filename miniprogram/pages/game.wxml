@@ -48,6 +48,32 @@
     <view class="night-copy">轮到你时手机会震动并显示私密信息。</view>
   </view>
 
+  <view class="night-choice-card" wx:if="{{nightChoiceOptions.length}}">
+    <view class="eyebrow">NIGHT CHOICE</view>
+    <view class="choice-title">请选择玩家</view>
+    <view class="choice-note">
+      需要选择 {{nightChoiceMinTargets}}–{{nightChoiceMaxTargets}} 人
+    </view>
+    <view class="choice-grid">
+      <button
+        wx:for="{{nightChoiceOptions}}"
+        wx:key="id"
+        class="choice-option {{item.selected ? 'selected' : ''}}"
+        data-player-id="{{item.id}}"
+        bindtap="onNightChoiceTap"
+      >
+        {{item.name}}
+      </button>
+    </view>
+    <button
+      class="primary-button"
+      disabled="{{!canSubmitNightChoice}}"
+      bindtap="onSubmitNightChoiceTap"
+    >
+      确认选择
+    </button>
+  </view>
+
   <view class="private-info-card" wx:if="{{minionDemonName}}">
     <view class="eyebrow">MINION INFO</view>
     <view class="private-info-line">恶魔：{{minionDemonName}}</view>

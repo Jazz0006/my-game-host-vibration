@@ -24,6 +24,11 @@ Use these in this order:
   - Simulator Lab V2 first, then BotC playable vertical integration;
   - normal development defaults to zero real devices;
   - B0C3B/deeper recommendation quality is deferred until the playable path needs it.
+- `docs/UGSM0_UNIFIED_TROUBLE_BREWING_GAME_SNAPSHOT_ADOPTION_AUDIT_2026-09-30.md`
+  - cross-project canonical `TroubleBrewingGameSnapshotV1` adoption boundary;
+  - keeps mutable online `BotcGameState` as runtime authority while the independent V1 contract/codec and pure runtime snapshot projector provide the shared read boundary;
+  - freezes KNOWN / UNCOMMITTED / UNKNOWN / NOT_APPLICABLE semantics and excludes room/network/client state;
+  - UGSM-1 exact V1 contract + pure projector is complete; PV-3B2 is again the current gameplay NEXT.
 - `docs/B0C_TROUBLE_BREWING_INFORMATION_RECOMMENDATION_HANDOFF_2026-09-30.md`
   - B0C1/B0C2/B0C3A completed foundation and recommendation-boundary history;
   - B0C3A registration + truthful Washerwoman candidate boundary is retained;
@@ -53,7 +58,11 @@ PV-2 role reveal / confirm-role ✅
   ↓
 PV-3 first-night playable UI ← IN PROGRESS
   ├─ PV-3A production first-night orchestration ✅
-  └─ PV-3B role action / information resolution ← CURRENT / NEXT
+  └─ PV-3B role action / information resolution ← IN PROGRESS
+       ├─ PV-3B1 single-target player choice ✅
+       ├─ UGSM-0 canonical snapshot adoption audit ✅
+       ├─ UGSM-1 exact V1 snapshot contract + pure projector ✅
+       └─ PV-3B2 first-night information resolution ← CURRENT / NEXT
   ↓
 PV-4 minimal day/night loop
   ↓

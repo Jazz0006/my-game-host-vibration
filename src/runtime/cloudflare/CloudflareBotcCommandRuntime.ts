@@ -124,7 +124,9 @@ export class CloudflareBotcCommandRuntime {
           }),
     };
 
-    const moderatorCommand = envelope.type !== "botc.confirmRole";
+    const moderatorCommand =
+      envelope.type !== "botc.confirmRole" &&
+      envelope.type !== "botc.submitNightChoice";
     if (
       moderatorCommand &&
       !hasGameModeratorControl(snapshot.gameModerator, member)
@@ -220,6 +222,12 @@ export class CloudflareBotcCommandRuntime {
         return this.startGame(room);
       case "botc.confirmRole":
         return this.confirmRole(room, authenticatedPlayerId);
+      case "botc.submitNightChoice":
+        return this.submitNightChoice(
+          room,
+          authenticatedPlayerId,
+          envelope.payload.playerIds,
+        );
       case "botc.beginFirstNight":
         return this.executeModeratorGameCommand(room, {
           type: "beginFirstNight",
@@ -250,6 +258,35 @@ export class CloudflareBotcCommandRuntime {
     );
     if (!result.outcome) {
       throw new Error("BotC confirmRole produced no outcome");
+    }
+    room.game = result.state;
+    room.updatedAt = now;
+    return result.outcome;
+  }
+
+  private submitNightChoice(
+    room: CloudflareBotcRoom,
+    playerId: string,
+    playerIds: string[],
+  ): BotcCommandOutcome {
+    if (!room.game) throw new Error("BotC game has not started");
+
+    const now = this.environment.now();
+    const result = botcGameModule.handleCommand(
+      room.game,
+      {
+        playerId,
+        isModerator: false,
+        now,
+      },
+      {
+        type: "submitNightChoice",
+        playerIds,
+      },
+      { random: this.environment.random },
+    );
+    if (!result.outcome) {
+      throw new Error("BotC submitNightChoice produced no outcome");
     }
     room.game = result.state;
     room.updatedAt = now;

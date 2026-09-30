@@ -8,12 +8,14 @@ export type BotcClientCommandEnvelope =
   | ClientCommandEnvelope<"botc.startGame", Record<string, never>>
   | ClientCommandEnvelope<"botc.confirmRole", Record<string, never>>
   | ClientCommandEnvelope<"botc.beginFirstNight", Record<string, never>>
+  | ClientCommandEnvelope<"botc.submitNightChoice", { playerIds: string[] }>
   | ClientCommandEnvelope<"botc.completeNightStep", Record<string, never>>;
 
 export const BOTC_CLIENT_COMMAND_TYPES = [
   "botc.startGame",
   "botc.confirmRole",
   "botc.beginFirstNight",
+  "botc.submitNightChoice",
   "botc.completeNightStep",
 ] as const;
 
@@ -64,6 +66,26 @@ export function parseBotcClientCommandEnvelope(
         type: record.type,
         payload: {},
       };
+    case "botc.submitNightChoice": {
+      const payload = record.payload as Record<string, unknown>;
+      if (
+        !Array.isArray(payload.playerIds) ||
+        payload.playerIds.some(
+          playerId => typeof playerId !== "string" || !playerId.trim(),
+        )
+      ) {
+        throw new Error("playerIds must be an array of non-empty strings");
+      }
+      return {
+        protocolVersion: CLIENT_PROTOCOL_VERSION,
+        kind: "command",
+        commandId,
+        type: "botc.submitNightChoice",
+        payload: {
+          playerIds: payload.playerIds.map(playerId => playerId.trim()),
+        },
+      };
+    }
     default:
       throw new Error("unsupported BotC client command type");
   }

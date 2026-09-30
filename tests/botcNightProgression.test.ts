@@ -52,12 +52,22 @@ function completeFirstNight(
   );
 
   while (started.state.phase === "first_night") {
-    module.handleCommand(
-      game,
-      moderatorContext,
-      { type: "completeNightStep" },
-      dependencies,
-    );
+    const step = module.getModeratorView(game, { players: [] }).nightStep;
+    if (step?.id === "role:poisoner") {
+      module.handleCommand(
+        game,
+        playerContext("p1"),
+        { type: "submitNightChoice", playerIds: ["p5"] },
+        dependencies,
+      );
+    } else {
+      module.handleCommand(
+        game,
+        moderatorContext,
+        { type: "completeNightStep" },
+        dependencies,
+      );
+    }
   }
 }
 
@@ -98,13 +108,14 @@ describe("B0B3 Trouble Brewing live other-night progression", () => {
     expect(
       module.handleCommand(
         game,
-        moderatorContext,
-        { type: "completeNightStep" },
+        playerContext("p1"),
+        { type: "submitNightChoice", playerIds: ["p5"] },
         dependencies,
       ).outcome,
     ).toEqual({
-      kind: "nightStepCompleted",
+      kind: "nightChoiceCommitted",
       completedStepId: "role:poisoner",
+      selectedPlayerIds: ["p5"],
       nextStepId: "role:monk",
       nightComplete: false,
     });

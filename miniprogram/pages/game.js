@@ -104,6 +104,11 @@ Page({
     isNightWake: false,
     isNightWaiting: false,
     nightStepId: "",
+    nightChoiceOptions: [],
+    nightChoiceMinTargets: 0,
+    nightChoiceMaxTargets: 0,
+    nightChoiceSelectedCount: 0,
+    canSubmitNightChoice: false,
     moderatorStepId: "",
     moderatorActorNames: "",
     minionDemonName: "",
@@ -207,6 +212,36 @@ Page({
       playerView && playerView.nightStep && typeof playerView.nightStep === "object"
         ? playerView.nightStep
         : null;
+    const nightChoice =
+      nightStep &&
+      nightStep.choice &&
+      typeof nightStep.choice === "object" &&
+      Array.isArray(nightStep.choice.allowedPlayerIds)
+        ? nightStep.choice
+        : null;
+    const choiceKey = nightChoice
+      ? (nightStep.id || "") + ":" + nightChoice.allowedPlayerIds.join(",")
+      : "";
+    if (choiceKey !== this._nightChoiceKey) {
+      this._nightChoiceKey = choiceKey;
+      this._selectedNightChoiceIds = [];
+    }
+    const selectedNightChoiceIds = this._selectedNightChoiceIds || [];
+    const nightChoiceOptions = nightChoice
+      ? nightChoice.allowedPlayerIds.map(playerId => ({
+          id: playerId,
+          name: playerName(room, playerId),
+          selected: selectedNightChoiceIds.includes(playerId),
+        }))
+      : [];
+    const minTargets = nightChoice ? Number(nightChoice.minTargets) || 0 : 0;
+    const maxTargets = nightChoice ? Number(nightChoice.maxTargets) || 0 : 0;
+    const canSubmitNightChoice = Boolean(
+      this._product.nightChoiceCommand &&
+      nightChoice &&
+      selectedNightChoiceIds.length >= minTargets &&
+      selectedNightChoiceIds.length <= maxTargets
+    );
     const moderatorStep =
       game && game.nightStep && typeof game.nightStep === "object"
         ? game.nightStep
@@ -262,6 +297,11 @@ Page({
       isNightWake,
       isNightWaiting,
       nightStepId: nightStep ? nightStep.id || "" : "",
+      nightChoiceOptions,
+      nightChoiceMinTargets: minTargets,
+      nightChoiceMaxTargets: maxTargets,
+      nightChoiceSelectedCount: selectedNightChoiceIds.length,
+      canSubmitNightChoice,
       moderatorStepId: moderatorStep ? moderatorStep.id || "" : "",
       moderatorActorNames:
         moderatorStep && Array.isArray(moderatorStep.actorPlayerIds)
@@ -298,12 +338,12 @@ Page({
     });
   },
 
-  async sendProductCommand(command, loadingTitle) {
+  async sendProductCommand(command, payload, loadingTitle) {
     if (!command || this._commandInFlight) return;
     this._commandInFlight = true;
     wx.showLoading({ title: loadingTitle });
     try {
-      await this._client.sendCommand(command, {});
+      await this._client.sendCommand(command, payload || {});
     } catch (error) {
       wx.showToast({
         title: errorMessage(error),
@@ -319,6 +359,7 @@ Page({
     if (!this.data.canConfirmRole) return;
     return this.sendProductCommand(
       this._product.confirmRoleCommand,
+      {},
       "正在确认…"
     );
   },
@@ -327,6 +368,7 @@ Page({
     if (!this.data.canBeginFirstNight) return;
     return this.sendProductCommand(
       this._product.beginFirstNightCommand,
+      {},
       "进入首夜…"
     );
   },
@@ -335,7 +377,49 @@ Page({
     if (!this.data.canCompleteNightStep) return;
     return this.sendProductCommand(
       this._product.completeNightStepCommand,
+      {},
       "推进夜间…"
+    );
+  },
+
+  onNightChoiceTap(event) {
+    const playerId = event.currentTarget.dataset.playerId;
+    if (!playerId) return;
+
+    const options = this.data.nightChoiceOptions || [];
+    if (!options.some(option => option.id === playerId)) return;
+
+    const maxTargets = Number(this.data.nightChoiceMaxTargets) || 0;
+    const selected = [...(this._selectedNightChoiceIds || [])];
+    const existingIndex = selected.indexOf(playerId);
+    if (existingIndex >= 0) {
+      selected.splice(existingIndex, 1);
+    } else if (maxTargets === 1) {
+      selected.splice(0, selected.length, playerId);
+    } else if (selected.length < maxTargets) {
+      selected.push(playerId);
+    }
+
+    this._selectedNightChoiceIds = selected;
+    const minTargets = Number(this.data.nightChoiceMinTargets) || 0;
+    this.setData({
+      nightChoiceOptions: options.map(option => ({
+        ...option,
+        selected: selected.includes(option.id),
+      })),
+      nightChoiceSelectedCount: selected.length,
+      canSubmitNightChoice:
+        selected.length >= minTargets && selected.length <= maxTargets,
+    });
+  },
+
+  async onSubmitNightChoiceTap() {
+    if (!this.data.canSubmitNightChoice) return;
+    const selected = [...(this._selectedNightChoiceIds || [])];
+    await this.sendProductCommand(
+      this._product.nightChoiceCommand,
+      { playerIds: selected },
+      "提交选择…"
     );
   },
 });

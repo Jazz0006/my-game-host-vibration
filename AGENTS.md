@@ -139,6 +139,8 @@ Do not import Android UI/runtime ownership, offline Host state management, netwo
 
 **CampBoardGameHost may inform game semantics and algorithms, but it does not define this repository's runtime architecture.**
 
+For Trouble Brewing cross-project work, `TroubleBrewingGameSnapshotV1` is the canonical **read-only semantic snapshot contract** when the shared V1 schema is consumed here. It does not replace this repository's mutable `BotcGameState`, RoomSnapshot, persistence owner, or runtime composition. New Recommendation/Evidence/Simulator-specific game-state models must not fork canonical game truth when the shared snapshot can represent it.
+
 For BotC work, keep the runtime and game-internal ownership boundaries explicit:
 
 ```text
@@ -151,6 +153,11 @@ BotC Setup Generation / Setup Contract
 
 Canonical BotC Session / Truth
   -> accepted setup plus authoritative evolving game facts
+
+Canonical Trouble Brewing Snapshot
+  -> pure deterministic read-only projection of canonical game truth at one decision point
+  -> uses explicit KNOWN / UNCOMMITTED / UNKNOWN / NOT_APPLICABLE fact semantics
+  -> cross-project semantic contract; does NOT own mutation, runtime persistence, transport, or privacy projection
 
 BotC Game Engine / GameModule
   -> phase + command orchestration, consumes owned rule-resolution results,

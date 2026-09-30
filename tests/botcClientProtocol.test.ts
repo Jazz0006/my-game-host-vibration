@@ -5,7 +5,7 @@ import {
   parseBotcClientCommandEnvelope,
 } from "../src/protocol/client/BotcClientProtocol.js";
 
-describe("PV-1/PV-2 BotC client protocol", () => {
+describe("PV-1/PV-2/PV-3 BotC client protocol", () => {
   it("accepts one stable start-game semantic command", () => {
     const envelope = createClientCommandEnvelope(
       "botc.startGame",
@@ -60,6 +60,23 @@ describe("PV-1/PV-2 BotC client protocol", () => {
     });
   });
 
+  it("accepts a stable player night-choice command", () => {
+    const envelope = createClientCommandEnvelope(
+      "botc.submitNightChoice",
+      { playerIds: [" p2 ", "p3"] },
+      "night-choice-1",
+    );
+
+    expect(isBotcClientCommand(envelope)).toBe(true);
+    expect(parseBotcClientCommandEnvelope(envelope)).toEqual({
+      protocolVersion: 1,
+      kind: "command",
+      commandId: "night-choice-1",
+      type: "botc.submitNightChoice",
+      payload: { playerIds: ["p2", "p3"] },
+    });
+  });
+
   it("rejects malformed or non-BotC command envelopes", () => {
     expect(() => parseBotcClientCommandEnvelope({
       protocolVersion: 1,
@@ -68,6 +85,14 @@ describe("PV-1/PV-2 BotC client protocol", () => {
       type: "botc.startGame",
       payload: [],
     })).toThrow("command payload must be an object");
+
+    expect(() => parseBotcClientCommandEnvelope(
+      createClientCommandEnvelope(
+        "botc.submitNightChoice",
+        { playerIds: "p2" },
+        "bad-choice",
+      ),
+    )).toThrow("playerIds must be an array of non-empty strings");
 
     expect(isBotcClientCommand({
       type: "werewolf.startGame",
