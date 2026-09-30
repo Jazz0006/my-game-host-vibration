@@ -242,7 +242,7 @@ Acceptance:
 - existing multiplayer tests remain authoritative for deterministic correctness, and SIM-0 adds dedicated 8-client / moderator / disconnect-reconnect acceptance;
 - secret-differentiated role PlayerViews are intentionally deferred to PV-2, because BotC production start/role-reveal commands do not yet exist; SIM-0 does not add a test-only state injection merely to manufacture that evidence.
 
-### PV-0 — Lobby production interaction closure
+### PV-0 — Lobby production interaction closure ✅ COMPLETE
 
 Complete the shared pre-game surface before deeper BotC UI:
 
@@ -252,8 +252,20 @@ Complete the shared pre-game surface before deeper BotC UI:
 - settings transfer-host / remove-player wiring;
 - preserve Owner / Moderator separation.
 
-Primary validation: Simulator Lab + focused/client tests.  
-Real-device requirement: none for correctness; later one-device touch/vibration smoke.
+Implementation result:
+
+- added game-neutral authoritative `RoomPlayer.ready`, persisted in `RoomSnapshot` and normalized into generic / Werewolf / BotC room projections;
+- added `room.setReady { ready }` to the existing room-management semantic-command owner; each authenticated player may change only their own Ready value while the game is still in Lobby;
+- Ready remains a player attribute, **not** a Room phase and not a new game-start gate;
+- WeChat Lobby now renders authoritative Ready state and sends `room.setReady`; the first successful transition into Ready on a page instance performs the existing heavy short-vibration capability check;
+- Room Owner long-press drag reorders outer players through `room.movePlayerSeat`; local movement is presentation-only preview until authoritative projection returns;
+- dragging an outer player into the center uses `room.setGameModerator(Human)`; dragging the human moderator back to the ring first moves its hidden authoritative seat, then restores `Automatic`;
+- Settings now subscribes to authoritative room projection and wires `room.transferHost` / `room.removePlayer`, preserving Owner / Moderator separation and existing Automatic fallback when a human moderator is removed;
+- no Ready Check phase, local fake room state, second room-management owner, or BotC-specific lobby rule was added.
+
+Primary validation: Simulator Lab + focused/client tests. Simulator acceptance now proves `room.setReady` fan-out across independent BotC ClientSessions.  
+Validation checkpoint: `quality` PASS; 132 test files / 543 tests; Web client and both WeChat product shells build/verify PASS.  
+Real-device requirement: none for correctness; later one-device touch/vibration smoke remains an escalation check.
 
 ### PV-1 — Minimal BotC Setup + production start path
 
@@ -453,28 +465,12 @@ The correction is successful when:
 
 ## 10. Immediate handoff
 
-Do **not** resume B0C3B merely because SIM-0 is complete.
+Do **not** resume B0C3B merely because the shared Lobby is now complete.
 
-SIM-0 implementation result:
-
-```text
-/dev/lab browser surface
-  -> dev-only HTTP/SSE control channel
-  -> SimulatorLabCoordinator
-  -> dev/TestRoomClient + dev/InMemoryCloudflareMultiplayerHarness
-  -> production BrowserRoomBootstrapClient
-  -> production CloudflareRealtimeTransport / Raw WS core
-  -> production cloudflareWorker / GameRoomDurableObject
-  -> production room + game projection
-  -> ClientSession
-```
-
-The in-memory harness replaces only local Cloudflare network/storage/socket capabilities; production bootstrap, ticket, wire protocol, Durable Object, room commands, projection and ClientSession semantics still execute. This avoids adding browser CORS policy or a remote test namespace merely to support the daily lab.
-
-The old Node/Socket.IO lab, source-patching bootstrap, recovery lab, `npm run simulate`, and WeChat `preview=1` fake-state path have been retired.
+SIM-0 established the Simulator-first development surface. PV-0 then closed the shared production Lobby contract: authoritative Ready, direct table reorder, human/automatic moderator drag, and owner room-management UI now all use production room commands/projections.
 
 Immediate next task:
 
-> **PV-0 — close shared Lobby production interactions over the now-stable Simulator Lab V2 surface.**
+> **PV-1 — implement the minimal BotC Setup + production start path.**
 
-PV-0 should implement authoritative Ready state/command and its capability hook, then wire player reorder, moderator assignment, transfer-host and remove-player UI without recreating local preview state.
+PV-1 should add the smallest rules-legal Trouble Brewing start vertical slice: fixed Trouble Brewing script, legal automatic roster/setup, canonical actual/shown assignments, a stable BotC start semantic command and Cloudflare BotC command handler. Recommendation depth remains non-blocking; use the simplest rules-legal baseline where needed.

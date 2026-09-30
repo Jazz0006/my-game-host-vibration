@@ -7,6 +7,7 @@ import {
 
 export type RoomManagementCommand =
   | { type: "room.updateName"; name: string }
+  | { type: "room.setReady"; ready: boolean }
   | { type: "room.movePlayerSeat"; targetPlayerId: string; insertIndex: number }
   | { type: "room.removePlayer"; targetPlayerId: string }
   | { type: "room.setGameModerator"; assignment: GameModeratorAssignment }
@@ -17,6 +18,7 @@ export type RoomManagementCommand =
 
 export type RoomManagementClientCommandEnvelope =
   | ClientCommandEnvelope<"room.updateName", { name: string }>
+  | ClientCommandEnvelope<"room.setReady", { ready: boolean }>
   | ClientCommandEnvelope<
       "room.movePlayerSeat",
       { targetPlayerId: string; insertIndex: number }
@@ -33,6 +35,7 @@ export type RoomManagementClientCommandEnvelope =
 
 export const ROOM_MANAGEMENT_CLIENT_COMMAND_TYPES = [
   "room.updateName",
+  "room.setReady",
   "room.movePlayerSeat",
   "room.removePlayer",
   "room.setGameModerator",
@@ -119,6 +122,19 @@ export function parseRoomManagementClientCommandEnvelope(
         payload: { name: requiredString(payload, "name") },
       };
 
+    case "room.setReady": {
+      if (typeof payload.ready !== "boolean") {
+        throw new Error("ready must be a boolean");
+      }
+      return {
+        protocolVersion: CLIENT_PROTOCOL_VERSION,
+        kind: "command",
+        commandId,
+        type: "room.setReady",
+        payload: { ready: payload.ready },
+      };
+    }
+
     case "room.movePlayerSeat": {
       const insertIndex = payload.insertIndex;
       if (!Number.isInteger(insertIndex) || Number(insertIndex) < 0) {
@@ -181,6 +197,11 @@ export function mapRoomManagementClientCommand(
       return {
         commandId: envelope.commandId,
         command: { type: envelope.type, name: envelope.payload.name },
+      };
+    case "room.setReady":
+      return {
+        commandId: envelope.commandId,
+        command: { type: envelope.type, ready: envelope.payload.ready },
       };
     case "room.movePlayerSeat":
       return {

@@ -1,5 +1,8 @@
 const {
+  TABLE_WIDTH_RPX,
+  TABLE_HEIGHT_RPX,
   computeRoundedTableSeats,
+  resolveRoundedTableRingIndex,
 } = require("../rounded-table-layout.js");
 function toParticipantMap(participants) {
   const result = {};
@@ -7,6 +10,35 @@ function toParticipantMap(participants) {
     result[participant.id] = participant;
   }
   return result;
+}
+
+function movePlayerId(order, playerId, targetIndex) {
+  const next = (Array.isArray(order) ? order : []).filter(id => id !== playerId);
+  const index = Math.max(0, Math.min(Number(targetIndex) || 0, next.length));
+  next.splice(index, 0, playerId);
+  return next;
+}
+
+function eventPoint(event) {
+  const touch =
+    (event.touches && event.touches[0]) ||
+    (event.changedTouches && event.changedTouches[0]);
+  if (!touch) return null;
+  const x = Number(touch.clientX !== undefined ? touch.clientX : touch.pageX);
+  const y = Number(touch.clientY !== undefined ? touch.clientY : touch.pageY);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y };
+}
+
+function containsPoint(rect, point) {
+  return Boolean(
+    rect &&
+      point &&
+      point.x >= rect.left &&
+      point.x <= rect.right &&
+      point.y >= rect.top &&
+      point.y <= rect.bottom
+  );
 }
 
 function canonicalModeratorAssignment(value) {
@@ -31,8 +63,10 @@ function authoritativeLobbyModel(room) {
     participants: players.map(player => ({
       id: player.id,
       name: player.name,
+      seat: player.seat,
       isOwner: Boolean(player.isHost),
-      ready: false,
+      ready: Boolean(player.ready),
+      connected: player.connected !== false,
     })),
     playerOrder: players
       .filter(player => player.id !== moderatorPlayerId)
@@ -88,6 +122,9 @@ Page({
     isGameModerator: false,
     canControlGame: false,
     gameStarted: false,
+    draggingPlayerId: "",
+    draggingModerator: false,
+    dragOverModerator: false,
     statusLine: "等待 authoritative room projection。",
   },
 
@@ -117,11 +154,29 @@ Page({
     }
   },
 
+  onReady() {
+    this.refreshTableGeometry();
+  },
+
+  onResize() {
+    this.refreshTableGeometry();
+  },
+
   onUnload() {
     if (this._detachClient) {
       this._detachClient();
       this._detachClient = null;
     }
+  },
+
+  refreshTableGeometry() {
+    const query = wx.createSelectorQuery().in(this);
+    query.select(".table-stage").boundingClientRect();
+    query.select(".table-center").boundingClientRect();
+    query.exec(result => {
+      this._tableRect = result && result[0] ? result[0] : null;
+      this._moderatorRect = result && result[1] ? result[1] : null;
+    });
   },
 
   applyLobbyModel(model) {
@@ -153,18 +208,189 @@ Page({
       isGameModerator: Boolean(model.isGameModerator),
       canControlGame: Boolean(model.canControlGame),
       gameStarted: Boolean(model.gameStarted),
+      draggingPlayerId: "",
+      draggingModerator: false,
+      dragOverModerator: false,
       statusLine: model.gameStarted
         ? "服务器已开始游戏，authoritative PlayerView 已切换到游戏状态。"
         : "已连接 authoritative room projection。",
     });
   },
 
-  onReadyTap() {
-    if (!this._lobbyModel || this.data.isGameModerator) return;
-    wx.showToast({
-      title: "准备状态将在 lobby command slice 接入",
-      icon: "none",
+  renderPreviewOrder(playerOrder) {
+    if (!this._lobbyModel) return;
+    const participantMap = toParticipantMap(this._lobbyModel.participants);
+    this.setData({
+      playerOrder,
+      seats: computeRoundedTableSeats(playerOrder, participantMap),
     });
+  },
+
+  ringIndexForPoint(point, playerCount) {
+    const rect = this._tableRect;
+    if (!rect || !point || !playerCount) return null;
+    const xRpx = ((point.x - rect.left) / rect.width) * TABLE_WIDTH_RPX;
+    const yRpx = ((point.y - rect.top) / rect.height) * TABLE_HEIGHT_RPX;
+    return resolveRoundedTableRingIndex(xRpx, yRpx, playerCount);
+  },
+
+  onSeatLongPress(event) {
+    if (!this.data.isOwner || this.data.gameStarted || !this._lobbyModel) return;
+    const playerId = event.currentTarget.dataset.playerId;
+    if (!playerId || !this._lobbyModel.playerOrder.includes(playerId)) return;
+    this._dragState = {
+      kind: "player",
+      playerId,
+      originalOrder: [...this._lobbyModel.playerOrder],
+      previewOrder: [...this._lobbyModel.playerOrder],
+      dragOverModerator: false,
+    };
+    this.setData({ draggingPlayerId: playerId });
+  },
+
+  onSeatTouchMove(event) {
+    const drag = this._dragState;
+    if (!drag || drag.kind !== "player") return;
+    const point = eventPoint(event);
+    if (!point) return;
+
+    const overModerator = containsPoint(this._moderatorRect, point);
+    drag.dragOverModerator = overModerator;
+    if (overModerator) {
+      this.setData({ dragOverModerator: true });
+      return;
+    }
+
+    const targetIndex = this.ringIndexForPoint(point, drag.previewOrder.length);
+    if (targetIndex === null) return;
+    const nextOrder = movePlayerId(drag.previewOrder, drag.playerId, targetIndex);
+    drag.previewOrder = nextOrder;
+    this.setData({ dragOverModerator: false });
+    this.renderPreviewOrder(nextOrder);
+  },
+
+  async onSeatTouchEnd() {
+    const drag = this._dragState;
+    if (!drag || drag.kind !== "player" || !this._lobbyModel) return;
+    this._dragState = null;
+    this.setData({
+      draggingPlayerId: "",
+      dragOverModerator: false,
+    });
+
+    try {
+      if (drag.dragOverModerator) {
+        await this._client.sendCommand("room.setGameModerator", {
+          assignment: { mode: "human", playerId: drag.playerId },
+        });
+        return;
+      }
+
+      const finalIndex = drag.previewOrder.indexOf(drag.playerId);
+      const originalIndex = drag.originalOrder.indexOf(drag.playerId);
+      if (finalIndex < 0 || finalIndex === originalIndex) {
+        this.applyLobbyModel(this._lobbyModel);
+        return;
+      }
+
+      const nextVisibleId = drag.previewOrder[finalIndex + 1];
+      const fullOrder = [...this._lobbyModel.participants]
+        .sort((left, right) => left.seat - right.seat)
+        .map(player => player.id);
+      const insertIndex = nextVisibleId
+        ? fullOrder.indexOf(nextVisibleId)
+        : fullOrder.length;
+
+      await this._client.sendCommand("room.movePlayerSeat", {
+        targetPlayerId: drag.playerId,
+        insertIndex,
+      });
+    } catch (error) {
+      this.applyLobbyModel(this._lobbyModel);
+      wx.showToast({ title: errorMessage(error), icon: "none" });
+    }
+  },
+
+  onModeratorLongPress() {
+    if (
+      !this.data.isOwner ||
+      this.data.gameStarted ||
+      !this._lobbyModel ||
+      this._lobbyModel.moderatorAssignment.mode !== "human"
+    ) {
+      return;
+    }
+
+    this._dragState = {
+      kind: "moderator",
+      playerId: this._lobbyModel.moderatorAssignment.playerId,
+      targetIndex: null,
+    };
+    this.setData({ draggingModerator: true });
+  },
+
+  onModeratorTouchMove(event) {
+    const drag = this._dragState;
+    if (!drag || drag.kind !== "moderator") return;
+    const point = eventPoint(event);
+    if (!point || containsPoint(this._moderatorRect, point)) {
+      drag.targetIndex = null;
+      return;
+    }
+    drag.targetIndex = this.ringIndexForPoint(
+      point,
+      this._lobbyModel ? this._lobbyModel.playerOrder.length + 1 : 0
+    );
+  },
+
+  async onModeratorTouchEnd() {
+    const drag = this._dragState;
+    if (!drag || drag.kind !== "moderator" || !this._lobbyModel) return;
+    this._dragState = null;
+    this.setData({ draggingModerator: false });
+    if (drag.targetIndex === null) return;
+
+    try {
+      const visibleOrder = [...this._lobbyModel.playerOrder];
+      const targetIndex = Math.max(0, Math.min(drag.targetIndex, visibleOrder.length));
+      visibleOrder.splice(targetIndex, 0, drag.playerId);
+      const nextVisibleId = visibleOrder[targetIndex + 1];
+      const fullOrder = [...this._lobbyModel.participants]
+        .sort((left, right) => left.seat - right.seat)
+        .map(player => player.id);
+      const insertIndex = nextVisibleId
+        ? fullOrder.indexOf(nextVisibleId)
+        : fullOrder.length;
+
+      await this._client.sendCommand("room.movePlayerSeat", {
+        targetPlayerId: drag.playerId,
+        insertIndex,
+      });
+      await this._client.sendCommand("room.setGameModerator", {
+        assignment: { mode: "automatic" },
+      });
+    } catch (error) {
+      wx.showToast({ title: errorMessage(error), icon: "none" });
+    }
+  },
+
+  async onReadyTap() {
+    if (!this._lobbyModel || this.data.isGameModerator || this.data.gameStarted) return;
+    const nextReady = !this.data.currentPlayerReady;
+    try {
+      await this._client.sendCommand("room.setReady", { ready: nextReady });
+      if (nextReady && !this._readyCapabilityTested) {
+        this._readyCapabilityTested = true;
+        if (wx.vibrateShort) {
+          wx.vibrateShort({
+            type: "heavy",
+            fail() {},
+          });
+        }
+      }
+    } catch (error) {
+      wx.showToast({ title: errorMessage(error), icon: "none" });
+    }
   },
 
   onSettingsTap() {

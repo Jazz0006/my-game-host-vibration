@@ -27,6 +27,7 @@ export function createClientRoomProjection<
       name: player.name,
       seat: player.seat,
       isHost: player.isHost,
+      ready: Boolean(player.ready),
     })),
     gameStarted: room.game !== undefined,
   };

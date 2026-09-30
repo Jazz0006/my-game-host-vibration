@@ -177,11 +177,11 @@ function room(gameStarted: boolean): ClientRoomProjection {
     viewer: { playerId: "p1", isHost: true, isGameModerator: false },
     gameModerator: { mode: "automatic" },
     players: [
-      { id: "p1", name: "Host", seat: 1, isHost: true },
-      { id: "p2", name: "Player 2", seat: 2, isHost: false },
-      { id: "p3", name: "Player 3", seat: 3, isHost: false },
-      { id: "p4", name: "Player 4", seat: 4, isHost: false },
-      { id: "p5", name: "Player 5", seat: 5, isHost: false },
+      { id: "p1", name: "Host", seat: 1, isHost: true, ready: false },
+      { id: "p2", name: "Player 2", seat: 2, isHost: false, ready: false },
+      { id: "p3", name: "Player 3", seat: 3, isHost: false, ready: false },
+      { id: "p4", name: "Player 4", seat: 4, isHost: false, ready: false },
+      { id: "p5", name: "Player 5", seat: 5, isHost: false, ready: false },
     ],
     gameStarted,
   };

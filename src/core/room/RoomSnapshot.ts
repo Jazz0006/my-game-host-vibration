@@ -13,7 +13,7 @@ export type RoomSnapshotMetadata = {
 
 export type RoomSnapshotMember = Pick<
   RoomPlayer,
-  "id" | "name" | "seat" | "isHost" | "resumeTokenHash"
+  "id" | "name" | "seat" | "isHost" | "ready" | "resumeTokenHash"
 >;
 
 /**
@@ -111,6 +111,7 @@ export function createRoomSnapshot<
       name: player.name,
       seat: player.seat,
       isHost: player.isHost,
+      ready: Boolean(player.ready),
       resumeTokenHash: player.resumeTokenHash,
     })),
     gameModerator: { ...room.gameModerator },
@@ -159,7 +160,10 @@ export function restoreRoomSnapshot<
     room: {
       id: snapshot.metadata.roomId,
       gameType: snapshot.metadata.gameType,
-      players: snapshot.membership.map(member => ({ ...member })),
+      players: snapshot.membership.map(member => ({
+        ...member,
+        ready: Boolean(member.ready),
+      })),
       createdAt: snapshot.metadata.createdAt,
       updatedAt: snapshot.metadata.updatedAt,
       gameModerator: { ...snapshot.gameModerator },

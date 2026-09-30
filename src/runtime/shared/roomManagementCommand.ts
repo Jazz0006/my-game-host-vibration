@@ -8,6 +8,7 @@ import type { RoomManagementCommand } from "../../protocol/client/ClientRoomMana
 
 export type RoomManagementCommandOutcome =
   | { kind: "updatedName"; name: string }
+  | { kind: "updatedReady"; ready: boolean }
   | { kind: "movedPlayer"; playerId: string }
   | { kind: "removedPlayer"; playerId: string }
   | { kind: "updatedGameModerator"; assignment: GameModeratorAssignment }
@@ -101,6 +102,14 @@ export function executeRoomManagementMutation<
       }
       const renamed = core.renamePlayer(actor.id, normalized);
       return { kind: "updatedName", name: renamed.name };
+    }
+
+    case "room.setReady": {
+      if (room.game !== undefined) {
+        throw new RoomManagementError("游戏开始后不能修改准备状态");
+      }
+      core.setPlayerReady(actor.id, command.ready);
+      return { kind: "updatedReady", ready: command.ready };
     }
 
     case "room.movePlayerSeat": {

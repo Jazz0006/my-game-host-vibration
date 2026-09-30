@@ -149,6 +149,7 @@ describe("C2 room snapshot contract", () => {
         name: "房主",
         seat: 1,
         isHost: true,
+        ready: false,
         resumeTokenHash: "c".repeat(64),
       },
       {
@@ -156,6 +157,7 @@ describe("C2 room snapshot contract", () => {
         name: "玩家二号",
         seat: 2,
         isHost: false,
+        ready: false,
         resumeTokenHash: "d".repeat(64),
       },
     ]);

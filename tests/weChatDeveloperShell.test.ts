@@ -103,8 +103,11 @@ describe("MG0D WeChat game-specific product shells", () => {
     const lobbyMarkup = text("miniprogram/pages/lobby.wxml");
     expect(lobby).toContain('require("../rounded-table-layout.js")');
     expect(lobby).toContain("applyLobbyModel");
-    expect(lobby).toContain("准备状态将在 lobby command slice 接入");
-    expect(lobby).not.toContain("wx.vibrateShort");
+    expect(lobby).toContain('"room.setReady"');
+    expect(lobby).toContain('"room.movePlayerSeat"');
+    expect(lobby).toContain('"room.setGameModerator"');
+    expect(lobby).toContain("wx.vibrateShort");
+    expect(lobby).toContain('type: "heavy"');
     expect(lobby).not.toContain("previewMode");
     expect(lobby).not.toContain("PREVIEW_GAMES");
     expect(lobby).not.toContain("selectedGame");
@@ -116,6 +119,13 @@ describe("MG0D WeChat game-specific product shells", () => {
     expect(lobbyMarkup).toContain("gameLabel");
     expect(lobbyMarkup).toContain("已准备好");
     expect(lobbyMarkup).toContain("开始游戏");
+    expect(lobbyMarkup).toContain('bindlongpress="onSeatLongPress"');
+    expect(lobbyMarkup).toContain('bindlongpress="onModeratorLongPress"');
+
+    const settings = text("miniprogram/pages/settings.js");
+    expect(settings).toContain('"room.transferHost"');
+    expect(settings).toContain('"room.removePlayer"');
+    expect(settings).not.toContain("previewMode");
   });
 
   it("documents separate product imports instead of a single root project", () => {

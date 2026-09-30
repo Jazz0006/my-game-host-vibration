@@ -7,6 +7,7 @@ export type RoomPlayer = {
   name: string;
   seat: number;
   isHost: boolean;
+  ready?: boolean;
   resumeTokenHash: string;
 };
 
@@ -25,4 +26,4 @@ export type RoomState<
   game?: TGameState;
 };
 
-export type PublicRoomPlayer = Pick<RoomPlayer, "id" | "name" | "seat" | "isHost">;
+export type PublicRoomPlayer = Pick<RoomPlayer, "id" | "name" | "seat" | "isHost" | "ready">;

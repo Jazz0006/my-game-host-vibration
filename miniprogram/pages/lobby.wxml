@@ -9,10 +9,14 @@
 
   <view class="table-stage">
     <view
-      class="seat {{item.ready ? 'seat-ready' : ''}} {{item.connected === false ? 'seat-offline' : ''}}"
+      class="seat {{item.ready ? 'seat-ready' : ''}} {{item.connected === false ? 'seat-offline' : ''}} {{draggingPlayerId === item.id ? 'seat-dragging' : ''}}"
       style="{{item.style}}"
       wx:for="{{seats}}"
       wx:key="id"
+      data-player-id="{{item.id}}"
+      bindlongpress="onSeatLongPress"
+      catchtouchmove="onSeatTouchMove"
+      bindtouchend="onSeatTouchEnd"
     >
       <view class="seat-name">
         {{item.name}}
@@ -22,9 +26,17 @@
     </view>
 
     <view class="table-center">
-      <view class="moderator-card">
+      <view
+        class="moderator-card {{dragOverModerator ? 'moderator-drop-target' : ''}} {{draggingModerator ? 'moderator-dragging' : ''}}"
+        bindlongpress="onModeratorLongPress"
+        catchtouchmove="onModeratorTouchMove"
+        bindtouchend="onModeratorTouchEnd"
+      >
         <view class="moderator-role">{{moderatorLabel}}</view>
         <view class="moderator-name">{{moderatorName}}</view>
+        <view class="moderator-hint" wx:if="{{isOwner && !gameStarted}}">
+          {{moderatorName === "自动" ? "长按玩家拖到这里" : "长按主持位拖回桌边"}}
+        </view>
       </view>
 
       <view class="divider"></view>

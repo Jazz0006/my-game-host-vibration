@@ -28,7 +28,7 @@ describe("E3.6 public client room projection", () => {
       gameType: "werewolf",
       viewer: { playerId: "p1", isHost: true, isGameModerator: false },
       gameModerator: { mode: "automatic" },
-      players: [{ id: "p1", name: "Host", seat: 1, isHost: true }],
+      players: [{ id: "p1", name: "Host", seat: 1, isHost: true, ready: false }],
       gameStarted: false,
     });
     expect(JSON.stringify(projection)).not.toContain("resumeToken");

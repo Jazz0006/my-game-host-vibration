@@ -40,12 +40,27 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
     }
   });
 
-  it("uses semantic room commands for storyteller assignment, rename, disconnect, and reconnect", async () => {
+  it("uses semantic room commands for Ready, storyteller assignment, rename, disconnect, and reconnect", async () => {
     coordinator = new SimulatorLabCoordinator();
     let state = await coordinator.reset(6);
     const host = state.clients[0]!;
     const storyteller = state.clients[1]!;
     const reconnecting = state.clients[2]!;
+
+    const ready = await coordinator.sendCommand(
+      reconnecting.playerId,
+      "room.setReady",
+      { ready: true },
+    );
+    state = ready.state;
+    for (const client of state.clients) {
+      expect(
+        client.roomProjection?.players.find(
+          player => player.id === reconnecting.playerId,
+        )?.ready,
+      ).toBe(true);
+    }
+    expect(state.roomRevision).toBe(6);
 
     state = await coordinator.setModerator(storyteller.playerId);
     expect(
@@ -56,7 +71,7 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
       state.clients.find(client => client.playerId === host.playerId)
         ?.isGameModerator,
     ).toBe(false);
-    expect(state.roomRevision).toBe(6);
+    expect(state.roomRevision).toBe(7);
 
     const renamed = await coordinator.sendCommand(
       storyteller.playerId,
@@ -67,7 +82,7 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
     expect(
       state.clients.find(client => client.playerId === storyteller.playerId)?.name,
     ).toBe("Storyteller");
-    expect(state.roomRevision).toBe(7);
+    expect(state.roomRevision).toBe(8);
 
     state = coordinator.disconnectPlayer(reconnecting.playerId);
     expect(
@@ -80,7 +95,7 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
       client => client.playerId === reconnecting.playerId,
     );
     expect(recovered?.connectionStatus).toBe("Connected");
-    expect(recovered?.roomRevision).toBe(7);
+    expect(recovered?.roomRevision).toBe(8);
     expect(recovered?.generation).toBeGreaterThan(1);
   });
 });
