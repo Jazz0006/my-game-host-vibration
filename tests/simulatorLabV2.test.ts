@@ -157,6 +157,73 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
     expect(replay.state.roomRevision).toBe(8);
   });
 
+  it("converges per-player BotC role confirmation and replays duplicate confirmation safely", async () => {
+    coordinator = new SimulatorLabCoordinator();
+    let state = await coordinator.reset(5);
+    const owner = state.clients[0]!;
+
+    state = (
+      await coordinator.sendCommand(
+        owner.playerId,
+        "botc.startGame",
+        {},
+        "pv2-start",
+      )
+    ).state;
+    expect(state.roomRevision).toBe(5);
+
+    for (const [index, client] of state.clients.entries()) {
+      const commandId = `pv2-confirm-${index + 1}`;
+      const confirmed = await coordinator.sendCommand(
+        client.playerId,
+        "botc.confirmRole",
+        {},
+        commandId,
+      );
+      state = confirmed.state;
+      expect(confirmed.result).toMatchObject({
+        revision: 6 + index,
+        replayed: false,
+        outcome: {
+          kind: "roleConfirmed",
+          allConfirmed: index === state.clients.length - 1,
+        },
+      });
+    }
+
+    expect(state.roomRevision).toBe(10);
+    for (const client of state.clients) {
+      expect(client.playerView).toMatchObject({
+        phase: "role_reveal",
+        mode: "waiting",
+        roleConfirmed: true,
+      });
+      expect(client.roomProjection).toMatchObject({
+        game: {
+          phase: "role_reveal",
+          playerCount: 5,
+          confirmedRoles: 5,
+        },
+      });
+    }
+
+    const replay = await coordinator.sendCommand(
+      state.clients[4]!.playerId,
+      "botc.confirmRole",
+      {},
+      "pv2-confirm-5",
+    );
+    expect(replay.result).toMatchObject({
+      revision: 10,
+      replayed: true,
+      outcome: {
+        kind: "roleConfirmed",
+        allConfirmed: true,
+      },
+    });
+    expect(replay.state.roomRevision).toBe(10);
+  });
+
   it("gives BotC start authority to a human Storyteller and excludes them from roles", async () => {
     coordinator = new SimulatorLabCoordinator();
     let state = await coordinator.reset(6);
@@ -195,6 +262,14 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
       phase: "role_reveal",
       mode: "spectator",
     });
+    await expect(
+      coordinator.sendCommand(
+        storyteller.playerId,
+        "botc.confirmRole",
+        {},
+        "storyteller-must-not-confirm",
+      ),
+    ).rejects.toThrow("Only a seated BotC player can confirm a role");
     expect(storytellerState.roomProjection).toMatchObject({
       viewer: { isGameModerator: true },
       gameStarted: true,

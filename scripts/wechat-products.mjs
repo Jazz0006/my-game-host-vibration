@@ -16,6 +16,8 @@ export const WECHAT_PRODUCTS = [
     moderatorLabel: "说书人",
     projectName: "junjun-boardgame-botc",
     startCommand: "botc.startGame",
+    confirmRoleCommand: "botc.confirmRole",
+    gamePage: "/pages/game",
   },
 ];
 

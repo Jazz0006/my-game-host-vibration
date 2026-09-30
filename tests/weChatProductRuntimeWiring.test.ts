@@ -21,6 +21,8 @@ describe("MG0D WeChat product runtime wiring", () => {
     expect(werewolf).toContain('"startCommand": "werewolf.startGame"');
     expect(botc).toContain('"gameType": "botc"');
     expect(botc).toContain('"startCommand": "botc.startGame"');
+    expect(botc).toContain('"confirmRoleCommand": "botc.confirmRole"');
+    expect(botc).toContain('"gamePage": "/pages/game"');
     expect(botc).not.toContain("werewolf.startGame");
   });
 
@@ -41,6 +43,7 @@ describe("MG0D WeChat product runtime wiring", () => {
     expect(lobby).toContain("this._product.gameLabel");
     expect(lobby).toContain("this._product.moderatorLabel");
     expect(lobby).toContain("this._product.startCommand");
+    expect(lobby).toContain("this._product.gamePage");
     expect(lobby).toContain(".subscribe(");
     expect(lobby).toContain("view.room");
     expect(lobby).not.toContain("selectedGame");
@@ -49,5 +52,10 @@ describe("MG0D WeChat product runtime wiring", () => {
     expect(markup).toContain("{{gameLabel}}");
     expect(markup).not.toContain("data-game-id");
     expect(markup).not.toContain("bindtap=\"onGameTap\"");
+
+    const game = text("miniprogram/pages/game.js");
+    expect(game).toContain("this._product.confirmRoleCommand");
+    expect(game).toContain("view.playerView");
+    expect(game).toContain("view.room");
   });
 });

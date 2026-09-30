@@ -1,0 +1,54 @@
+<view class="page">
+  <view class="topbar">
+    <view>
+      <view class="eyebrow">GAME</view>
+      <view class="title">{{gameLabel}}</view>
+    </view>
+    <view class="phase-pill">{{phaseLabel}}</view>
+  </view>
+
+  <view class="connection-line" wx:if="{{connectionStatus}}">
+    {{connectionStatus}}
+  </view>
+
+  <view class="role-card" wx:if="{{!isSpectator}}">
+    <view class="eyebrow">YOUR ROLE</view>
+    <view class="role-name">{{roleName || "等待身份信息"}}</view>
+    <view class="role-category" wx:if="{{roleCategory}}">
+      {{roleCategory}}
+    </view>
+    <view class="confirmed-badge" wx:if="{{roleConfirmed}}">
+      ✓ 已确认
+    </view>
+  </view>
+
+  <view class="storyteller-card" wx:if="{{isSpectator}}">
+    <view class="eyebrow">STORYTELLER</view>
+    <view class="storyteller-title">你是本局说书人</view>
+    <view class="storyteller-copy">
+      你不参与角色分配。当前仅等待玩家完成身份确认。
+    </view>
+  </view>
+
+  <view class="progress-card">
+    <view class="progress-label">身份确认进度</view>
+    <view class="progress-value">{{confirmedRoles}} / {{playerCount}}</view>
+    <view class="progress-note" wx:if="{{allConfirmed}}">
+      所有玩家已确认
+    </view>
+  </view>
+
+  <view class="status-line">{{statusLine}}</view>
+
+  <button
+    wx:if="{{canConfirmRole}}"
+    class="primary-button"
+    bindtap="onConfirmRoleTap"
+  >
+    我知道自己的身份了
+  </button>
+
+  <view class="privacy-note" wx:if="{{!isSpectator}}">
+    本页只显示服务器为当前玩家生成的 authoritative PlayerView。
+  </view>
+</view>

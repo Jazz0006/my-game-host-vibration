@@ -1,0 +1,152 @@
+.page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 34rpx 30rpx 48rpx;
+  background: #f4f6f4;
+  color: #17201b;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-bottom: 30rpx;
+}
+
+.eyebrow {
+  color: #7b857f;
+  font-size: 19rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+}
+
+.title {
+  margin-top: 6rpx;
+  font-size: 40rpx;
+  font-weight: 800;
+}
+
+.phase-pill {
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: #e6ece7;
+  color: #31533c;
+  font-size: 21rpx;
+  font-weight: 700;
+}
+
+.connection-line {
+  margin-bottom: 18rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background: #fff2dc;
+  color: #765b2e;
+  font-size: 21rpx;
+}
+
+.role-card,
+.storyteller-card,
+.progress-card {
+  border-radius: 28rpx;
+  background: #ffffff;
+  box-shadow: 0 12rpx 36rpx rgba(31, 49, 37, 0.07);
+}
+
+.role-card {
+  padding: 44rpx 32rpx 38rpx;
+  text-align: center;
+}
+
+.role-name {
+  margin-top: 24rpx;
+  font-size: 54rpx;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.role-category {
+  margin-top: 12rpx;
+  color: #7b857f;
+  font-size: 23rpx;
+  text-transform: uppercase;
+}
+
+.confirmed-badge {
+  display: inline-block;
+  margin-top: 24rpx;
+  padding: 9rpx 18rpx;
+  border-radius: 999rpx;
+  background: #e4f2e8;
+  color: #28603d;
+  font-size: 21rpx;
+  font-weight: 700;
+}
+
+.storyteller-card {
+  padding: 36rpx 30rpx;
+}
+
+.storyteller-title {
+  margin-top: 12rpx;
+  font-size: 36rpx;
+  font-weight: 800;
+}
+
+.storyteller-copy {
+  margin-top: 16rpx;
+  color: #6e7971;
+  font-size: 23rpx;
+  line-height: 1.6;
+}
+
+.progress-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8rpx 18rpx;
+  align-items: center;
+  margin-top: 22rpx;
+  padding: 24rpx 26rpx;
+}
+
+.progress-label {
+  color: #68746c;
+  font-size: 22rpx;
+}
+
+.progress-value {
+  color: #254b34;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.progress-note {
+  grid-column: 1 / -1;
+  color: #2e6944;
+  font-size: 21rpx;
+}
+
+.status-line {
+  margin: 24rpx 4rpx;
+  color: #667169;
+  font-size: 23rpx;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.primary-button {
+  margin-top: 12rpx;
+  border-radius: 24rpx;
+  background: #254b34;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.privacy-note {
+  margin-top: 22rpx;
+  padding: 0 18rpx;
+  color: #929b95;
+  font-size: 19rpx;
+  line-height: 1.55;
+  text-align: center;
+}

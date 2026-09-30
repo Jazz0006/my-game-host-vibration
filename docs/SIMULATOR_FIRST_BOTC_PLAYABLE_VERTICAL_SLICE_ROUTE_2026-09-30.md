@@ -302,7 +302,7 @@ Simulator acceptance now proves:
 
 Validation checkpoint: `quality` PASS; 134 test files / 559 tests; Web client and both WeChat product shells build/verify PASS.
 
-### PV-2 — Role reveal / confirmation vertical slice
+### PV-2 — Role reveal / confirmation vertical slice ✅ COMPLETE
 
 End-to-end:
 
@@ -319,6 +319,20 @@ Critical privacy acceptance:
 - Drunk sees shown Townsfolk, not actual Drunk;
 - another player's role never appears in ordinary PlayerView;
 - Room Owner gains no storyteller secret merely by ownership.
+
+Implementation result:
+
+- extended the stable BotC client protocol with per-player `botc.confirmRole`;
+- the Cloudflare BotC runtime executes confirmation through the existing `BotcGameModule.handleCommand({ type: "confirmRole" })`, using player-scoped `RoomCommandRuntime` idempotency rather than duplicating role-confirmation rules in transport/runtime code;
+- five independent Simulator clients now confirm sequentially, authoritative `confirmedRoles` converges to 5/5, each confirmed PlayerView changes from `role_reveal` to `waiting`, and duplicate command delivery replays without advancing revision;
+- a Human Storyteller remains `spectator` and cannot issue player role confirmation;
+- added a shared WeChat `pages/game` thin projection page: BotC product configuration supplies `gamePage` and `confirmRoleCommand`, Lobby redirects only after authoritative `gameStarted=true`, and the game page renders only the current PlayerView plus public confirmation progress;
+- the page never reads canonical assignments, `actualRoleId`, or `shownRoleId`; Drunk therefore sees the shown Townsfolk already selected by the authoritative PlayerView owner;
+- existing projection tests now explicitly prove Drunk actual-vs-shown privacy, cross-player role isolation, and Room Owner remaining on PublicView while Human Storyteller alone receives ModeratorView.
+
+PV-2 stops at **ready-to-proceed after all confirmations**. The actual `beginFirstNight` production command/UI and first-night interaction surface belong to PV-3 so the client is not advanced into an unsupported phase.
+
+Validation checkpoint: `quality` PASS; 134 test files / 561 tests; Web client and both WeChat product shells build/verify PASS.
 
 ### PV-3 — First-night playable UI
 
@@ -486,12 +500,12 @@ The correction is successful when:
 
 ## 10. Immediate handoff
 
-Do **not** resume B0C3B merely because the production BotC start path now exists.
+Do **not** resume B0C3B merely because role reveal is now playable.
 
-SIM-0 established the Simulator-first development surface. PV-0 closed the shared production Lobby contract. PV-1 now closes the minimal production start path: fixed Trouble Brewing, rules-legal baseline automatic setup, canonical actual/shown assignments, stable `botc.startGame`, Cloudflare BotC command runtime, moderator authority, idempotent persistence, and authoritative role-reveal projections.
+SIM-0 established the Simulator-first development surface. PV-0 closed the shared production Lobby contract. PV-1 closed the minimal production start path. PV-2 now closes the private role-reveal/confirmation path: each participant sees only their authoritative shown-role PlayerView, confirms through player-scoped `botc.confirmRole`, confirmation progress converges for all clients, and the Human Storyteller remains a spectator with ModeratorView rather than a role participant.
 
 Immediate next task:
 
-> **PV-2 — implement the role reveal / confirm-role vertical slice.**
+> **PV-3 — implement the first-night playable UI and production command path.**
 
-PV-2 should wire the already-existing BotC `role_reveal` PlayerView into the client UI and add the stable production confirmation command path. The acceptance target is start game → each participant sees only their own shown role → each confirms → confirmations converge → moderator/automatic control can proceed. Privacy evidence must explicitly cover Drunk shown-vs-actual separation, cross-player secrecy, and Room Owner remaining on PublicView.
+PV-3 should expose the already-existing `beginFirstNight` / night-sequence engine through stable BotC production commands and extend the thin game page to waiting/asleep, wake/attention, private information, required target selection/acknowledgement, step completion and dawn. Where recommendation quality is not yet available, continue to use the simplest rules-legal baseline; do not resume B0C3B merely to unblock the vertical slice.

@@ -5,10 +5,12 @@ import {
 } from "./ClientProtocol.js";
 
 export type BotcClientCommandEnvelope =
-  ClientCommandEnvelope<"botc.startGame", Record<string, never>>;
+  | ClientCommandEnvelope<"botc.startGame", Record<string, never>>
+  | ClientCommandEnvelope<"botc.confirmRole", Record<string, never>>;
 
 export const BOTC_CLIENT_COMMAND_TYPES = [
   "botc.startGame",
+  "botc.confirmRole",
 ] as const;
 
 const TYPE_SET = new Set<string>(BOTC_CLIENT_COMMAND_TYPES);
@@ -34,7 +36,7 @@ export function parseBotcClientCommandEnvelope(
   if (record.kind !== "command") {
     throw new Error("client protocol message is not a command");
   }
-  if (record.type !== "botc.startGame") {
+  if (!TYPE_SET.has(String(record.type ?? ""))) {
     throw new Error("unsupported BotC client command type");
   }
   if (
@@ -45,11 +47,22 @@ export function parseBotcClientCommandEnvelope(
     throw new Error("command payload must be an object");
   }
 
+  const commandId = requireCommandId(record.commandId);
+  if (record.type === "botc.startGame") {
+    return {
+      protocolVersion: CLIENT_PROTOCOL_VERSION,
+      kind: "command",
+      commandId,
+      type: "botc.startGame",
+      payload: {},
+    };
+  }
+
   return {
     protocolVersion: CLIENT_PROTOCOL_VERSION,
     kind: "command",
-    commandId: requireCommandId(record.commandId),
-    type: "botc.startGame",
+    commandId,
+    type: "botc.confirmRole",
     payload: {},
   };
 }

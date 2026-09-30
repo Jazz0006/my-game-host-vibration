@@ -39,6 +39,7 @@ describe("MG0D WeChat game-specific product shells", () => {
       expect(app.pages).toEqual([
         "pages/index/index",
         "pages/lobby",
+        "pages/game",
         "pages/settings",
         "pages/diagnostics",
       ]);
@@ -121,6 +122,18 @@ describe("MG0D WeChat game-specific product shells", () => {
     expect(lobbyMarkup).toContain("开始游戏");
     expect(lobbyMarkup).toContain('bindlongpress="onSeatLongPress"');
     expect(lobbyMarkup).toContain('bindlongpress="onModeratorLongPress"');
+
+    const game = text("miniprogram/pages/game.js");
+    const gameMarkup = text("miniprogram/pages/game.wxml");
+    expect(game).toContain("view.playerView");
+    expect(game).toContain("this._product.confirmRoleCommand");
+    expect(game).not.toContain("actualRoleId");
+    expect(game).not.toContain("shownRoleId");
+    expect(game).not.toContain("assignments");
+    expect(game).not.toContain("/domain/");
+    expect(game).not.toContain("/games/");
+    expect(gameMarkup).toContain("我知道自己的身份了");
+    expect(gameMarkup).toContain("authoritative PlayerView");
 
     const settings = text("miniprogram/pages/settings.js");
     expect(settings).toContain('"room.transferHost"');

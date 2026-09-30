@@ -144,6 +144,7 @@ Page({
     this._detachClient = this._client.subscribe(view => {
       if (view.room) {
         this.applyLobbyModel(authoritativeLobbyModel(view.room));
+        this.routeToGameIfNeeded(view.room);
         return;
       }
       this.setData({ statusLine: connectionStatusLine(view) });
@@ -160,6 +161,26 @@ Page({
 
   onResize() {
     this.refreshTableGeometry();
+  },
+
+  routeToGameIfNeeded(room) {
+    if (
+      !room ||
+      !room.gameStarted ||
+      !this._product ||
+      !this._product.gamePage ||
+      this._gameRedirecting
+    ) {
+      return;
+    }
+
+    this._gameRedirecting = true;
+    wx.redirectTo({
+      url: this._product.gamePage,
+      fail: () => {
+        this._gameRedirecting = false;
+      },
+    });
   },
 
   onUnload() {

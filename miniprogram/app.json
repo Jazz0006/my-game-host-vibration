@@ -2,6 +2,7 @@
   "pages": [
     "pages/index/index",
     "pages/lobby",
+    "pages/game",
     "pages/settings",
     "pages/diagnostics"
   ],
