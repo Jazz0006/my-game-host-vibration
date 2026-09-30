@@ -318,14 +318,53 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
       if (projection?.game?.phase !== "first_night") break;
       step += 1;
       expect(step).toBeLessThan(20);
-      state = (
-        await coordinator.sendCommand(
-          owner.playerId,
-          "botc.completeNightStep",
-          {},
-          `pv3a-complete-${step}`,
-        )
-      ).state;
+
+      const choiceActor = state.clients.find(client => {
+        const view = client.playerView as
+          | {
+              nightStep?: {
+                choice?: {
+                  allowedPlayerIds?: string[];
+                  minTargets?: number;
+                };
+              };
+            }
+          | null;
+        return Boolean(
+          view?.nightStep?.choice?.allowedPlayerIds?.length,
+        );
+      });
+
+      if (choiceActor) {
+        const view = choiceActor.playerView as {
+          nightStep: {
+            choice: {
+              allowedPlayerIds: string[];
+              minTargets: number;
+            };
+          };
+        };
+        const targetCount = view.nightStep.choice.minTargets;
+        const selectedPlayerIds =
+          view.nightStep.choice.allowedPlayerIds.slice(0, targetCount);
+        state = (
+          await coordinator.sendCommand(
+            choiceActor.playerId,
+            "botc.submitNightChoice",
+            { playerIds: selectedPlayerIds },
+            `pv3b1-choice-${step}`,
+          )
+        ).state;
+      } else {
+        state = (
+          await coordinator.sendCommand(
+            owner.playerId,
+            "botc.completeNightStep",
+            {},
+            `pv3a-complete-${step}`,
+          )
+        ).state;
+      }
     }
 
     for (const client of state.clients) {

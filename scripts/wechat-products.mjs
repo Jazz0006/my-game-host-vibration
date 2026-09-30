@@ -18,6 +18,7 @@ export const WECHAT_PRODUCTS = [
     startCommand: "botc.startGame",
     confirmRoleCommand: "botc.confirmRole",
     beginFirstNightCommand: "botc.beginFirstNight",
+    nightChoiceCommand: "botc.submitNightChoice",
     completeNightStepCommand: "botc.completeNightStep",
     gamePage: "/pages/game",
   },

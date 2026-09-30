@@ -364,7 +364,7 @@ PV-3A is **not** completion of automatic first-night gameplay. The current night
 
 Validation checkpoint: `quality` PASS; 134 test files / 565 tests; Web client and both WeChat product shells build/verify PASS.
 
-#### PV-3B — Role action / information resolution ← NEXT
+#### PV-3B — Role action / information resolution ← IN PROGRESS
 
 Close the actual role-interaction contract behind the already-live night cursor:
 
@@ -374,6 +374,34 @@ Close the actual role-interaction contract behind the already-live night cursor:
 - reuse existing Demon Info, registration, Washerwoman candidate and Recommendation seams where already available;
 - add missing rules/information owners only where the playable vertical slice requires them; do not resume broad B0C3B recommendation-depth work merely because a role needs a legal baseline;
 - only after every active first-night step has a rules-legal resolution path should PV-3 be marked complete and Automatic Storyteller be allowed to progress through the whole night without manual semantic gaps.
+
+##### PV-3B1 — Single-target player-choice foundation ✅ COMPLETE
+
+- added a game-owned `TroubleBrewingNightInteraction` contract for active-step target legality instead of letting the client infer role rules;
+- added player-scoped `botc.submitNightChoice { playerIds }` with Cloudflare/ClientSession idempotency;
+- Poisoner may choose one participant and commits canonical `poisonedPlayerId`; that effect remains private/canonical through the following day and is cleared at the next dusk before a new nightly choice;
+- Butler must choose exactly one other participant and commits canonical `butlerMasterPlayerId`; the previous master is cleared at the next dusk;
+- moderator generic `completeNightStep` is now rejected for an active step that requires player input, so Human/Automatic control cannot silently skip a mandatory Poisoner/Butler choice;
+- choice submission automatically advances the same canonical night cursor after a legal commit;
+- only actual-role sourced choices mutate Poisoner/Butler effect state; presentation/transition-derived identity cannot create those canonical effects;
+- PlayerView exposes only a generic choice schema (`minTargets`, `maxTargets`, `allowedPlayerIds`) and the WeChat game page renders a role-agnostic target selector; the page contains no Poisoner/Butler role branching;
+- ModeratorView may inspect committed night effects, while PublicView and ordinary room projections do not expose the poisoned target or Butler master;
+- Cloudflare runtime acceptance proves wrong-actor rejection, persisted revision, commandId replay and public secrecy.
+
+Validation checkpoint: `quality` PASS; 136 test files / 569 tests; Web client and both WeChat product shells build/verify PASS.
+
+##### PV-3B2 — First-night information resolution ← NEXT
+
+Implement the information-bearing Townsfolk path before Fortune Teller/Spy specialization:
+
+- establish one private information-result shape owned by BotC Rules/Information, not by the WeChat page;
+- cover Washerwoman, Librarian, Investigator, Chef and Empath first-night results using canonical setup/seat/registration facts;
+- incorporate current Poisoner state into whether an information ability is healthy vs malfunctioning, while keeping the simplest rules-legal misinformation baseline separate from future recommendation-quality work;
+- commit the chosen authoritative result to game state before exposing it in PlayerView, so reconnect/replay returns the same information rather than recomputing it;
+- advance each information step only after its result is committed/acknowledged;
+- continue reusing the existing registration and Washerwoman candidate owners rather than rebuilding them.
+
+Fortune Teller dual-target + Red Herring/result semantics and Spy Grimoire remain later PV-3B sub-slices because they require distinct interaction/private-view contracts.
 
 ### PV-4 — Minimal day / night loop
 
@@ -533,6 +561,6 @@ SIM-0 established the Simulator-first development surface. PV-0 closed the share
 
 Immediate next task:
 
-> **PV-3B — implement authoritative first-night role action / information resolution.**
+> **PV-3B2 — implement authoritative first-night information resolution.**
 
-PV-3B must fill the semantic gaps inside the already-canonical night cursor rather than create another night engine. Start by classifying active Trouble Brewing first-night roles into target/choice vs private-information vs moderator-resolved steps, then provide rules-legal request/commit/PlayerView contracts for the minimum playable path. Existing information/recommendation owners should be reused; missing rules should be added narrowly. PV-3 remains IN PROGRESS until every role step the automatic path can encounter has a real resolution path.
+PV-3B1 has closed the reusable player-choice foundation for Poisoner and Butler, including canonical effect persistence and a role-agnostic client target selector. PV-3B2 should now make Washerwoman/Librarian/Investigator/Chef/Empath information real and reconnect-stable by committing server-owned private results before delivery. Poisoning must be part of the rules context, but recommendation quality remains a separate intelligence concern: use the simplest rules-legal baseline necessary for the playable slice rather than resuming broad B0C3B. Fortune Teller and Spy remain distinct later PV-3B slices.

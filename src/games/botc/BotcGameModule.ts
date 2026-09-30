@@ -23,6 +23,11 @@ import {
   type TroubleBrewingOtherNightProgress,
 } from "./TroubleBrewingNightProgression.js";
 import {
+  resolveTroubleBrewingNightChoice,
+  troubleBrewingNightChoiceSpec,
+  type TroubleBrewingNightChoiceSpec,
+} from "./TroubleBrewingNightInteraction.js";
+import {
   normalizeTroubleBrewingSetup,
   type BotcCanonicalSetupAssignment,
   type BotcSetupAssignment,
@@ -76,6 +81,8 @@ export type BotcGameState = {
   executedAndDiedTodayPlayerId?: string;
   roleTransitions: TroubleBrewingOtherNightRoleTransition[];
   demonInfo?: BotcDemonInfoState;
+  poisonedPlayerId?: string;
+  butlerMasterPlayerId?: string;
   nightStepIndex?: number;
   otherNightProgress?: TroubleBrewingOtherNightProgress;
 };
@@ -85,6 +92,7 @@ export type BotcCommand =
   | { type: "setDemonBluffs"; roleIds: TroubleBrewingRoleId[] }
   | { type: "beginFirstNight" }
   | { type: "beginOtherNight" }
+  | { type: "submitNightChoice"; playerIds: string[] }
   | { type: "completeNightStep" };
 
 export type BotcCommandOutcome =
@@ -108,6 +116,13 @@ export type BotcCommandOutcome =
       nightComplete: boolean;
     }
   | {
+      kind: "nightChoiceCommitted";
+      completedStepId: BotcNightStep["id"];
+      selectedPlayerIds: string[];
+      nextStepId?: BotcNightStep["id"];
+      nightComplete: boolean;
+    }
+  | {
       kind: "nightStepCompleted";
       completedStepId: BotcNightStep["id"];
       nextStepId?: BotcNightStep["id"];
@@ -118,6 +133,7 @@ export type BotcPlayerNightStepView = {
   id: BotcNightStep["id"];
   kind: BotcNightStep["kind"];
   roleId?: TroubleBrewingRoleId;
+  choice?: TroubleBrewingNightChoiceSpec;
 };
 
 export type BotcMinionInfoView = {
@@ -160,6 +176,10 @@ export type BotcPublicView = {
 export type BotcModeratorView = BotcPublicView & {
   assignments: BotcCanonicalSetupAssignment[];
   nightStep?: BotcNightStep;
+  nightEffects?: {
+    poisonedPlayerId?: string;
+    butlerMasterPlayerId?: string;
+  };
   demonInfo?: BotcDemonInfoView;
 };
 
@@ -274,17 +294,29 @@ function currentNightStep(state: BotcGameState): BotcNightStep | undefined {
   return undefined;
 }
 
-function playerNightStepView(step: BotcNightStep): BotcPlayerNightStepView {
-  return step.kind === "system_info"
-    ? {
-        id: step.id,
-        kind: step.kind,
-      }
-    : {
-        id: step.id,
-        kind: step.kind,
-        roleId: step.roleId,
-      };
+function playerNightStepView(
+  step: BotcNightStep,
+  playerId: string,
+  participantPlayerIds: readonly string[],
+): BotcPlayerNightStepView {
+  if (step.kind === "system_info") {
+    return {
+      id: step.id,
+      kind: step.kind,
+    };
+  }
+
+  const choice = troubleBrewingNightChoiceSpec(
+    step,
+    playerId,
+    participantPlayerIds,
+  );
+  return {
+    id: step.id,
+    kind: step.kind,
+    roleId: step.roleId,
+    ...(choice ? { choice } : {}),
+  };
 }
 
 function commitResolvedRoleTransitions(state: BotcGameState): void {
@@ -309,6 +341,67 @@ function clearCompletedOtherNightFacts(state: BotcGameState): void {
   state.roleTransitions = [];
   delete state.executedAndDiedTodayPlayerId;
   delete state.otherNightProgress;
+}
+
+function advanceCurrentNightStep(
+  state: BotcGameState,
+): Extract<BotcCommandOutcome, { kind: "nightStepCompleted" }> {
+  if (state.phase === "first_night") {
+    const step = currentNightStep(state);
+    if (!step || state.nightStepIndex === undefined) {
+      throw new Error("There is no active BotC night step");
+    }
+
+    const sequence = firstNightSequence(state);
+    const nextStep = sequence[state.nightStepIndex + 1];
+    if (!nextStep) {
+      state.phase = "day";
+      state.dayNumber = 1;
+      delete state.nightStepIndex;
+      return {
+        kind: "nightStepCompleted",
+        completedStepId: step.id,
+        nightComplete: true,
+      };
+    }
+
+    state.nightStepIndex += 1;
+    return {
+      kind: "nightStepCompleted",
+      completedStepId: step.id,
+      nextStepId: nextStep.id,
+      nightComplete: false,
+    };
+  }
+
+  if (state.phase === "other_night" && state.otherNightProgress?.activeStep) {
+    const advanced = advanceTroubleBrewingOtherNightProgress(
+      otherNightFacts(state),
+      state.otherNightProgress,
+    );
+    state.otherNightProgress = advanced.progress;
+
+    if (!advanced.nextStep) {
+      state.phase = "day";
+      state.dayNumber += 1;
+      commitResolvedRoleTransitions(state);
+      clearCompletedOtherNightFacts(state);
+      return {
+        kind: "nightStepCompleted",
+        completedStepId: advanced.completedStep.id,
+        nightComplete: true,
+      };
+    }
+
+    return {
+      kind: "nightStepCompleted",
+      completedStepId: advanced.completedStep.id,
+      nextStepId: advanced.nextStep.id,
+      nightComplete: false,
+    };
+  }
+
+  throw new Error("There is no active BotC night step");
 }
 
 function publicView(state: BotcGameState): BotcPublicView {
@@ -452,6 +545,11 @@ export class BotcGameModule implements GameModule<
           throw new Error("BotC other night can only begin from day");
         }
 
+        // Night-start is dusk for these day-spanning effects. The previous
+        // Poisoner target becomes healthy and the previous Butler master stops
+        // constraining tomorrow's vote before the new nightly choices occur.
+        delete state.poisonedPlayerId;
+        delete state.butlerMasterPlayerId;
         state.diedTonightPlayerIds = [];
         const progress = startTroubleBrewingOtherNightProgress(otherNightFacts(state));
         state.nightNumber += 1;
@@ -480,79 +578,74 @@ export class BotcGameModule implements GameModule<
         };
       }
 
+      case "submitNightChoice": {
+        if (!context.playerId) {
+          throw new Error("player command requires playerId");
+        }
+
+        const step = currentNightStep(state);
+        if (!step || !step.actorPlayerIds.includes(context.playerId)) {
+          throw new Error("Only the active BotC night actor can submit this choice");
+        }
+
+        const participantPlayerIds = state.assignments.map(
+          assignment => assignment.playerId,
+        );
+        const resolution = resolveTroubleBrewingNightChoice(
+          step,
+          context.playerId,
+          participantPlayerIds,
+          command.playerIds,
+        );
+
+        if (resolution.appliesEffect) {
+          if (resolution.kind === "poisoner_target") {
+            state.poisonedPlayerId = resolution.targetPlayerId;
+          } else {
+            state.butlerMasterPlayerId = resolution.targetPlayerId;
+          }
+        }
+
+        const advanced = advanceCurrentNightStep(state);
+        return {
+          state,
+          outcome: {
+            kind: "nightChoiceCommitted",
+            completedStepId: advanced.completedStepId,
+            selectedPlayerIds: [resolution.targetPlayerId],
+            ...(advanced.nextStepId
+              ? { nextStepId: advanced.nextStepId }
+              : {}),
+            nightComplete: advanced.nightComplete,
+          },
+        };
+      }
+
       case "completeNightStep": {
         if (!context.isModerator) {
           throw new Error("Only the BotC moderator can complete a night step");
         }
 
-        if (state.phase === "first_night") {
-          const step = currentNightStep(state);
-          if (!step || state.nightStepIndex === undefined) {
-            throw new Error("There is no active BotC night step");
-          }
-
-          const sequence = firstNightSequence(state);
-          const nextStep = sequence[state.nightStepIndex + 1];
-          if (!nextStep) {
-            state.phase = "day";
-            state.dayNumber = 1;
-            delete state.nightStepIndex;
-            return {
-              state,
-              outcome: {
-                kind: "nightStepCompleted",
-                completedStepId: step.id,
-                nightComplete: true,
-              },
-            };
-          }
-
-          state.nightStepIndex += 1;
-          return {
-            state,
-            outcome: {
-              kind: "nightStepCompleted",
-              completedStepId: step.id,
-              nextStepId: nextStep.id,
-              nightComplete: false,
-            },
-          };
+        const step = currentNightStep(state);
+        if (!step) {
+          throw new Error("There is no active BotC night step");
+        }
+        const actorPlayerId = step.actorPlayerIds[0];
+        if (
+          actorPlayerId &&
+          troubleBrewingNightChoiceSpec(
+            step,
+            actorPlayerId,
+            state.assignments.map(assignment => assignment.playerId),
+          )
+        ) {
+          throw new Error("Active BotC night step requires a player choice");
         }
 
-        if (state.phase === "other_night" && state.otherNightProgress?.activeStep) {
-          const advanced = advanceTroubleBrewingOtherNightProgress(
-            otherNightFacts(state),
-            state.otherNightProgress,
-          );
-          state.otherNightProgress = advanced.progress;
-
-          if (!advanced.nextStep) {
-            state.phase = "day";
-            state.dayNumber += 1;
-            commitResolvedRoleTransitions(state);
-            clearCompletedOtherNightFacts(state);
-            return {
-              state,
-              outcome: {
-                kind: "nightStepCompleted",
-                completedStepId: advanced.completedStep.id,
-                nightComplete: true,
-              },
-            };
-          }
-
-          return {
-            state,
-            outcome: {
-              kind: "nightStepCompleted",
-              completedStepId: advanced.completedStep.id,
-              nextStepId: advanced.nextStep.id,
-              nightComplete: false,
-            },
-          };
-        }
-
-        throw new Error("There is no active BotC night step");
+        return {
+          state,
+          outcome: advanceCurrentNightStep(state),
+        };
       }
     }
   }
@@ -606,7 +699,11 @@ export class BotcGameModule implements GameModule<
         return {
           ...base,
           mode: "night_wake",
-          nightStep: playerNightStepView(step),
+          nightStep: playerNightStepView(
+            step,
+            playerId,
+            state.assignments.map(assignment => assignment.playerId),
+          ),
           ...(activeMinionInfo ? { minionInfo: activeMinionInfo } : {}),
           ...(activeDemonInfo ? { demonInfo: activeDemonInfo } : {}),
         };
@@ -629,9 +726,21 @@ export class BotcGameModule implements GameModule<
   ): BotcModeratorView {
     const step = currentNightStep(state);
     const privateDemonInfo = demonInfoView(state);
+    const nightEffects =
+      state.poisonedPlayerId || state.butlerMasterPlayerId
+        ? {
+            ...(state.poisonedPlayerId
+              ? { poisonedPlayerId: state.poisonedPlayerId }
+              : {}),
+            ...(state.butlerMasterPlayerId
+              ? { butlerMasterPlayerId: state.butlerMasterPlayerId }
+              : {}),
+          }
+        : undefined;
     return {
       ...publicView(state),
       assignments: state.assignments.map(assignment => ({ ...assignment })),
+      ...(nightEffects ? { nightEffects } : {}),
       ...(step
         ? {
             nightStep: {

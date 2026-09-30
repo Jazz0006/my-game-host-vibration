@@ -53,7 +53,9 @@ PV-2 role reveal / confirm-role ✅
   ↓
 PV-3 first-night playable UI ← IN PROGRESS
   ├─ PV-3A production first-night orchestration ✅
-  └─ PV-3B role action / information resolution ← CURRENT / NEXT
+  └─ PV-3B role action / information resolution ← IN PROGRESS
+       ├─ PV-3B1 single-target player choice ✅
+       └─ PV-3B2 first-night information resolution ← CURRENT / NEXT
   ↓
 PV-4 minimal day/night loop
   ↓
