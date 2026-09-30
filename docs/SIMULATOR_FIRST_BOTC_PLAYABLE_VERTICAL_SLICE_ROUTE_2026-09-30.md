@@ -1,7 +1,7 @@
 # Simulator-first BotC Playable Vertical Slice Route (2026-09-30)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; SIM-0 COMPLETE, PV-0 NEXT**  
+> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; UGSM-1 COMPLETE, PV-3B2 NEXT**  
 > Route owner: current execution order is governed by V5; this document owns the detailed Simulator-first / playable-vertical-slice decomposition.  
 > Supersedes as NEXT: continuing directly from B0C3A into B0C3B recommendation depth.
 
@@ -390,9 +390,23 @@ Close the actual role-interaction contract behind the already-live night cursor:
 
 Validation checkpoint: `quality` PASS; 136 test files / 569 tests; Web client and both WeChat product shells build/verify PASS.
 
+##### UGSM-0 / UGSM-1 — Canonical snapshot compatibility gate
+
+Before PV-3B2 adds durable information-result semantics, the online runtime must align with the cross-project `TroubleBrewingGameSnapshotV1` contract.
+
+UGSM-0 is complete in `docs/UGSM0_UNIFIED_TROUBLE_BREWING_GAME_SNAPSHOT_ADOPTION_AUDIT_2026-09-30.md` and freezes these boundaries:
+
+- mutable online `BotcGameState` remains the authoritative GameModule state;
+- `TroubleBrewingGameSnapshotV1` is a pure deterministic read-only projection, not a replacement runtime state;
+- canonical unresolved facts use explicit KNOWN / UNCOMMITTED / UNKNOWN / NOT_APPLICABLE semantics;
+- Room Runtime / transport / session / client capability state is excluded;
+- current immediate Drunk commitment is a runtime behavior and must not become a snapshot-schema assumption.
+
+UGSM-1 is complete: `src/games/botc/TroubleBrewingGameSnapshot.ts` independently owns the frozen V1 contract/codec, while `TroubleBrewingGameSnapshotProjection.ts` provides the pure `BotcGameState + explicit projection context -> TroubleBrewingGameSnapshotV1` runtime adapter; JSON field order remains Host-compatible. The projector does not invent `gameSeed` or missing revision semantics; those values remain explicit caller context / NOT_APPLICABLE until this runtime has authoritative producers. Validation: typecheck PASS; full test PASS, 137 files / 574 tests; Web and both WeChat product shells build/verify PASS.
+
 ##### PV-3B2 — First-night information resolution ← NEXT
 
-Implement the information-bearing Townsfolk path before Fortune Teller/Spy specialization:
+With UGSM-1 accepted, implement the information-bearing Townsfolk path before Fortune Teller/Spy specialization:
 
 - establish one private information-result shape owned by BotC Rules/Information, not by the WeChat page;
 - cover Washerwoman, Librarian, Investigator, Chef and Empath first-night results using canonical setup/seat/registration facts;
