@@ -14,8 +14,9 @@ Use these in this order:
 
 - `docs/B0C_TROUBLE_BREWING_INFORMATION_RECOMMENDATION_HANDOFF_2026-09-30.md`
   - current B0C Rules/Information -> Storyteller Recommendation decomposition;
-  - B0C1 Demon Info legal-candidate + recommendation-boundary GREEN checkpoint;
-  - B0C2 recommendation policy + Game Engine commit/private delivery entry scope.
+  - B0C1 Demon Info legality/recommendation-boundary merged through PR #109;
+  - B0C2 baseline recommendation + Game Engine commit/private delivery GREEN checkpoint;
+  - B0C3 setup-information registration + Washerwoman entry scope.
 - `docs/B0B_TROUBLE_BREWING_NIGHT_SEQUENCING_HANDOFF_2026-09-30.md`
   - completed B0B sequencing authority and B0C handoff.
 - `docs/B0B3_BOTC_OWNERSHIP_BOUNDARY_AUDIT_2026-09-30.md`
@@ -36,8 +37,9 @@ B0 BotC / Trouble Brewing production entry
   │   │   └─ B0B2B immediate trigger / role-transition sequencing ✅ MERGED PR #107
   │   └─ B0B3 ownership hardening + live runtime progression ✅ COMPLETE
   └─ B0C Rules / Information → Storyteller Recommendation ← CURRENT
-      ├─ B0C1 Demon Info legal candidates + recommendation boundary ✅ LOCAL GREEN
-      └─ B0C2 recommendation policy + authoritative commit/private delivery ← NEXT AFTER MERGE
+      ├─ B0C1 Demon Info legal candidates + recommendation boundary ✅ MERGED PR #109
+      ├─ B0C2 recommendation policy + authoritative commit/private delivery ✅ LOCAL GREEN
+      └─ B0C3 setup-information registration + Washerwoman ← NEXT AFTER MERGE
 ```
 
 ## Parallel engineering route

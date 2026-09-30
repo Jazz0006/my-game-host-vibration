@@ -2,19 +2,19 @@
 
 ## Canonical checkpoint
 
-B0C1 implementation branch:
+B0C2 implementation branch:
 
 ```text
-agent/b0c1-botc-demon-info-boundary
+agent/b0c2-botc-demon-info-runtime
 ```
 
-Fresh live `main` at B0C1 entry:
+Fresh live `main` at B0C2 entry:
 
 ```text
-76bf10f624470d5393b499916b605d447852e719
+f07a7549c89150c0e9af596d767455a798737ab7
 ```
 
-B0A–B0B3 are complete. B0C is now the active BotC production-expansion milestone.
+B0A–B0B3 are complete. B0C is the active BotC production-expansion milestone. B0C1 merged through PR #109.
 
 Standing merge authorization remains active: accepted-scope PRs may be merged automatically once exact-head, required checks, mergeability, unresolved-thread, and final-diff gates pass.
 
@@ -143,14 +143,67 @@ pretest
   both WeChat product-shell build / verification PASS
 ```
 
-## Next after B0C1 merge
+## B0C2 implemented scope
 
-B0C2 should complete the Demon Info vertical slice without collapsing the owners:
+B0C2 completes the first Demon Info vertical slice while preserving the B0C1 owner boundary.
 
-1. define the first concrete Storyteller Recommendation policy for choosing three legal Demon bluffs;
-2. keep its input limited to the B0C1 request contract plus explicit optional/enrichment context;
-3. validate the recommendation through the B0C1 legality guard;
-4. let `BotcGameModule` commit the accepted bluff choice into canonical session state;
-5. expose Minion identities + selected three bluff roles only to the Demon during the `demon_info` step and to the authoritative ModeratorView;
-6. keep PublicView and non-Demon PlayerViews secret-safe;
-7. do not yet expand into Washerwoman/Librarian/Investigator registration or poison/drunk misinformation.
+Recommendation:
+
+- `recommendDemonBluffsBaselineV1` is an independent automatic Storyteller policy;
+- it accepts only the B0C1 recommendation request plus injected randomness;
+- if at least three alternatives exist, it avoids the Townsfolk role currently shown to the Drunk;
+- otherwise it samples three distinct roles from the full rules-legal set;
+- it always returns through the B0C1 legality validator;
+- richer narrative / player-level / history scoring is intentionally deferred.
+
+Game Engine / canonical state:
+
+- moderator-only `setDemonBluffs` allows a human Storyteller to commit any legal three-role choice before the first night;
+- a human choice is preserved and is not overwritten by automatic recommendation;
+- if no manual choice exists, `beginFirstNight` invokes baseline V1 and commits the accepted result;
+- canonical `demonInfo` stores the Demon player, Minion player IDs, accepted bluff roles and selection source;
+- the Recommendation owner never writes state directly.
+
+Privacy / delivery:
+
+- during the active `demon_info` first-night step, only the canonical Demon PlayerView receives Minion IDs + the three committed bluff roles;
+- non-Demon PlayerViews do not receive Demon Info;
+- PublicView never receives Demon Info;
+- authoritative ModeratorView may inspect the committed Demon Info;
+- the Demon private payload disappears from PlayerView after `demon_info` is completed.
+
+B0C2 still does **not** implement:
+
+- advanced bluff-quality scoring;
+- player-skill / game-history / evil-public-story context;
+- Washerwoman / Librarian / Investigator information;
+- Spy / Recluse registration;
+- poisoning / drunken information malfunction;
+- generic BotC rules or recommendation DSL.
+
+## B0C2 validation
+
+```text
+npm run typecheck
+  PASS
+
+npm test
+  PASS
+  130 test files
+  533 tests
+
+pretest
+  Web client build PASS
+  both WeChat product-shell build / verification PASS
+```
+
+## Next after B0C2 merge
+
+B0C3 should move to setup-information roles, beginning with an explicit Trouble Brewing registration seam rather than embedding registration exceptions in each role:
+
+1. model the concrete Trouble Brewing registration alternatives needed by first-night setup-information roles;
+2. keep actual canonical identity separate from possible registration;
+3. start with one focused role path (Washerwoman) before batching Librarian / Investigator;
+4. Rules / Information should generate the legal two-player / shown-character information candidates;
+5. Recommendation should later choose among those legal candidates without deciding registration legality;
+6. do not yet add poisoning/drunken misinformation until the truthful-information path is stable.
