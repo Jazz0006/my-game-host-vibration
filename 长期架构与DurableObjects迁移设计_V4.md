@@ -742,6 +742,38 @@ Room Owner 是房间管理/恢复权限，不等同于 Game Moderator/Storytelle
 
 暂不复制 WerewolfGameJudge 的完整 package / runtime-erased engine 体系。
 
+## 19.1 BotC 内部长期 ownership contract
+
+BotC 不能因为 `BotcGameModule` 是平台接入点，就把阵容搜索、规则判定、信息生成和说书人推荐全部塞进同一个模块。长期数据流固定为：
+
+```text
+Setup Generation / Setup Contract
+        ↓
+Canonical Session / Truth
+        ↓
+Game Engine / BotcGameModule
+        ↓
+Rules / Information Resolution
+        ↓
+Recommendation Context Builder
+        ↓
+Storyteller Recommendation Engine
+        ↓
+chosen decision
+        ↓
+Game Engine authoritative commit
+```
+
+职责边界：
+
+- **Setup Generation / Setup Contract**：角色/剧本合法性、人数分布、Baron 等 setup mutation、actual/shown identity 合法性，以及以后真正的阵容候选生成。它不推进夜晚，也不决定信息强弱。
+- **Canonical Session / Truth**：唯一权威真实状态，包括已接受阵容、死亡、角色变化、白天/夜晚已发生事实等。推荐层只读，不直接写入。
+- **Game Engine / GameModule**：负责 phase、command lifecycle、调用各 owner、提交已接受的决策、生成 Player/Moderator/Public projection；它是 orchestration façade，不是所有 BotC 逻辑的最终 owner。
+- **Rules / Information Resolution**：负责能力是否合法/如何生效、registration、poison/drunk truth、合法信息候选等确定性或受规则约束的结果。
+- **Storyteller Recommendation Engine**：给定明确 decision point 与 required / optional context，对合法候选进行质量排序并给出理由/trace；不得自行改 authoritative state。
+
+2026-09-30 B0B3 前置 ownership audit 已确认：B0A 阶段把 setup normalization 暂存在 `BotcGameModule` 是可接受的过渡，但继续扩张会造成重新耦合。因此从 B0B3 起，Trouble Brewing setup validation 迁到独立 setup owner；night sequencing/progression 也保持为纯 owner，`BotcGameModule` 只编排并持有 canonical session facts。B0C+ 必须继续把 Rules/Information 与 Storyteller Recommendation 分开，而不是把“合法信息生成”和“推荐哪条信息更好”合并成一个 intelligence 大模块。
+
 ---
 
 # 20. 推荐后的实施路线
@@ -781,18 +813,18 @@ MG0 Second-game admission hardening COMPLETE ✅
         ↓
 BotC / Trouble Brewing Production Expansion
   ├─ B0A module + setup/view contracts ✅
-  ├─ B0B first-night / night sequencing ← CURRENT
+  ├─ B0B first-night / night sequencing ✅ COMPLETE
   │   ├─ B0B1 canonical order + first-night progression ✅
-  │   ├─ B0B2 later-night dynamic eligibility / progression
+  │   ├─ B0B2 later-night dynamic eligibility / progression ✅
   │   │   ├─ B0B2A recurring / conditional eligibility ✅
   │   │   └─ B0B2B immediate trigger / role-transition sequencing ✅
-  │   └─ B0B3 live runtime progression / command integration ← NEXT
-  └─ B0C+ information / storyteller intelligence slices
+  │   └─ B0B3 ownership hardening + live runtime progression ✅
+  └─ B0C Rules / Information -> Storyteller Recommendation ← NEXT
         ↓
 Production Web cutover / Reliability hardening — deferred, risk-driven
 ```
 
-E2 与 E3.1–E3.7B 已完成，包括第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle、native composition、Developer Tools 工程壳/构建链与真实设备 lifecycle 验收。后续 W3D3 与 MG0A–MG0D 也已完成：identity recovery 已 game-neutral，room runtime/command dispatch 已具备第二游戏边界，Owner/Moderator 已拆分，微信发布形态已由一个 shared shell source 生成 `骏骏桌游-狼人` / `骏骏桌游-血染` 两个独立产品工程。当前已进入 BotC / Trouble Brewing production expansion；B0A 已建立真实 BotC GameModule、Trouble Brewing setup contract 与 authoritative views；B0B1 已建立 canonical night order 与 first-night progression；B0B2A 已建立 live recurring/conditional eligibility；B0B2B 已建立 Scarlet Woman -> Imp 与 Imp self-kill 的即时 role-transition sequencing，并保持 rules decision 与 night ordering 分离；下一步 B0B3 把 live eligibility / transition timeline 接入 BotC runtime progression，同时避免使用会因动态状态变化而失效的 frozen filtered-list index；Storyteller Intelligence 继续保持为独立层。Production Web cutover 与 Reliability hardening 不再作为 BotC 前置。微信 runtime 继续由 `tsconfig.wechat` 做 bundler-mode typecheck，再由显式 `esbuild` owner 为两个 generated product package 打出 CommonJS runtime bundle；生成产物不成为第二份源码。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 与 E3.1–E3.7B 已完成，包括第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle、native composition、Developer Tools 工程壳/构建链与真实设备 lifecycle 验收。后续 W3D3 与 MG0A–MG0D 也已完成：identity recovery 已 game-neutral，room runtime/command dispatch 已具备第二游戏边界，Owner/Moderator 已拆分，微信发布形态已由一个 shared shell source 生成 `骏骏桌游-狼人` / `骏骏桌游-血染` 两个独立产品工程。BotC / Trouble Brewing 的 B0A–B0B3 已建立真实 GameModule 接入、独立 setup contract、canonical night ordering、动态 eligibility、即时 role transition 与 live monotonic night progression；B0B3 同时把 Setup Generation / Canonical Session / Game Engine / Rules-Information / Storyteller Recommendation 正式固化为长期 ownership contract，并把 setup normalization 从 `BotcGameModule` 移到独立 owner。下一步 B0C 从一个具体 Trouble Brewing information decision point 开始，先实现 authoritative Rules / Information 候选，再由独立、只读的 Storyteller Recommendation 使用 required/optional context 做推荐；推荐结果只能由 Game Engine 正式提交回 Canonical Session。Production Web cutover 与 Reliability hardening 不再作为 BotC 前置。微信 runtime 继续由 `tsconfig.wechat` 做 bundler-mode typecheck，再由显式 `esbuild` owner 为两个 generated product package 打出 CommonJS runtime bundle；生成产物不成为第二份源码。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 

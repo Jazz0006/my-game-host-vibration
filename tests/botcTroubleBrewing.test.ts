@@ -3,10 +3,8 @@ import type {
   GameModuleDependencies,
   GameViewContext,
 } from "../src/core/game/GameModule.js";
-import {
-  BotcGameModule,
-  type BotcSetupAssignment,
-} from "../src/games/botc/BotcGameModule.js";
+import { BotcGameModule } from "../src/games/botc/BotcGameModule.js";
+import type { BotcSetupAssignment } from "../src/games/botc/TroubleBrewingSetup.js";
 import {
   TROUBLE_BREWING_ROLES,
   troubleBrewingBaseCounts,
