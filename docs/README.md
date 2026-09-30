@@ -10,13 +10,21 @@ Use these in this order:
 4. `docs/微信客户端大厅与方桌_UI实施基线_2026-09-28.md` — current WeChat lobby/table UX baseline.
 5. live code / Git / tests / runtime evidence.
 
+## Development workflow baseline
+
+- Normal development is **Mini MCP local-first**; local inspection/edit/Git/validation and GitHub PR/CI/review/merge control-plane operations go through Mini MCP direct tools.
+- ChatGPT owns semantics, architecture, scope and acceptance judgment; Codex/Luna is a bounded local implementation worker (`edit -> test -> repair`) and does not independently choose architecture or GitHub control-plane actions.
+- Related micro-slices may remain local until a **logical checkpoint**. At that point run Mini MCP `quality` (`check-file-sizes + typecheck + test`), review the exact diff, commit, then push once for independent GitHub acceptance.
+- GitHub remains canonical remote truth and independent CI acceptance, but it is not the normal per-edit test loop. Detailed normative rules live in `AGENTS.md`.
+
 ## Current handoff
 
 - `docs/B0C_TROUBLE_BREWING_INFORMATION_RECOMMENDATION_HANDOFF_2026-09-30.md`
   - current B0C Rules/Information -> Storyteller Recommendation decomposition;
   - B0C1 Demon Info legality/recommendation-boundary merged through PR #109;
-  - B0C2 baseline recommendation + Game Engine commit/private delivery GREEN checkpoint;
-  - B0C3 setup-information registration + Washerwoman entry scope.
+  - B0C2 Demon Info recommendation/runtime merged through PR #110;
+  - B0C3A registration + truthful Washerwoman candidate boundary GREEN checkpoint;
+  - B0C3B Washerwoman recommendation + Game Engine commit/private delivery entry scope.
 - `docs/B0B_TROUBLE_BREWING_NIGHT_SEQUENCING_HANDOFF_2026-09-30.md`
   - completed B0B sequencing authority and B0C handoff.
 - `docs/B0B3_BOTC_OWNERSHIP_BOUNDARY_AUDIT_2026-09-30.md`
@@ -38,8 +46,10 @@ B0 BotC / Trouble Brewing production entry
   │   └─ B0B3 ownership hardening + live runtime progression ✅ COMPLETE
   └─ B0C Rules / Information → Storyteller Recommendation ← CURRENT
       ├─ B0C1 Demon Info legal candidates + recommendation boundary ✅ MERGED PR #109
-      ├─ B0C2 recommendation policy + authoritative commit/private delivery ✅ LOCAL GREEN
-      └─ B0C3 setup-information registration + Washerwoman ← NEXT AFTER MERGE
+      ├─ B0C2 recommendation policy + authoritative commit/private delivery ✅ MERGED PR #110
+      └─ B0C3 setup-information registration + Washerwoman ← CURRENT
+          ├─ B0C3A registration + truthful candidate boundary ✅ LOCAL GREEN
+          └─ B0C3B recommendation + authoritative commit/private delivery ← NEXT AFTER MERGE
 ```
 
 ## Parallel engineering route

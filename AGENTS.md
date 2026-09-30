@@ -44,7 +44,7 @@ Current product priorities:
 5. reconnect, app switching, screen lock, and network changes are normal lifecycle events;
 6. the system owns authoritative game flow and secret information;
 7. the host is primarily a recovery controller, not a hidden-information super-user;
-8. Werewolf is the current production game. W3D3 + MG0 shared-infrastructure admission work is complete; Blood on the Clocktower / Trouble Brewing B0 is the active production-expansion mainline. B0A–B0B3 are complete. B0C Rules/Information -> Storyteller Recommendation is active; B0C1 Demon Info legality/recommendation-boundary is merged through PR #109, B0C2 recommendation policy + authoritative commit/private delivery is locally GREEN, and B0C3 setup-information registration + Washerwoman is next after merge.
+8. Werewolf is the current production game. W3D3 + MG0 shared-infrastructure admission work is complete; Blood on the Clocktower / Trouble Brewing B0 is the active production-expansion mainline. B0A–B0B3 are complete. B0C Rules/Information -> Storyteller Recommendation is active; B0C1 merged through PR #109, B0C2 merged through PR #110, B0C3A registration + truthful Washerwoman candidate boundary is locally GREEN, and B0C3B Washerwoman recommendation + authoritative commit/private delivery is next after merge.
 9. The WeChat product direction is two game-specific thin-client shells — working names `骏骏桌游-狼人` and `骏骏桌游-血染` — over one shared client/runtime/backend platform. Do not duplicate reconnect, identity, transport, room, recovery, persistence, or Cloudflare authority code per mini program.
 10. A room's `gameType` is fixed at room creation by the client product; the lobby no longer owns cross-game switching.
 
@@ -191,28 +191,23 @@ Default collaboration model:
 
 ```text
 ChatGPT / Chat
-  = product semantics
-  = architecture and ownership
-  = scope / slice selection
-  = public-contract decisions
-  = test strategy and acceptance criteria
-  = final diff / test / CI / result analysis
+  = semantics / architecture / scope / acceptance judgment
+  = chooses owners, bounded slices, invariants, test strategy, and final acceptance
 
 Mini MCP direct tools
-  = normal repository inspection
-  = search / bounded read / small safe patches
-  = Git state / diff / stage / commit / push
-  = configured task execution
-  = GitHub control-plane operations when appropriate
+  = repository inspection / edit / Git / local validation
+  = PR / CI / review / merge control plane
+  = default execution surface for normal development work
 
 Codex / Luna execution session
-  = bounded local implementation mechanics
-  = complete-file or cross-file mechanical changes
-  = edit -> typecheck/test -> repair loops within approved semantics
+  = bounded local implementation worker
+  = edit -> focused test/typecheck -> repair inside Chat-approved semantics
+  = does not own architecture decisions or GitHub CLI/control-plane decisions
 
 GitHub
-  = canonical remote repository / PR / CI state
-  = independent remote acceptance evidence
+  = canonical remote truth
+  = independent remote acceptance surface
+  = not the normal per-edit implementation or test loop
 ```
 
 Use three explicit local-model authority levels:
@@ -243,7 +238,39 @@ If the real code makes the approved design materially ambiguous, return a decisi
 
 ## 6. Execution-path priority
 
-Choose the simplest safe path.
+Choose the simplest safe path. **Normal development is local-first.** Do not use GitHub queries, pushes, or CI as a substitute for available local inspection and validation.
+
+Default development loop:
+
+```text
+inspect live local state
+-> design bounded slice
+-> local implementation
+-> focused test
+-> continue related micro-slices when appropriate
+-> reach logical checkpoint
+-> local full quality gate
+-> exact diff review
+-> commit
+-> push
+-> PR audit
+-> GitHub CI independent acceptance
+-> merge when all gates pass
+```
+
+A **micro-slice** is a small related implementation step that can be validated locally without needing a remote collaboration/acceptance boundary. Several micro-slices may remain local when they belong to one coherent design and the working tree stays reviewable.
+
+A **logical checkpoint** is the smallest coherent state worth preserving and independently accepting remotely. It should have a clear purpose, a reviewable diff, locally passing evidence, and a sensible commit message. Typical checkpoint triggers include completion of a bounded behavior/contract, a useful ownership move, a handoff point, or a point where further work would materially broaden risk or scope.
+
+Default cadence rules:
+
+- do not push after every edit, RED/GREEN step, or micro-slice;
+- do not poll PR/CI while implementation is still progressing locally;
+- run focused local evidence as often as useful;
+- run the full local quality gate once the logical checkpoint is ready;
+- only after exact diff review and commit should the checkpoint be pushed for GitHub acceptance;
+- after push, use Mini MCP GitHub control-plane tools for PR/check/review/merge state instead of routing ordinary control-plane work through a separate connector;
+- GitHub CI must remain independently configured and must rerun the relevant acceptance checks from the pushed commit rather than trusting local results.
 
 ### Path A — Mini MCP direct tools
 
@@ -379,14 +406,18 @@ Do not add a production abstraction solely to satisfy a process requirement for 
 The configured normal Mini MCP validation tasks are:
 
 ```text
-typecheck    -> npm run typecheck
-test         -> npm test
-build:client -> npm run build:client
+typecheck        -> npm run typecheck
+test             -> npm test
+build:client     -> npm run build:client
+check-file-sizes -> npm run check:file-sizes
+quality          -> check-file-sizes + typecheck + test
 ```
 
-Choose the cheapest reliable evidence for the slice rather than mechanically running every command after every edit.
+`npm test` already runs its `pretest`, which builds the Web client and prepares/typechecks/builds/verifies both generated WeChat product shells. Do not run those same builds again merely for ceremony when `test` or `quality` has already provided the required evidence.
 
-At logical checkpoints and before merge, ensure all validation relevant to the changed ownership boundary has passed.
+Choose the cheapest reliable evidence for each micro-slice rather than mechanically running every command after every edit.
+
+At a normal logical checkpoint, `quality` is the default full local gate. Add narrower or runtime-specific evidence only when the changed boundary requires it. Before merge, the exact pushed commit must also pass the required independent GitHub acceptance checks.
 
 ### `verify:flow` special rule
 
@@ -414,11 +445,15 @@ Rules:
 - do not overwrite, reset, or discard unrelated working-tree changes;
 - review the exact diff before staging/commit;
 - stage explicit intended paths only;
-- keep commits focused on one logical slice;
+- keep commits focused on one logical checkpoint rather than forcing one commit/PR per micro-slice;
 - keep `main` runnable;
 - use exact stale-state protections exposed by Mini MCP;
-- GitHub is canonical remote truth;
-- local execution success does not substitute for remote PR/CI acceptance when remote acceptance is part of the task.
+- local repository state is the normal implementation truth while a checkpoint is still in progress;
+- push only when a logical checkpoint has passed its local gate and exact diff review, or when a real collaboration/backup/handoff need justifies an earlier remote checkpoint;
+- do not create GitHub traffic merely to discover whether locally available typecheck/tests pass;
+- after push, GitHub becomes the canonical remote truth for that commit/PR and provides independent acceptance;
+- local execution success never substitutes for required remote PR/CI acceptance, and remote CI success never substitutes for local exact-diff review;
+- normally query PR/check/review state at remote acceptance boundaries, not repeatedly during local implementation.
 
 Standing merge authorization (2026-09-29): once a PR for an accepted task has passed all required repository validation, is mergeable/clean, has no unresolved review threads, and the final diff remains within the accepted scope, merge it without asking the user for a separate per-PR authorization. Stop instead of merging when required checks fail or remain pending, mergeability is not clean, review threads remain unresolved, or the implementation has materially drifted beyond the accepted task.
 

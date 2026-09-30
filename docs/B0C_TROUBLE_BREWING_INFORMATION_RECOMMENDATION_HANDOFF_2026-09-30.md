@@ -2,19 +2,19 @@
 
 ## Canonical checkpoint
 
-B0C2 implementation branch:
+B0C3A implementation branch:
 
 ```text
-agent/b0c2-botc-demon-info-runtime
+agent/b0c3a-botc-registration-washerwoman
 ```
 
-Fresh live `main` at B0C2 entry:
+Fresh live `main` at B0C3A entry:
 
 ```text
-f07a7549c89150c0e9af596d767455a798737ab7
+08dfc328c238f8d293ea20ce2efaf4399ff9d738
 ```
 
-B0A–B0B3 are complete. B0C is the active BotC production-expansion milestone. B0C1 merged through PR #109.
+B0A–B0B3 are complete. B0C is the active BotC production-expansion milestone. B0C1 merged through PR #109 and B0C2 merged through PR #110.
 
 Standing merge authorization remains active: accepted-scope PRs may be merged automatically once exact-head, required checks, mergeability, unresolved-thread, and final-diff gates pass.
 
@@ -197,13 +197,102 @@ pretest
   both WeChat product-shell build / verification PASS
 ```
 
-## Next after B0C2 merge
+## B0C3A registration authority
 
-B0C3 should move to setup-information roles, beginning with an explicit Trouble Brewing registration seam rather than embedding registration exceptions in each role:
+Official Trouble Brewing rules establish the concrete registration cases required by setup-information roles:
 
-1. model the concrete Trouble Brewing registration alternatives needed by first-night setup-information roles;
-2. keep actual canonical identity separate from possible registration;
-3. start with one focused role path (Washerwoman) before batching Librarian / Investigator;
-4. Rules / Information should generate the legal two-player / shown-character information candidates;
-5. Recommendation should later choose among those legal candidates without deciding registration legality;
-6. do not yet add poisoning/drunken misinformation until the truthful-information path is stable.
+- Washerwoman: start knowing that one of two players is a particular Townsfolk;
+- Spy: may register as good and as a Townsfolk or Outsider; the official Spy page includes a Washerwoman example where the Spy registers as Ravenkeeper;
+- Recluse: may register as evil and as a Minion or Demon.
+
+References:
+
+```text
+https://wiki.bloodontheclocktower.com/Washerwoman
+https://wiki.bloodontheclocktower.com/Spy
+https://wiki.bloodontheclocktower.com/Recluse
+```
+
+The implementation therefore keeps registration contextual and separate from canonical identity:
+
+```text
+canonical actualRoleId
+        ↓
+TroubleBrewingRegistration
+  -> actual registration
+  -> Spy good-character alternatives
+  -> Recluse evil-character alternatives
+        ↓
+TroubleBrewingInformation
+  -> legal truthful information candidates
+```
+
+A registration option never mutates `actualRoleId`.
+
+The Drunk is intentionally different: a Drunk shown Empath is still actually the Drunk and does **not** gain an Empath registration identity merely because of `shownRoleId`.
+
+## B0C3A implemented scope
+
+Production:
+
+```text
+src/games/botc/TroubleBrewingRegistration.ts
+src/games/botc/TroubleBrewingInformation.ts
+```
+
+Tests:
+
+```text
+tests/botcWasherwomanInformation.test.ts
+```
+
+B0C3A provides:
+
+- concrete Trouble Brewing character-registration alternatives;
+- ordinary players register as their actual character;
+- Spy additionally has every Trouble Brewing Townsfolk / Outsider as a legal contextual character registration;
+- Recluse additionally has every Trouble Brewing Minion / Demon as a legal contextual character registration;
+- Drunk `shownRoleId` is not treated as registration;
+- truthful Washerwoman candidates contain a learned Townsfolk plus two distinct shown players;
+- an actual Townsfolk can make the information true;
+- Spy may make the information true by registering as a Townsfolk that is not actually in play;
+- a Drunk shown as the learned Townsfolk may still be the wrong player, but is not a truthful matching player;
+- only Townsfolk character identities are emitted for Washerwoman;
+- identical player-visible information is represented once, with all legal registration resolutions grouped underneath it, so registration multiplicity does not accidentally become Recommendation weight.
+
+B0C3A intentionally does **not** implement:
+
+- automatic Washerwoman candidate ranking;
+- human Storyteller candidate selection;
+- canonical commit of the selected Washerwoman information;
+- Washerwoman PlayerView delivery;
+- Librarian / Investigator information;
+- poisoning / drunken false information.
+
+## B0C3A validation
+
+```text
+npm run typecheck
+  PASS
+
+npm test
+  PASS
+  131 test files
+  539 tests
+
+pretest
+  Web client build PASS
+  both WeChat product-shell build / verification PASS
+```
+
+## Next after B0C3A merge
+
+B0C3B should complete the truthful Washerwoman vertical slice while preserving the new registration boundary:
+
+1. define a Washerwoman Recommendation request over the distinct legal information candidates;
+2. implement a minimal independent baseline policy, without hard-coding registration rules into the policy;
+3. provide a moderator-only human selection/commit path;
+4. let Game Engine store the accepted visible information plus the chosen legal registration resolution for traceability;
+5. deliver the visible information only to the actual Washerwoman during the `role:washerwoman` first-night step and to ModeratorView;
+6. keep PublicView and all other PlayerViews secret-safe;
+7. keep Drunk/poisoned misinformation deferred to a separate malfunction layer.
