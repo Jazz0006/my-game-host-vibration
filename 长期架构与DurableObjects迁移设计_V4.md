@@ -819,12 +819,14 @@ BotC / Trouble Brewing Production Expansion
   │   │   ├─ B0B2A recurring / conditional eligibility ✅
   │   │   └─ B0B2B immediate trigger / role-transition sequencing ✅
   │   └─ B0B3 ownership hardening + live runtime progression ✅
-  └─ B0C Rules / Information -> Storyteller Recommendation ← NEXT
+  └─ B0C Rules / Information -> Storyteller Recommendation ← CURRENT
+      ├─ B0C1 Demon Info legal-candidate + recommendation boundary ✅ LOCAL GREEN
+      └─ B0C2 recommendation policy + authoritative commit/private delivery ← NEXT AFTER MERGE
         ↓
 Production Web cutover / Reliability hardening — deferred, risk-driven
 ```
 
-E2 与 E3.1–E3.7B 已完成，包括第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle、native composition、Developer Tools 工程壳/构建链与真实设备 lifecycle 验收。后续 W3D3 与 MG0A–MG0D 也已完成：identity recovery 已 game-neutral，room runtime/command dispatch 已具备第二游戏边界，Owner/Moderator 已拆分，微信发布形态已由一个 shared shell source 生成 `骏骏桌游-狼人` / `骏骏桌游-血染` 两个独立产品工程。BotC / Trouble Brewing 的 B0A–B0B3 已建立真实 GameModule 接入、独立 setup contract、canonical night ordering、动态 eligibility、即时 role transition 与 live monotonic night progression；B0B3 同时把 Setup Generation / Canonical Session / Game Engine / Rules-Information / Storyteller Recommendation 正式固化为长期 ownership contract，并把 setup normalization 从 `BotcGameModule` 移到独立 owner。下一步 B0C 从一个具体 Trouble Brewing information decision point 开始，先实现 authoritative Rules / Information 候选，再由独立、只读的 Storyteller Recommendation 使用 required/optional context 做推荐；推荐结果只能由 Game Engine 正式提交回 Canonical Session。Production Web cutover 与 Reliability hardening 不再作为 BotC 前置。微信 runtime 继续由 `tsconfig.wechat` 做 bundler-mode typecheck，再由显式 `esbuild` owner 为两个 generated product package 打出 CommonJS runtime bundle；生成产物不成为第二份源码。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
+E2 与 E3.1–E3.7B 已完成，包括第二客户端边界、Raw WebSocket、reconnect/state-sync、same-commandId retry、微信 effects、public room projection、Cloudflare lifecycle、native composition、Developer Tools 工程壳/构建链与真实设备 lifecycle 验收。后续 W3D3 与 MG0A–MG0D 也已完成：identity recovery 已 game-neutral，room runtime/command dispatch 已具备第二游戏边界，Owner/Moderator 已拆分，微信发布形态已由一个 shared shell source 生成 `骏骏桌游-狼人` / `骏骏桌游-血染` 两个独立产品工程。BotC / Trouble Brewing 的 B0A–B0B3 已建立真实 GameModule 接入、独立 setup contract、canonical night ordering、动态 eligibility、即时 role transition 与 live monotonic night progression；B0B3 同时把 Setup Generation / Canonical Session / Game Engine / Rules-Information / Storyteller Recommendation 正式固化为长期 ownership contract，并把 setup normalization 从 `BotcGameModule` 移到独立 owner。B0C 已从标准 7+ Demon Info 这一 concrete decision point 开始：B0C1 由 Rules / Information 生成 Demon/Minion 权威事实与全部 rules-legal not-in-play good bluff candidates，独立 Recommendation boundary 只接受该合法集合并校验输出，不重新判规则；B0C2 再加入具体 bluff policy、Game Engine authoritative commit 与 Demon 私密交付。Production Web cutover 与 Reliability hardening 不再作为 BotC 前置。微信 runtime 继续由 `tsconfig.wechat` 做 bundler-mode typecheck，再由显式 `esbuild` owner 为两个 generated product package 打出 CommonJS runtime bundle；生成产物不成为第二份源码。下方 E2.2 / E2.3 章节保留为已完成阶段的历史设计说明。
 
 ---
 
