@@ -46,6 +46,8 @@ Page({
     privateInformationNumber: null,
     hasPrivateInformationNumber: false,
     privateInformationBooleanLabel: "",
+    spyGrimoireRows: [],
+    spyGrimoireReminderLines: [],
     confirmedRoles: 0,
     playerCount: 0,
     allConfirmed: false,

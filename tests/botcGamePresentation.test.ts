@@ -295,6 +295,102 @@ describe("PV-UI0 BotC shared game presentation", () => {
     });
   });
 
+  it("projects Spy Grimoire rows and reminder facts without renderer-side role logic", () => {
+    const presentation = createBotcGamePresentation({
+      room: room({
+        game: {
+          phase: "first_night",
+          playerCount: 3,
+          confirmedRoles: 3,
+          informationDecision: { committed: true },
+        },
+      }),
+      playerView: {
+        phase: "first_night",
+        mode: "night_wake",
+        roleNameZh: "间谍",
+        nightStep: { id: "role:spy", kind: "role", roleId: "spy" },
+        privateInformation: {
+          kind: "spy_grimoire",
+          abilityRoleId: "spy",
+          players: [
+            {
+              playerId: "p1",
+              name: "Alice",
+              seat: 1,
+              actualRole: { id: "spy", name: "Spy", nameZh: "间谍" },
+              shownRole: { id: "spy", name: "Spy", nameZh: "间谍" },
+              alive: true,
+            },
+            {
+              playerId: "p2",
+              name: "Bob",
+              seat: 2,
+              actualRole: { id: "drunk", name: "Drunk", nameZh: "酒鬼" },
+              shownRole: { id: "empath", name: "Empath", nameZh: "共情者" },
+              alive: true,
+            },
+            {
+              playerId: "p3",
+              name: "Carol",
+              seat: 3,
+              actualRole: { id: "imp", name: "Imp", nameZh: "小恶魔" },
+              shownRole: { id: "imp", name: "Imp", nameZh: "小恶魔" },
+              alive: false,
+            },
+          ],
+          reminders: {
+            drunkPlayerId: "p2",
+            poisonedPlayerId: "p1",
+            pairInformation: [
+              {
+                kind: "pair",
+                abilityRoleId: "washerwoman",
+                abilityRole: { id: "washerwoman", name: "Washerwoman", nameZh: "洗衣妇" },
+                recipientPlayerId: "p1",
+                learnedRole: { id: "empath", name: "Empath", nameZh: "共情者" },
+                shownPlayerIds: ["p2", "p3"],
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(presentation.spyGrimoireRows).toEqual([
+      {
+        playerId: "p1",
+        seat: 1,
+        name: "Alice",
+        roleName: "间谍",
+        shownRoleName: "",
+        alive: true,
+      },
+      {
+        playerId: "p2",
+        seat: 2,
+        name: "Bob",
+        roleName: "酒鬼",
+        shownRoleName: "共情者",
+        alive: true,
+      },
+      {
+        playerId: "p3",
+        seat: 3,
+        name: "Carol",
+        roleName: "小恶魔",
+        shownRoleName: "",
+        alive: false,
+      },
+    ]);
+    expect(presentation.spyGrimoireReminderLines).toEqual([
+      "酒鬼：Bob",
+      "中毒：Alice",
+      "洗衣妇（Alice）：Bob、Carol 中有 1 人是 共情者",
+    ]);
+    expect(presentation.canAcknowledgeNightInformation).toBe(true);
+  });
+
   it("keeps the Simulator phone viewer on the same shared presentation owner as WeChat", () => {
     const lab = fs.readFileSync("dev/labV2.js", "utf8");
     const wechat = fs.readFileSync("miniprogram/pages/game.js", "utf8");
@@ -307,5 +403,7 @@ describe("PV-UI0 BotC shared game presentation", () => {
     expect(lab).toContain("我记住这条信息了");
     expect(lab).toContain("privateInformationNumber");
     expect(wechat).toContain("privateInformationNumber");
+    expect(lab).toContain("spyGrimoireRows");
+    expect(wechat).toContain("spyGrimoireRows");
   });
 });

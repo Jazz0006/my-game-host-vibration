@@ -613,6 +613,21 @@ function renderPhone(client) {
       presentation.demonBluffNames ? "三个伪装身份：" + presentation.demonBluffNames : "",
     ]);
   }
+  if (presentation.spyGrimoireRows.length) {
+    const lines = presentation.spyGrimoireRows.map(row =>
+      "#" + row.seat + " " + row.name + " · " + (row.alive ? "存活" : "死亡") +
+      " · " + row.roleName + (row.shownRoleName ? "（展示：" + row.shownRoleName + "）" : ""),
+    );
+    lines.push(...presentation.spyGrimoireReminderLines);
+    const grimoire = appendInfoCard(root, "GRIMOIRE", lines);
+    appendAction(
+      grimoire,
+      "我看完魔典了",
+      presentation.canAcknowledgeNightInformation,
+      () => sendPhoneCommand(client, "botc.acknowledgeNightInformation"),
+    );
+  }
+
   if (
     presentation.privateInformationRoleName ||
     presentation.privateInformationZeroLabel ||
