@@ -35,25 +35,16 @@
       <article class="panel phone-panel">
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">Real-client viewer</p>
-            <h2>接近真实手机的 Viewer</h2>
+            <p class="eyebrow">WeChat presentation mirror</p>
+            <h2>微信游戏界面镜像 Viewer</h2>
           </div>
           <select id="viewer-select" disabled aria-label="选择 Viewer"></select>
         </div>
 
         <div class="phone-shell">
-          <div id="phone-connection" class="phone-connection">未建立模拟桌</div>
-          <div class="phone-title">
-            <strong id="phone-identity">选择或建立一个 Simulator room</strong>
-            <span>房间 <b id="phone-room">—</b></span>
+          <div id="phone-product-view" class="wechat-game-page">
+            <div class="phone-empty">建立模拟桌后，这里会按微信游戏页的共享 presentation model 渲染当前 Viewer。</div>
           </div>
-          <div class="phone-meta">
-            <span>说书人</span>
-            <strong id="phone-moderator">—</strong>
-          </div>
-          <div id="phone-players" class="phone-players"></div>
-          <div class="phone-private-title">仅此 Viewer 的 authoritative PlayerView</div>
-          <div id="phone-private" class="phone-private">暂无 authoritative PlayerView</div>
         </div>
       </article>
 

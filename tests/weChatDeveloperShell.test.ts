@@ -65,6 +65,7 @@ describe("MG0D WeChat game-specific product shells", () => {
     expect(config.include).toEqual([
       "src/client/WeChatNativeClient.ts",
       "src/client/WeChatMinimalPageController.ts",
+      "src/client/BotcGamePresentation.ts",
     ]);
 
     const pkg = json("package.json");
@@ -81,6 +82,11 @@ describe("MG0D WeChat game-specific product shells", () => {
       expect(
         fs.existsSync(
           `wechat-build/${product.id}/miniprogram/runtime/client/WeChatMinimalPageController.js`,
+        ),
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          `wechat-build/${product.id}/miniprogram/runtime/client/BotcGamePresentation.js`,
         ),
       ).toBe(true);
     }
@@ -126,14 +132,15 @@ describe("MG0D WeChat game-specific product shells", () => {
     const game = text("miniprogram/pages/game.js");
     const gameMarkup = text("miniprogram/pages/game.wxml");
     expect(game).toContain("view.playerView");
+    expect(game).toContain('require("../runtime/client/BotcGamePresentation.js")');
+    expect(game).toContain("createBotcGamePresentation");
     expect(game).toContain("this._product.confirmRoleCommand");
     expect(game).toContain("this._product.nightChoiceCommand");
     expect(game).not.toContain("poisoner");
     expect(game).not.toContain("butler");
     expect(game).not.toContain("librarian");
     expect(game).not.toContain("investigator");
-    expect(game).toContain('privateInformation.kind === "no_characters"');
-    expect(game).toContain("本局没有外来者");
+    expect(game).not.toContain("本局没有外来者");
     expect(game).not.toContain("actualRoleId");
     expect(game).not.toContain("shownRoleId");
     expect(game).not.toContain("assignments");
