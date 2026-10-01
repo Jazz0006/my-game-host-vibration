@@ -1,5 +1,8 @@
+import http from "node:http";
+import express from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import { SimulatorLabCoordinator } from "../dev/SimulatorLabCoordinator.js";
+import { mountSimulatorLab } from "../dev/SimulatorLabServer.js";
 
 describe("SIM-0 Simulator Lab V2 foundation", () => {
   let coordinator: SimulatorLabCoordinator | null = null;
@@ -91,6 +94,61 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
       roomId,
       viewer: { playerId: state.clients[1]?.playerId },
     });
+  });
+
+  it("accepts a four-digit room code through the Simulator HTTP join adapter", async () => {
+    const app = express();
+    coordinator = mountSimulatorLab(app);
+    const server = http.createServer(app);
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => {
+        server.off("error", reject);
+        resolve();
+      });
+    });
+
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Simulator test server did not expose a TCP address");
+      }
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const postJson = (path: string, body: unknown) => fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const reset = await postJson("/dev/simulator/api/devices/reset", { deviceCount: 2 });
+      expect(reset.status).toBe(200);
+
+      const create = await postJson("/dev/simulator/api/room/create", {
+        label: "P1",
+        name: "Host",
+      });
+      expect(create.status).toBe(200);
+      const created = await create.json() as { roomId: string };
+      expect(created.roomId).toMatch(/^\d{4}$/u);
+
+      const join = await postJson("/dev/simulator/api/room/join", {
+        label: "P2",
+        name: "Guest",
+        roomCode: created.roomId,
+      });
+      expect(join.status).toBe(200);
+      const joined = await join.json() as {
+        clients: Array<{ label: string; joined: boolean; connectionStatus: string }>;
+      };
+      expect(joined.clients.find(client => client.label === "P2")).toMatchObject({
+        joined: true,
+        connectionStatus: "Connected",
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close(error => error ? reject(error) : resolve());
+      });
+    }
   });
 
   it("uses semantic room commands for Ready, storyteller assignment, rename, disconnect, and reconnect", async () => {
