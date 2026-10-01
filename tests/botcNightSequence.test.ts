@@ -272,14 +272,34 @@ describe("B0B Trouble Brewing night sequence", () => {
     expect(JSON.stringify(drunkView)).not.toContain("drunk");
     expect(JSON.stringify(drunkView)).not.toContain("shown_drunk");
 
-    const completed = module.handleCommand(
+    const empathCommitted = module.handleCommand(
       game,
       moderatorContext,
-      { type: "completeNightStep" },
+      { type: "commitNightInformation" },
+      dependencies,
+    );
+    expect(empathCommitted.outcome).toMatchObject({
+      kind: "nightInformationCommitted",
+      stepId: "role:empath",
+      recipientPlayerId: "p2",
+    });
+    expect(module.getPlayerView(game, "p2", fivePlayerViewContext).privateInformation).toMatchObject({
+      kind: "number",
+      abilityRoleId: "empath",
+      value: expect.any(Number),
+    });
+    expect(JSON.stringify(module.getPlayerView(game, "p2", fivePlayerViewContext))).not.toContain(
+      "reliability",
+    );
+
+    const completed = module.handleCommand(
+      game,
+      playerContext("p2"),
+      { type: "acknowledgeNightInformation" },
       dependencies,
     );
     expect(completed.outcome).toEqual({
-      kind: "nightStepCompleted",
+      kind: "nightInformationAcknowledged",
       completedStepId: "role:empath",
       nightComplete: true,
     });

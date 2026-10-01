@@ -111,6 +111,38 @@ describe("PV-UI0 BotC shared game presentation", () => {
 
     expect(zero.privateInformationRoleName).toBe("");
     expect(zero.privateInformationZeroLabel).toBe("本局没有外来者");
+    expect(zero.hasPrivateInformationNumber).toBe(false);
+
+    const numericZero = createBotcGamePresentation({
+      room: room({
+        game: {
+          phase: "first_night",
+          playerCount: 3,
+          confirmedRoles: 3,
+          informationDecision: { committed: true },
+        },
+      }),
+      playerView: {
+        phase: "first_night",
+        mode: "night_wake",
+        roleNameZh: "厨师",
+        nightStep: { id: "role:chef", kind: "role", roleId: "chef" },
+        privateInformation: {
+          kind: "number",
+          abilityRoleId: "chef",
+          value: 0,
+        },
+      },
+    });
+
+    expect(numericZero).toMatchObject({
+      privateInformationRoleName: "",
+      privateInformationPlayerNames: "",
+      privateInformationZeroLabel: "",
+      privateInformationNumber: 0,
+      hasPrivateInformationNumber: true,
+      canAcknowledgeNightInformation: true,
+    });
   });
 
   it("projects target selection and controller actions from authoritative views", () => {
@@ -188,5 +220,7 @@ describe("PV-UI0 BotC shared game presentation", () => {
     expect(wechat).toContain("../runtime/client/BotcGamePresentation.js");
     expect(lab).toContain("我知道自己的身份了");
     expect(lab).toContain("我记住这条信息了");
+    expect(lab).toContain("privateInformationNumber");
+    expect(wechat).toContain("privateInformationNumber");
   });
 });

@@ -144,12 +144,21 @@ describe("PV-3B1 Trouble Brewing player night choices", () => {
       dependencies,
     );
 
-    for (const stepId of ["role:chef", "role:empath"]) {
+    for (const [stepId, recipientPlayerId] of [
+      ["role:chef", "p5"],
+      ["role:empath", "p6"],
+    ] as const) {
       expect(module.getModeratorView(state, viewContext).nightStep?.id).toBe(stepId);
       module.handleCommand(
         state,
         moderatorContext,
-        { type: "completeNightStep" },
+        { type: "commitNightInformation" },
+        dependencies,
+      );
+      module.handleCommand(
+        state,
+        playerContext(recipientPlayerId),
+        { type: "acknowledgeNightInformation" },
         dependencies,
       );
     }
@@ -229,11 +238,17 @@ describe("PV-3B1 Trouble Brewing player night choices", () => {
       { type: "acknowledgeNightInformation" },
       dependencies,
     );
-    for (let index = 0; index < 2; index += 1) {
+    for (const recipientPlayerId of ["p5", "p6"] as const) {
       module.handleCommand(
         state,
         moderatorContext,
-        { type: "completeNightStep" },
+        { type: "commitNightInformation" },
+        dependencies,
+      );
+      module.handleCommand(
+        state,
+        playerContext(recipientPlayerId),
+        { type: "acknowledgeNightInformation" },
         dependencies,
       );
     }

@@ -1,5 +1,7 @@
 import {
   TROUBLE_BREWING_ROLES,
+  troubleBrewingRole,
+  type BotcAlignment,
   type TroubleBrewingRoleId,
 } from "./TroubleBrewing.js";
 import type { BotcCanonicalSetupAssignment } from "./TroubleBrewingSetup.js";
@@ -14,6 +16,16 @@ export type TroubleBrewingCharacterRegistration = {
   source: TroubleBrewingCharacterRegistrationSource;
 };
 
+export type TroubleBrewingAlignmentRegistrationSource =
+  | "actual"
+  | "spy"
+  | "recluse";
+
+export type TroubleBrewingAlignmentRegistration = {
+  alignment: BotcAlignment;
+  source: TroubleBrewingAlignmentRegistrationSource;
+};
+
 /**
  * Returns the character identities this player may register as in Trouble
  * Brewing.
@@ -22,6 +34,26 @@ export type TroubleBrewingCharacterRegistration = {
  * DSL. Canonical actual identity remains unchanged; registration is contextual
  * information/effect resolution only.
  */
+export function troubleBrewingAlignmentRegistrations(
+  assignment: BotcCanonicalSetupAssignment,
+): TroubleBrewingAlignmentRegistration[] {
+  const registrations: TroubleBrewingAlignmentRegistration[] = [
+    {
+      alignment: troubleBrewingRole(assignment.actualRoleId).alignment,
+      source: "actual",
+    },
+  ];
+
+  if (assignment.actualRoleId === "spy") {
+    registrations.push({ alignment: "good", source: "spy" });
+  }
+  if (assignment.actualRoleId === "recluse") {
+    registrations.push({ alignment: "evil", source: "recluse" });
+  }
+
+  return registrations;
+}
+
 export function troubleBrewingCharacterRegistrations(
   assignment: BotcCanonicalSetupAssignment,
 ): TroubleBrewingCharacterRegistration[] {

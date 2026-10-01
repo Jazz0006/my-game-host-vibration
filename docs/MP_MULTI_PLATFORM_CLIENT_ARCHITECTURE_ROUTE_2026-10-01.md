@@ -1,9 +1,9 @@
 # Multi-platform Client Architecture Route (2026-10-01)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE INSERTED ROUTE — MP-0 COMPLETE; NO MANDATORY PRE-PV MP-1; PV-3B2C NEXT**  
+> Status: **NORMATIVE INSERTED ROUTE — COMPLETE / HANDOFF CONSUMED BY PV-3B2C**  
 > Scope: client/runtime architecture for Browser/Simulator as the development reference surface, WeChat Mini Program as a production client, and future Android/iOS production clients.  
-> Execution result: MP-0 found the next BotC information shape already has a shared client path. No MP-1 code hardening is required before PV-3B2C; later mobile-framework work remains deferred.
+> Execution result: MP-0 found the next BotC information shape already had a shared client path. No MP-1 code hardening was required before PV-3B2C; PV-3B2C subsequently completed on that seam. Later mobile-framework work remains deferred.
 
 ---
 

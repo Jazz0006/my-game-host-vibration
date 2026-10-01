@@ -50,6 +50,19 @@ describe("PV-UI1 Simulator pre-device client-shell parity", () => {
     expect(lab).toContain("createClientLobbyPresentation");
   });
 
+  it("keeps numeric private information on the shared WeChat/Simulator presentation seam", () => {
+    const game = text("miniprogram/pages/game.js");
+    const wxml = text("miniprogram/pages/game.wxml");
+    const lab = text("dev/labV2.js");
+
+    expect(game).toContain("privateInformationNumber");
+    expect(game).toContain("hasPrivateInformationNumber");
+    expect(wxml).toContain("hasPrivateInformationNumber");
+    expect(wxml).toContain("你得知的数字是 {{privateInformationNumber}}");
+    expect(lab).toContain("privateInformationNumber");
+    expect(lab).toContain("你得知的数字是 ");
+  });
+
   it("keeps quick-table mode alongside the full-client mode", () => {
     const html = text("dev/lab.html");
     const lab = text("dev/labV2.js");

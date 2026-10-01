@@ -249,5 +249,7 @@ MP-0 COMPLETE
   ↓
 MP-1 mandatory pre-PV hardening: NONE
   ↓
-PV-3B2C Chef + Empath numeric information ← NEXT
+PV-3B2C Chef + Empath numeric information ✅ subsequently completed
 ```
+
+Follow-up: PV-3B2C validated the audited seam without requiring a separate MP-1 implementation. Current NEXT is owned by the playable route, not this historical audit.
