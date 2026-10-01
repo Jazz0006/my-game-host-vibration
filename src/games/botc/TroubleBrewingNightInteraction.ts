@@ -17,7 +17,30 @@ export type TroubleBrewingNightChoiceResolution =
       kind: "butler_master";
       targetPlayerId: string;
       appliesEffect: boolean;
+    }
+  | {
+      kind: "fortune_teller_targets";
+      targetPlayerIds: [string, string];
     };
+
+function requireDistinctTargets(
+  selectedPlayerIds: readonly string[],
+  allowedPlayerIds: readonly string[],
+  count: number,
+): string[] {
+  if (selectedPlayerIds.length !== count) {
+    throw new Error(`This BotC night action requires exactly ${count} players`);
+  }
+  if (new Set(selectedPlayerIds).size !== selectedPlayerIds.length) {
+    throw new Error("This BotC night action requires distinct players");
+  }
+  for (const playerId of selectedPlayerIds) {
+    if (!allowedPlayerIds.includes(playerId)) {
+      throw new Error("Selected player is not a legal target");
+    }
+  }
+  return [...selectedPlayerIds];
+}
 
 function requireSingleTarget(
   selectedPlayerIds: readonly string[],
@@ -70,6 +93,14 @@ export function troubleBrewingNightChoiceSpec(
         ),
       };
 
+    case "fortune_teller":
+      return {
+        kind: "player_targets",
+        minTargets: 2,
+        maxTargets: 2,
+        allowedPlayerIds: [...participantPlayerIds],
+      };
+
     default:
       return undefined;
   }
@@ -96,31 +127,46 @@ export function resolveTroubleBrewingNightChoice(
     throw new Error("Active BotC night step does not accept this player choice");
   }
 
-  const targetPlayerId = requireSingleTarget(
-    selectedPlayerIds,
-    spec.allowedPlayerIds,
-  );
-  const appliesEffect =
-    step.kind === "role" && step.actorSource === "actual";
-
   if (step.kind !== "role") {
     throw new Error("Active BotC night step is not a role choice");
   }
 
   switch (step.roleId) {
-    case "poisoner":
+    case "poisoner": {
+      const targetPlayerId = requireSingleTarget(
+        selectedPlayerIds,
+        spec.allowedPlayerIds,
+      );
       return {
         kind: "poisoner_target",
         targetPlayerId,
-        appliesEffect,
+        appliesEffect: step.actorSource === "actual",
       };
+    }
 
-    case "butler":
+    case "butler": {
+      const targetPlayerId = requireSingleTarget(
+        selectedPlayerIds,
+        spec.allowedPlayerIds,
+      );
       return {
         kind: "butler_master",
         targetPlayerId,
-        appliesEffect,
+        appliesEffect: step.actorSource === "actual",
       };
+    }
+
+    case "fortune_teller": {
+      const targets = requireDistinctTargets(
+        selectedPlayerIds,
+        spec.allowedPlayerIds,
+        2,
+      );
+      return {
+        kind: "fortune_teller_targets",
+        targetPlayerIds: targets as [string, string],
+      };
+    }
 
     default:
       throw new Error("Active BotC night step has no supported choice resolver");

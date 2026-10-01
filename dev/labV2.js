@@ -123,21 +123,28 @@ async function sendPhoneCommand(client, type, payload = {}) {
 
 function presentationForClient(client) {
   const selected = client._selectedNightChoiceIds || [];
+  const selectedRedHerringPlayerId = client._selectedRedHerringPlayerId || "";
   const first = createBotcGamePresentation({
     room: client.roomProjection,
     playerView: client.playerView,
     connectionStatus: client.connectionStatus,
     selectedNightChoiceIds: selected,
+    selectedRedHerringPlayerId,
   });
   if (client._nightChoiceKey !== first.nightChoiceKey) {
     client._nightChoiceKey = first.nightChoiceKey;
     client._selectedNightChoiceIds = [];
+  }
+  if (client._redHerringKey !== first.redHerringKey) {
+    client._redHerringKey = first.redHerringKey;
+    client._selectedRedHerringPlayerId = "";
   }
   return createBotcGamePresentation({
     room: client.roomProjection,
     playerView: client.playerView,
     connectionStatus: client.connectionStatus,
     selectedNightChoiceIds: client._selectedNightChoiceIds || [],
+    selectedRedHerringPlayerId: client._selectedRedHerringPlayerId || "",
   });
 }
 
@@ -517,6 +524,33 @@ function renderPhone(client) {
     root.append(wake);
   }
 
+  if (presentation.redHerringOptions.length) {
+    const setup = phoneElement("section", "wechat-card wechat-choice-card");
+    setup.append(
+      phoneElement("div", "wechat-eyebrow", "STORYTELLER SETUP"),
+      phoneElement("div", "wechat-section-title", "选择占卜师的红鲱鱼"),
+      phoneElement("div", "wechat-copy", "选择 1 名实际善良玩家；占卜师不会看到这项设置。"),
+    );
+    const grid = phoneElement("div", "wechat-choice-grid");
+    for (const option of presentation.redHerringOptions) {
+      grid.append(createButton(option.name, () => {
+        client._selectedRedHerringPlayerId = option.id;
+        renderPhone(client);
+      }, "wechat-choice-option" + (option.selected ? " selected" : "")));
+    }
+    setup.append(grid);
+    const refreshed = presentationForClient(client);
+    appendAction(
+      setup,
+      "确认红鲱鱼",
+      refreshed.canSetRedHerring,
+      () => sendPhoneCommand(client, "botc.setRedHerring", {
+        playerId: refreshed.redHerringSelectedPlayerId,
+      }),
+    );
+    root.append(setup);
+  }
+
   if (presentation.isNightWaiting) {
     const wait = phoneElement("section", "wechat-card wechat-night-card waiting");
     wait.append(
@@ -582,14 +616,17 @@ function renderPhone(client) {
   if (
     presentation.privateInformationRoleName ||
     presentation.privateInformationZeroLabel ||
-    presentation.privateInformationNumber !== null
+    presentation.privateInformationNumber !== null ||
+    presentation.privateInformationBooleanLabel
   ) {
     const card = appendInfoCard(root, "PRIVATE INFO", [
-      presentation.privateInformationNumber !== null
-        ? "你得知的数字是 " + presentation.privateInformationNumber
-        : presentation.privateInformationRoleName
-          ? presentation.privateInformationPlayerNames + " 中有 1 人是 " + presentation.privateInformationRoleName
-          : presentation.privateInformationZeroLabel,
+      presentation.privateInformationBooleanLabel
+        ? "占卜结果：" + presentation.privateInformationBooleanLabel
+        : presentation.privateInformationNumber !== null
+          ? "你得知的数字是 " + presentation.privateInformationNumber
+          : presentation.privateInformationRoleName
+            ? presentation.privateInformationPlayerNames + " 中有 1 人是 " + presentation.privateInformationRoleName
+            : presentation.privateInformationZeroLabel,
     ]);
     appendAction(
       card,

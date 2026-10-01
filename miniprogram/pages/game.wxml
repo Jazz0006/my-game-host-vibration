@@ -34,6 +34,30 @@
     </view>
   </view>
 
+  <view class="night-choice-card" wx:if="{{redHerringOptions.length}}">
+    <view class="eyebrow">STORYTELLER SETUP</view>
+    <view class="choice-title">选择占卜师的红鲱鱼</view>
+    <view class="choice-note">必须选择 1 名实际善良玩家；占卜师不会看到这项设置。</view>
+    <view class="choice-grid">
+      <button
+        wx:for="{{redHerringOptions}}"
+        wx:key="id"
+        class="choice-option {{item.selected ? 'selected' : ''}}"
+        data-player-id="{{item.id}}"
+        bindtap="onRedHerringTap"
+      >
+        {{item.name}}
+      </button>
+    </view>
+    <button
+      class="primary-button"
+      disabled="{{!canSetRedHerring}}"
+      bindtap="onSetRedHerringTap"
+    >
+      确认红鲱鱼
+    </button>
+  </view>
+
   <view class="night-card wake" wx:if="{{isNightWake}}">
     <view class="eyebrow">WAKE</view>
     <view class="night-title">请睁眼</view>
@@ -92,7 +116,7 @@
     </view>
   </view>
 
-  <view class="private-info-card" wx:if="{{privateInformationRoleName || privateInformationZeroLabel || hasPrivateInformationNumber}}">
+  <view class="private-info-card" wx:if="{{privateInformationRoleName || privateInformationZeroLabel || hasPrivateInformationNumber || privateInformationBooleanLabel}}">
     <view class="eyebrow">PRIVATE INFO</view>
     <view class="private-info-line" wx:if="{{privateInformationRoleName}}">
       {{privateInformationPlayerNames}} 中有 1 人是 {{privateInformationRoleName}}
@@ -102,6 +126,9 @@
     </view>
     <view class="private-info-line" wx:if="{{hasPrivateInformationNumber}}">
       你得知的数字是 {{privateInformationNumber}}
+    </view>
+    <view class="private-info-line" wx:if="{{privateInformationBooleanLabel}}">
+      占卜结果：{{privateInformationBooleanLabel}}
     </view>
     <button
       wx:if="{{canAcknowledgeNightInformation}}"

@@ -4,6 +4,7 @@ import {
   type TroubleBrewingRoleId,
 } from "./TroubleBrewing.js";
 import type { BotcCanonicalSetupAssignment } from "./TroubleBrewingSetup.js";
+import type { TroubleBrewingFortuneTellerInformationResolution } from "./TroubleBrewingFortuneTeller.js";
 import {
   troubleBrewingAlignmentRegistrations,
   troubleBrewingCharacterRegistrations,
@@ -189,9 +190,21 @@ export type TroubleBrewingNumericInformationResult = {
   selectedResolution: TroubleBrewingNumericInformationResolution;
 };
 
+export type TroubleBrewingBooleanInformationResult = {
+  kind: "boolean";
+  abilityRoleId: "fortune_teller";
+  recipientPlayerId: string;
+  value: boolean;
+  reliability: TroubleBrewingInformationReliability;
+  semanticTruth: TroubleBrewingSemanticTruth;
+  selectedCandidateId: string;
+  selectedResolution: TroubleBrewingFortuneTellerInformationResolution;
+};
+
 export type TroubleBrewingNightInformationResult =
   | TroubleBrewingPairInformationResult
-  | TroubleBrewingNumericInformationResult;
+  | TroubleBrewingNumericInformationResult
+  | TroubleBrewingBooleanInformationResult;
 
 export function isTroubleBrewingPairCandidate(
   candidate: TroubleBrewingInformationCandidate,

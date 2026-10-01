@@ -1,5 +1,6 @@
 import type { RandomProvider } from "../../core/random/RandomProvider.js";
 import type { TroubleBrewingRoleId } from "./TroubleBrewing.js";
+import type { TroubleBrewingFortuneTellerInformationCandidate } from "./TroubleBrewingFortuneTeller.js";
 import type {
   TroubleBrewingDemonInfoFacts,
   TroubleBrewingInformationCandidate,
@@ -9,6 +10,42 @@ import type {
   TroubleBrewingNumericInformationResolution,
   TroubleBrewingPairInformationAbilityRoleId,
 } from "./TroubleBrewingInformation.js";
+
+export type RedHerringRecommendationRequest = {
+  decisionPoint: "red_herring";
+  requiredContext: {
+    legalCandidatePlayerIds: string[];
+  };
+};
+
+export type RedHerringRecommendation = {
+  playerId: string;
+};
+
+export function createRedHerringRecommendationRequest(
+  legalCandidatePlayerIds: readonly string[],
+): RedHerringRecommendationRequest {
+  if (legalCandidatePlayerIds.length === 0) {
+    throw new Error("Red Herring recommendation requires at least one legal candidate");
+  }
+  return {
+    decisionPoint: "red_herring",
+    requiredContext: {
+      legalCandidatePlayerIds: [...legalCandidatePlayerIds],
+    },
+  };
+}
+
+export function recommendRedHerringBaselineV1(
+  request: RedHerringRecommendationRequest,
+): RedHerringRecommendation {
+  const playerId = [...request.requiredContext.legalCandidatePlayerIds]
+    .sort((left, right) => left.localeCompare(right))[0];
+  if (!playerId) {
+    throw new Error("Red Herring baseline has no legal candidate");
+  }
+  return { playerId };
+}
 
 export type DemonBluffRecommendationOptionalContext = {
   /**
@@ -318,4 +355,62 @@ export function recommendNumericInformationBaselineV1(
   return validateNumericInformationRecommendation(request, {
     candidateId: selected.candidateId,
   });
+}
+
+export type FortuneTellerInformationRecommendationRequest = {
+  decisionPoint: "fortune_teller_information";
+  requiredContext: {
+    recipientPlayerId: string;
+    reliability: TroubleBrewingInformationReliability;
+    legalCandidates: TroubleBrewingFortuneTellerInformationCandidate[];
+  };
+};
+
+export type FortuneTellerInformationRecommendation = {
+  candidateId: string;
+};
+
+export function createFortuneTellerInformationRecommendationRequest(
+  recipientPlayerId: string,
+  reliability: TroubleBrewingInformationReliability,
+  legalCandidates: readonly TroubleBrewingFortuneTellerInformationCandidate[],
+): FortuneTellerInformationRecommendationRequest {
+  if (!recipientPlayerId.trim()) {
+    throw new Error("Fortune Teller information recipient cannot be blank");
+  }
+  if (legalCandidates.length === 0) {
+    throw new Error("Fortune Teller information requires at least one legal candidate");
+  }
+  return {
+    decisionPoint: "fortune_teller_information",
+    requiredContext: {
+      recipientPlayerId,
+      reliability,
+      legalCandidates: legalCandidates.map(candidate => ({
+        ...candidate,
+        legalResolutions: candidate.legalResolutions.map(resolution => ({
+          ...resolution,
+          selectedPlayerIds: [...resolution.selectedPlayerIds] as [string, string],
+          targets: resolution.targets.map(target => ({
+            ...target,
+            registration: { ...target.registration },
+          })) as typeof resolution.targets,
+        })),
+      })),
+    },
+  };
+}
+
+export function recommendFortuneTellerInformationBaselineV1(
+  request: FortuneTellerInformationRecommendationRequest,
+): FortuneTellerInformationRecommendation {
+  const selected = [...request.requiredContext.legalCandidates].sort(
+    (left, right) =>
+      Number(left.value) - Number(right.value) ||
+      left.candidateId.localeCompare(right.candidateId),
+  )[0];
+  if (!selected) {
+    throw new Error("Fortune Teller information baseline has no legal candidate");
+  }
+  return { candidateId: selected.candidateId };
 }

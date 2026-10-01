@@ -78,6 +78,23 @@ describe("PV-1/PV-2/PV-3 BotC client protocol", () => {
     });
   });
 
+  it("accepts the moderator Red Herring setup command", () => {
+    const envelope = createClientCommandEnvelope(
+      "botc.setRedHerring",
+      { playerId: " p3 " },
+      "red-herring-1",
+    );
+
+    expect(isBotcClientCommand(envelope)).toBe(true);
+    expect(parseBotcClientCommandEnvelope(envelope)).toEqual({
+      protocolVersion: 1,
+      kind: "command",
+      commandId: "red-herring-1",
+      type: "botc.setRedHerring",
+      payload: { playerId: "p3" },
+    });
+  });
+
   it("accepts a stable player night-choice command", () => {
     const envelope = createClientCommandEnvelope(
       "botc.submitNightChoice",
@@ -111,6 +128,14 @@ describe("PV-1/PV-2/PV-3 BotC client protocol", () => {
         "bad-choice",
       ),
     )).toThrow("playerIds must be an array of non-empty strings");
+
+    expect(() => parseBotcClientCommandEnvelope(
+      createClientCommandEnvelope(
+        "botc.setRedHerring",
+        { playerId: "   " },
+        "bad-red-herring",
+      ),
+    )).toThrow("playerId must be a non-empty string");
 
     expect(isBotcClientCommand({
       type: "werewolf.startGame",
