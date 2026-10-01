@@ -23,6 +23,18 @@ describe("PV-UI1 Simulator pre-device client-shell parity", () => {
     expect(server).toContain('"/dev/simulator/api/device/close"');
   });
 
+  it("replaces stale phone-mirror DOM before rendering the selected client", () => {
+    const lab = text("dev/labV2.js");
+    const start = lab.indexOf("function renderPhone(client)");
+    const end = lab.indexOf("function renderVirtualPlayers()", start);
+    const renderPhone = lab.slice(start, end);
+
+    expect(renderPhone).toContain("root.replaceChildren();");
+    expect(renderPhone.indexOf("root.replaceChildren();")).toBeLessThan(
+      renderPhone.indexOf("if (!client)"),
+    );
+  });
+
   it("covers Lobby and room-management product actions in the phone mirror", () => {
     const lobby = text("miniprogram/pages/lobby.js");
     const settings = text("miniprogram/pages/settings.js");
