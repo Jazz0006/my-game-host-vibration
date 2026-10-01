@@ -153,7 +153,7 @@ The lab should use TestRoomClient / the same public runtime seams whenever pract
 
 ### 4.2 Real-client simulator
 
-Purpose: represent one selected participant almost like a phone client.
+Purpose: represent one selected participant as the **reference mirror of the production WeChat client**, not as a simplified development UI.
 
 Required capabilities:
 
@@ -163,9 +163,11 @@ Required capabilities:
 - render authoritative PlayerView / ModeratorView as applicable;
 - send the same semantic commands available to the product client;
 - show connection/sync/reconnect state;
-- allow UI work without a physical phone.
+- allow UI work without a physical phone;
+- keep the selected-phone surface in 1:1 product parity with the current WeChat thin client for page structure, visible text, control visibility, navigation flow, layout geometry and interaction intent;
+- reuse shared presentation/layout authorities where possible so the Lab cannot silently fork the WeChat UI contract.
 
-It may use a development-specific renderer, but **must not calculate game truth locally**.
+The browser is allowed to provide a platform adapter for capabilities that do not exist on desktop (for example, recording that a heavy vibration would have fired), but it **must not replace the product UI with developer shortcuts or alternate controls**. Development-only bulk controls and shortcuts belong only in the separate N-client control board / Inspector. The selected-phone mirror must never calculate game truth locally.
 
 ### 4.3 Simplified multi-client control board
 

@@ -19,6 +19,7 @@
     "src/client/WeChatMinimalPageController.ts",
     "src/client/BotcGamePresentation.ts",
     "src/client/ClientLobbyPresentation.ts",
-    "src/client/ClientEntryPresentation.ts"
+    "src/client/ClientEntryPresentation.ts",
+    "src/client/RoundedTableLayout.ts"
   ]
 }

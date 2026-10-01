@@ -1,9 +1,25 @@
-const TABLE_WIDTH_RPX = 640;
-const TABLE_HEIGHT_RPX = 720;
-const CARD_WIDTH_RPX = 120;
-const CARD_HEIGHT_RPX = 72;
+export const TABLE_WIDTH_RPX = 640;
+export const TABLE_HEIGHT_RPX = 720;
+export const CARD_WIDTH_RPX = 120;
+export const CARD_HEIGHT_RPX = 72;
 
-function pointAtDistance(distance, topLength, sideLength) {
+export type RoundedTableParticipant = {
+  id: string;
+  name?: string;
+  [key: string]: unknown;
+};
+
+export type RoundedTableSeat<T extends RoundedTableParticipant> = T & {
+  ringIndex: number;
+  xRpx: number;
+  yRpx: number;
+};
+
+function pointAtDistance(
+  distance: number,
+  topLength: number,
+  sideLength: number,
+): { x: number; y: number } {
   const perimeter = 2 * (topLength + sideLength);
   let d = ((distance % perimeter) + perimeter) % perimeter;
 
@@ -16,7 +32,7 @@ function pointAtDistance(distance, topLength, sideLength) {
   return { x: 0, y: sideLength - d };
 }
 
-function seatPointAtIndex(index, count) {
+function seatPointAtIndex(index: number, count: number): { x: number; y: number } {
   const usableWidth = TABLE_WIDTH_RPX - CARD_WIDTH_RPX;
   const usableHeight = TABLE_HEIGHT_RPX - CARD_HEIGHT_RPX;
   const perimeter = 2 * (usableWidth + usableHeight);
@@ -25,24 +41,31 @@ function seatPointAtIndex(index, count) {
   return pointAtDistance(distance, usableWidth, usableHeight);
 }
 
-function computeRoundedTableSeats(playerOrder, participants) {
+export function computeRoundedTableSeats<T extends RoundedTableParticipant>(
+  playerOrder: string[],
+  participants: Record<string, T>,
+): RoundedTableSeat<T>[] {
   const order = Array.isArray(playerOrder) ? playerOrder : [];
   const byId = participants || {};
   if (order.length === 0) return [];
 
   return order.map((playerId, index) => {
-    const participant = byId[playerId] || { id: playerId, name: playerId };
+    const participant = byId[playerId] ?? ({ id: playerId, name: playerId } as T);
     const point = seatPointAtIndex(index, order.length);
-
     return {
       ...participant,
       ringIndex: index,
-      style: `left:${Math.round(point.x)}rpx;top:${Math.round(point.y)}rpx;`,
+      xRpx: Math.round(point.x),
+      yRpx: Math.round(point.y),
     };
   });
 }
 
-function resolveRoundedTableRingIndex(xRpx, yRpx, playerCount) {
+export function resolveRoundedTableRingIndex(
+  xRpx: number,
+  yRpx: number,
+  playerCount: number,
+): number | null {
   if (!Number.isFinite(xRpx) || !Number.isFinite(yRpx)) return null;
   if (!Number.isInteger(playerCount) || playerCount <= 0) return null;
 
@@ -62,10 +85,3 @@ function resolveRoundedTableRingIndex(xRpx, yRpx, playerCount) {
   }
   return bestIndex;
 }
-
-module.exports = {
-  TABLE_WIDTH_RPX,
-  TABLE_HEIGHT_RPX,
-  computeRoundedTableSeats,
-  resolveRoundedTableRingIndex,
-};

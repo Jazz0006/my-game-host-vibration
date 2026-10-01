@@ -3,7 +3,7 @@ const {
   TABLE_HEIGHT_RPX,
   computeRoundedTableSeats,
   resolveRoundedTableRingIndex,
-} = require("../rounded-table-layout.js");
+} = require("../runtime/client/RoundedTableLayout.js");
 const {
   createClientLobbyPresentation,
 } = require("../runtime/client/ClientLobbyPresentation.js");
@@ -13,6 +13,13 @@ function toParticipantMap(participants) {
     result[participant.id] = participant;
   }
   return result;
+}
+
+function toWxSeats(playerOrder, participantMap) {
+  return computeRoundedTableSeats(playerOrder, participantMap).map(item => ({
+    ...item,
+    style: `left:${item.xRpx}rpx;top:${item.yRpx}rpx;`,
+  }));
 }
 
 function movePlayerId(order, playerId, targetIndex) {
@@ -182,7 +189,7 @@ Page({
     this.setData({
       roomCode: model.roomCode || "",
       moderatorName: model.moderatorName || (humanModerator ? humanModerator.name : "自动"),
-      seats: computeRoundedTableSeats(this._lobbyModel.playerOrder, participantMap),
+      seats: toWxSeats(this._lobbyModel.playerOrder, participantMap),
       participants,
       playerOrder: this._lobbyModel.playerOrder,
       currentPlayerId: model.currentPlayerId || "",
@@ -207,7 +214,7 @@ Page({
     const participantMap = toParticipantMap(this._lobbyModel.participants);
     this.setData({
       playerOrder,
-      seats: computeRoundedTableSeats(playerOrder, participantMap),
+      seats: toWxSeats(playerOrder, participantMap),
     });
   },
 
