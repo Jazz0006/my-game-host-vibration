@@ -1,7 +1,7 @@
 # Simulator-first BotC Playable Vertical Slice Route (2026-09-30)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-UI1 COMPLETE, PV-3B2C NEXT**  
+> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-UI1 COMPLETE, MP-0 NEXT, PV-3B2C RESUMES AFTER MP-0 + NECESSARY MP-1**  
 > Route owner: current execution order is governed by V5; this document owns the detailed Simulator-first / playable-vertical-slice decomposition.  
 > Supersedes as NEXT: continuing directly from B0C3A into B0C3B recommendation depth.
 
@@ -499,7 +499,11 @@ deployed Cloudflare Worker + public WebSocket/network behavior
 
 This makes “Lab replaces real-device testing before the platform acceptance stage” an explicit architecture contract rather than merely a developer convenience. Automated validation at implementation checkpoint: 145 test files / 599 tests PASS before the final quality-gate rerun.
 
-###### PV-3B2C — Chef + Empath numeric information ← NEXT
+The browser-hosted Lab is a **development/reference client surface, not a final production player target**. Private vibration/haptic alerting is a mandatory player capability, while plain browser support is not reliably cross-platform (especially iOS/Safari). Browser effect rendering may be simulated or best-effort; final haptic evidence belongs to WeChat / Android / iOS platform acceptance.
+
+Before adding another information-result shape, execute the bounded multi-platform insertion route in `docs/MP_MULTI_PLATFORM_CLIENT_ARCHITECTURE_ROUTE_2026-10-01.md`: MP-0 architecture audit plus only the MP-1 seam hardening proven necessary by that audit. Then immediately resume PV-3B2C.
+
+###### PV-3B2C — Chef + Empath numeric information — RESUME AFTER MP-0 + NECESSARY MP-1
 
 Reuse the same information lifecycle where applicable, but introduce a separate numeric-result shape rather than forcing Chef / Empath into pair-information fields. Preserve explicit reliability/truth, private delivery, authoritative commit and acknowledgement semantics.
 

@@ -49,6 +49,7 @@ Current product priorities:
 10. A room's `gameType` is fixed at room creation by the client product; the lobby no longer owns cross-game switching.
 11. Current implementation priority is **Simulator-first BotC Playable Vertical Slice**: establish the smallest end-to-end playable flow and production client wiring before adding more storyteller recommendation depth.
 12. Normal feature development defaults to **zero real devices**. Use automated multiplayer + Simulator Lab first, then WeChat Developer Tools, then escalate to one real device, two real devices + virtual players, and full-table acceptance only when the evidence requires hardware.
+13. Browser/Simulator is a development/reference client surface, not a final player-product target. Reliable private haptic/vibration alerting is a mandatory production-player capability; supported production targets are WeChat and future installed Android/iOS apps behind shared client/platform seams. A future mobile framework (Donut, Capacitor, React Native, etc.) must not leak into game/protocol ownership.
 
 Do not turn this repository into a general game-platform framework before real product needs justify it.
 
@@ -345,10 +346,11 @@ For any shared contract, projection, protocol envelope, snapshot, player view, i
 This is especially important across:
 
 ```text
-Web client
+Browser / Simulator reference client
+WeChat production client
+future Android / iOS production adapters
 Node runtime
 Cloudflare runtime
-future WeChat shell
 ```
 
 A fix is incomplete if only the path that exposed the defect is updated while an equivalent runtime/client path remains stale.

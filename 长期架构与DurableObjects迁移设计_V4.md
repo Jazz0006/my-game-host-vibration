@@ -932,27 +932,34 @@ Cloudflare production cutover 前必须有真实设备验证，而不能只依�
 
 # 26. 最终目标
 
+长期客户端结构区分 **开发参考面** 与 **正式玩家终端**。Browser/Simulator 保留为应用语义、多人仿真与调试的 reference surface，不作为正式玩家产品目标；原因是私人震动/触觉提醒属于核心产品能力，而 plain browser/PWA 无法提供可靠的跨平台能力，尤其不能覆盖 iOS/Safari。
+
 长期最终结构：
 
 ```text
-               Shared Client Protocol
-                       |
-          +------------+-----------------------+
-          |                                    |
-      Web Client                      Shared WeChat Runtime
-                                              /         \
-                               骏骏桌游-狼人   骏骏桌游-血染
-          |                                    |
-          +--------------------+---------------+
-                               |
-                        Cloudflare Worker
-                               |
-                       GameRoom Durable Object
-                               |
-                          Game Catalog
-                       /               \
-                  Werewolf             BotC
+                     Shared Client Protocol
+                              |
+                     Shared Client Core
+                              |
+                    Platform Capability Ports
+               +--------------+------------------+
+               |              |                  |
+     Browser / Simulator   WeChat Runtime   Native Mobile Runtime
+      dev/reference only      /      \          /            \
+                      骏骏桌游-狼人 骏骏桌游-血染  Android        iOS
+               |              |                  |
+               +--------------+------------------+
+                              |
+                       Cloudflare Worker
+                              |
+                      GameRoom Durable Object
+                              |
+                         Game Catalog
+                      /               \
+                 Werewolf             BotC
 ```
+
+Android/iOS 的具体实现框架不属于 shared architecture。Donut、Capacitor、React Native、Flutter 或 native Kotlin/Swift 均必须通过同一 Platform Port 边界接入；其中 Capacitor 若进入验证，应视为“Web 技术 + 原生容器/原生 capability plugin”，不能把 plain browser 的能力限制当成 native app 的上限。
 
 系统必须保证：
 
