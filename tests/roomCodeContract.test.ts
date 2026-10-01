@@ -53,9 +53,12 @@ describe("four-digit room code contract", () => {
     expect(recoveryUi).toContain('/^\\d{6}$/u');
 
     expect(labHtml).toContain("Simulator Lab V2");
-    expect(labHtml).toContain('id="player-count" type="number" min="5" max="15" value="8"');
+    expect(labHtml).toContain('id="player-count" type="number" min="1" max="15" value="8"');
+    expect(labHtml).toContain('id="reset-devices"');
     expect(labHtml).toContain('src="/dev/assets/labV2.js"');
+    expect(labClient).toContain('"/dev/simulator/api/devices/reset"');
     expect(labClient).toContain('"/dev/simulator/api/reset"');
+    expect(labClient).toContain("快速 BotC 模拟桌需要 5–15 名玩家");
     expect(coordinator).toContain('gameType: "botc"');
     expect(coordinator).toContain('"room.setGameModerator"');
     expect(coordinator).not.toContain("/snapshot");

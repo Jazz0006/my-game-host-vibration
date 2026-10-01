@@ -9,6 +9,8 @@ const entries = [
   ["src/client/WeChatNativeClient.ts", "WeChatNativeClient.js"],
   ["src/client/WeChatMinimalPageController.ts", "WeChatMinimalPageController.js"],
   ["src/client/BotcGamePresentation.ts", "BotcGamePresentation.js"],
+  ["src/client/ClientLobbyPresentation.ts", "ClientLobbyPresentation.js"],
+  ["src/client/ClientEntryPresentation.ts", "ClientEntryPresentation.js"],
 ];
 
 for (const product of WECHAT_PRODUCTS) {

@@ -20,6 +20,8 @@ export type SimulatorLabClientState = {
   label: string;
   name: string;
   playerId: string;
+  joined: boolean;
+  recoverable: boolean;
   seat: number | null;
   isHost: boolean;
   isGameModerator: boolean;
@@ -59,22 +61,25 @@ export class SimulatorLabCoordinator {
 
   getState(): SimulatorLabState {
     const clients = this.clients.map(managed => {
-      const roomProjection = managed.client.getRoomProjection();
+      const joined = managed.client.hasSession();
+      const roomProjection = joined ? managed.client.getRoomProjection() : null;
       const player = roomProjection?.players.find(item => item.id === managed.playerId);
-      const connection = managed.client.getConnectionState();
+      const connection = joined ? managed.client.getConnectionState() : null;
       return {
         label: managed.label,
         name: player?.name ?? managed.name,
         playerId: managed.playerId,
+        joined,
+        recoverable: managed.client.hasCredentials(),
         seat: player?.seat ?? null,
         isHost: Boolean(player?.isHost),
         isGameModerator: Boolean(roomProjection?.viewer.isGameModerator),
-        connectionStatus: connection.status,
-        generation: connection.generation,
-        roomRevision: managed.client.getRoomRevision(),
-        playerRevision: managed.client.getPlayerRevision(),
+        connectionStatus: connection?.status ?? "Idle",
+        generation: connection?.generation ?? 0,
+        roomRevision: joined ? managed.client.getRoomRevision() : null,
+        playerRevision: joined ? managed.client.getPlayerRevision() : null,
         roomProjection,
-        playerView: managed.client.getPlayerView(),
+        playerView: joined ? managed.client.getPlayerView() : null,
         trace: managed.client.captureTrace(),
       };
     });
@@ -83,7 +88,8 @@ export class SimulatorLabCoordinator {
       initialized: clients.length > 0,
       gameType: "botc",
       roomId: this.roomId,
-      roomRevision: clients[0]?.roomRevision ?? null,
+      roomRevision:
+        clients.find(client => client.roomRevision !== null)?.roomRevision ?? null,
       playerCount: clients.length,
       clients,
     };
@@ -97,34 +103,75 @@ export class SimulatorLabCoordinator {
     };
   }
 
-  async reset(playerCount = 8): Promise<SimulatorLabState> {
-    if (!Number.isInteger(playerCount) || playerCount < 5 || playerCount > 15) {
-      throw new Error("Simulator BotC player count must be an integer from 5 to 15");
+  async resetDevices(deviceCount = 8): Promise<SimulatorLabState> {
+    if (!Number.isInteger(deviceCount) || deviceCount < 1 || deviceCount > 15) {
+      throw new Error("Simulator device count must be an integer from 1 to 15");
     }
 
     this.disposeClients();
     this.runtime = new InMemoryCloudflareMultiplayerHarness();
     this.roomId = null;
 
-    const host = this.createClient("P1", "Player 1");
-    const created = await host.client.createRoom(host.name);
-    host.playerId = created.playerId;
-    this.roomId = created.roomId;
-    await host.client.connect();
-    this.attach(host);
-
-    for (let number = 2; number <= playerCount; number += 1) {
-      const managed = this.createClient(`P${number}`, `Player ${number}`);
-      const joined = await managed.client.joinRoom(created.roomId, managed.name);
-      managed.playerId = joined.playerId;
-      await managed.client.connect();
-      this.attach(managed);
+    for (let number = 1; number <= deviceCount; number += 1) {
+      this.attach(this.createClient(`P${number}`, `Player ${number}`));
     }
 
-    const finalRevision = playerCount - 1;
-    await Promise.all(
-      this.clients.map(item => item.client.waitForRevision(finalRevision)),
-    );
+    this.emit();
+    return this.getState();
+  }
+
+  async createRoom(label: string, name?: string): Promise<SimulatorLabState> {
+    const managed = this.requireDevice(label);
+    if (managed.client.hasSession()) {
+      throw new Error(`${label} has already entered a room`);
+    }
+    if (this.roomId) {
+      throw new Error("Simulator already has an active room; use another device to join it");
+    }
+
+    if (name?.trim()) managed.name = name.trim();
+    const created = await managed.client.createRoom(managed.name);
+    managed.playerId = created.playerId;
+    this.roomId = created.roomId;
+    await managed.client.connect();
+    this.emit();
+    return this.getState();
+  }
+
+  async joinRoom(
+    label: string,
+    roomCode: string,
+    name?: string,
+  ): Promise<SimulatorLabState> {
+    const managed = this.requireDevice(label);
+    if (managed.client.hasSession()) {
+      throw new Error(`${label} has already entered a room`);
+    }
+    if (name?.trim()) managed.name = name.trim();
+
+    const joined = await managed.client.joinRoom(roomCode, managed.name);
+    managed.playerId = joined.playerId;
+    if (!this.roomId) this.roomId = joined.roomId;
+    await managed.client.connect();
+    await this.waitForOnlineClients(joined.revision);
+    this.emit();
+    return this.getState();
+  }
+
+  async reset(playerCount = 8): Promise<SimulatorLabState> {
+    if (!Number.isInteger(playerCount) || playerCount < 5 || playerCount > 15) {
+      throw new Error("Simulator BotC player count must be an integer from 5 to 15");
+    }
+
+    await this.resetDevices(playerCount);
+    await this.createRoom("P1", "Player 1");
+    const roomId = this.roomId;
+    if (!roomId) throw new Error("Simulator room bootstrap failed");
+
+    for (let number = 2; number <= playerCount; number += 1) {
+      await this.joinRoom(`P${number}`, roomId, `Player ${number}`);
+    }
+
     this.emit();
     return this.getState();
   }
@@ -161,6 +208,29 @@ export class SimulatorLabCoordinator {
       `sim-${crypto.randomUUID()}`,
     );
     await this.waitForOnlineClients(commandRevision(result));
+    this.emit();
+    return this.getState();
+  }
+
+  closeDevice(label: string): SimulatorLabState {
+    const managed = this.requireDevice(label);
+    if (!managed.client.hasSession()) {
+      throw new Error(`${label} has no active session to close`);
+    }
+    managed.client.disconnect();
+    this.emit();
+    return this.getState();
+  }
+
+  async continueDevice(label: string): Promise<SimulatorLabState> {
+    const managed = this.requireDevice(label);
+    if (managed.client.hasSession()) {
+      throw new Error(`${label} already has an active session`);
+    }
+    if (!managed.client.hasCredentials()) {
+      throw new Error(`${label} has no recoverable room credentials`);
+    }
+    await managed.client.connect();
     this.emit();
     return this.getState();
   }
@@ -207,8 +277,15 @@ export class SimulatorLabCoordinator {
   }
 
   private requireClient(playerId: string): ManagedClient {
-    const managed = this.clients.find(item => item.playerId === playerId);
+    const managed = this.clients.find(item => item.playerId === playerId && item.playerId);
     if (!managed) throw new Error(`Unknown simulator player: ${playerId}`);
+    return managed;
+  }
+
+  private requireDevice(label: string): ManagedClient {
+    const normalized = label.trim();
+    const managed = this.clients.find(item => item.label === normalized);
+    if (!managed) throw new Error(`Unknown simulator device: ${label}`);
     return managed;
   }
 
@@ -216,7 +293,10 @@ export class SimulatorLabCoordinator {
     if (revision === null) return;
     await Promise.all(
       this.clients
-        .filter(item => item.client.getConnectionState().status === "Connected")
+        .filter(item =>
+          item.client.hasSession() &&
+          item.client.getConnectionState().status === "Connected"
+        )
         .map(item => item.client.waitForRevision(revision)),
     );
   }

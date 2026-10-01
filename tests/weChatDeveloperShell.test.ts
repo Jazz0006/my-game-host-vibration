@@ -66,6 +66,8 @@ describe("MG0D WeChat game-specific product shells", () => {
       "src/client/WeChatNativeClient.ts",
       "src/client/WeChatMinimalPageController.ts",
       "src/client/BotcGamePresentation.ts",
+      "src/client/ClientLobbyPresentation.ts",
+      "src/client/ClientEntryPresentation.ts",
     ]);
 
     const pkg = json("package.json");
@@ -89,6 +91,16 @@ describe("MG0D WeChat game-specific product shells", () => {
           `wechat-build/${product.id}/miniprogram/runtime/client/BotcGamePresentation.js`,
         ),
       ).toBe(true);
+      expect(
+        fs.existsSync(
+          `wechat-build/${product.id}/miniprogram/runtime/client/ClientLobbyPresentation.js`,
+        ),
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          `wechat-build/${product.id}/miniprogram/runtime/client/ClientEntryPresentation.js`,
+        ),
+      ).toBe(true);
     }
 
     const ignore = text(".gitignore");
@@ -97,6 +109,11 @@ describe("MG0D WeChat game-specific product shells", () => {
   });
 
   it("keeps diagnostics and product UI as thin projections over shared runtime", () => {
+    const index = text("miniprogram/pages/index/index.js");
+    expect(index).toContain('require("../../runtime/client/ClientEntryPresentation.js")');
+    expect(index).toContain("createClientEntryPresentation");
+    expect(index).toContain("normalizeClientRoomCode");
+
     const diagnostics = text("miniprogram/pages/diagnostics.js");
     expect(diagnostics).toContain('require("../runtime/client/WeChatNativeClient.js")');
     expect(diagnostics).toContain('require("../runtime/client/WeChatMinimalPageController.js")');
@@ -109,6 +126,8 @@ describe("MG0D WeChat game-specific product shells", () => {
     const lobby = text("miniprogram/pages/lobby.js");
     const lobbyMarkup = text("miniprogram/pages/lobby.wxml");
     expect(lobby).toContain('require("../rounded-table-layout.js")');
+    expect(lobby).toContain('require("../runtime/client/ClientLobbyPresentation.js")');
+    expect(lobby).toContain("createClientLobbyPresentation");
     expect(lobby).toContain("applyLobbyModel");
     expect(lobby).toContain('"room.setReady"');
     expect(lobby).toContain('"room.movePlayerSeat"');
@@ -159,6 +178,8 @@ describe("MG0D WeChat game-specific product shells", () => {
     expect(gameMarkup).toContain("authoritative PlayerView");
 
     const settings = text("miniprogram/pages/settings.js");
+    expect(settings).toContain('require("../runtime/client/ClientLobbyPresentation.js")');
+    expect(settings).toContain("createClientLobbyPresentation");
     expect(settings).toContain('"room.transferHost"');
     expect(settings).toContain('"room.removePlayer"');
     expect(settings).not.toContain("previewMode");

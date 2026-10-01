@@ -1,0 +1,64 @@
+import fs from "node:fs";
+import { describe, expect, it } from "vitest";
+
+function text(path: string): string {
+  return fs.readFileSync(path, "utf8");
+}
+
+describe("PV-UI1 Simulator pre-device client-shell parity", () => {
+  it("covers the WeChat entry and recovery lifecycle through production simulator seams", () => {
+    const index = text("miniprogram/pages/index/index.js");
+    const lab = text("dev/labV2.js");
+    const server = text("dev/SimulatorLabServer.ts");
+
+    expect(index).toContain("createRoom()");
+    expect(index).toContain("joinRoom(this.data.roomCode)");
+    expect(index).toContain("startStoredSession()");
+
+    expect(lab).toContain('"/dev/simulator/api/room/create"');
+    expect(lab).toContain('"/dev/simulator/api/room/join"');
+    expect(lab).toContain('"/dev/simulator/api/device/continue"');
+    expect(lab).toContain("继续上次房间");
+    expect(server).toContain('"/dev/simulator/api/devices/reset"');
+    expect(server).toContain('"/dev/simulator/api/device/close"');
+  });
+
+  it("covers Lobby and room-management product actions in the phone mirror", () => {
+    const lobby = text("miniprogram/pages/lobby.js");
+    const settings = text("miniprogram/pages/settings.js");
+    const lab = text("dev/labV2.js");
+
+    for (const command of [
+      "room.setReady",
+      "room.movePlayerSeat",
+      "room.setGameModerator",
+    ]) {
+      expect(lobby).toContain(command);
+      expect(lab).toContain(command);
+    }
+
+    expect(lobby).toContain("this._product.startCommand");
+    expect(lab).toContain("botc.startGame");
+
+    for (const command of ["room.transferHost", "room.removePlayer"]) {
+      expect(settings).toContain(command);
+      expect(lab).toContain(command);
+    }
+
+    expect(lobby).toContain("createClientLobbyPresentation");
+    expect(settings).toContain("createClientLobbyPresentation");
+    expect(lab).toContain("createClientLobbyPresentation");
+  });
+
+  it("keeps quick-table mode alongside the full-client mode", () => {
+    const html = text("dev/lab.html");
+    const lab = text("dev/labV2.js");
+
+    expect(html).toContain('id="reset-devices"');
+    expect(html).toContain("完整客户端模式");
+    expect(html).toContain('id="reset-simulator"');
+    expect(html).toContain("快速建立 N 人桌");
+    expect(lab).toContain('"/dev/simulator/api/devices/reset"');
+    expect(lab).toContain('"/dev/simulator/api/reset"');
+  });
+});

@@ -40,6 +40,59 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
     }
   });
 
+  it("supports full-client entry create/join and stored-session continue before game flow", async () => {
+    coordinator = new SimulatorLabCoordinator();
+    let state = await coordinator.resetDevices(5);
+
+    expect(state.roomId).toBeNull();
+    expect(state.clients).toHaveLength(5);
+    expect(state.clients.every(client => !client.joined)).toBe(true);
+    expect(state.clients.every(client => client.connectionStatus === "Idle")).toBe(true);
+
+    state = await coordinator.createRoom("P1", "Host");
+    expect(state.roomId).toMatch(/^\d{4}$/u);
+    expect(state.clients[0]).toMatchObject({
+      label: "P1",
+      name: "Host",
+      joined: true,
+      recoverable: true,
+      connectionStatus: "Connected",
+      isHost: true,
+    });
+
+    const roomId = state.roomId!;
+    state = await coordinator.joinRoom("P2", roomId, "Guest");
+    expect(state.clients[1]).toMatchObject({
+      label: "P2",
+      name: "Guest",
+      joined: true,
+      recoverable: true,
+      connectionStatus: "Connected",
+    });
+    expect(state.clients[0]?.roomRevision).toBe(1);
+    expect(state.clients[1]?.roomRevision).toBe(1);
+
+    state = coordinator.closeDevice("P2");
+    expect(state.clients[1]).toMatchObject({
+      joined: false,
+      recoverable: true,
+      connectionStatus: "Idle",
+      roomProjection: null,
+      playerView: null,
+    });
+
+    state = await coordinator.continueDevice("P2");
+    expect(state.clients[1]).toMatchObject({
+      joined: true,
+      recoverable: true,
+      connectionStatus: "Connected",
+    });
+    expect(state.clients[1]?.roomProjection).toMatchObject({
+      roomId,
+      viewer: { playerId: state.clients[1]?.playerId },
+    });
+  });
+
   it("uses semantic room commands for Ready, storyteller assignment, rename, disconnect, and reconnect", async () => {
     coordinator = new SimulatorLabCoordinator();
     let state = await coordinator.reset(6);

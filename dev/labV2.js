@@ -1,7 +1,13 @@
 import { createBotcGamePresentation } from "/client-runtime/client/BotcGamePresentation.js";
+import { createClientLobbyPresentation } from "/client-runtime/client/ClientLobbyPresentation.js";
+import {
+  createClientEntryPresentation,
+  normalizeClientRoomCode,
+} from "/client-runtime/client/ClientEntryPresentation.js";
 
 const elements = {
   playerCount: document.querySelector("#player-count"),
+  resetDevices: document.querySelector("#reset-devices"),
   reset: document.querySelector("#reset-simulator"),
   roomId: document.querySelector("#room-id"),
   roomRevision: document.querySelector("#room-revision"),
@@ -21,7 +27,8 @@ const elements = {
 };
 
 let simulatorState = null;
-let selectedPlayerId = "";
+let selectedDeviceLabel = "";
+const phoneSubpageByDevice = new Map();
 
 function setStatus(message, kind = "") {
   elements.status.textContent = message;
@@ -43,7 +50,7 @@ async function post(path, body) {
 
 function selectedClient() {
   return simulatorState && simulatorState.clients
-    ? simulatorState.clients.find(client => client.playerId === selectedPlayerId) || null
+    ? simulatorState.clients.find(client => client.label === selectedDeviceLabel) || null
     : null;
 }
 
@@ -65,6 +72,7 @@ function createButton(label, onClick, className = "") {
 }
 
 function clientLabel(client) {
+  if (!client.joined) return client.label + " · " + client.name + " · 未加入房间";
   const seat = client.seat === null ? "?" : client.seat;
   const roles = [
     client.isHost ? "Owner" : "",
@@ -75,18 +83,19 @@ function clientLabel(client) {
 
 function syncSelections() {
   const clients = simulatorState && simulatorState.clients ? simulatorState.clients : [];
-  if (!clients.some(client => client.playerId === selectedPlayerId)) {
-    selectedPlayerId = clients[0] ? clients[0].playerId : "";
+  if (!clients.some(client => client.label === selectedDeviceLabel)) {
+    selectedDeviceLabel = clients[0] ? clients[0].label : "";
   }
 
-  const viewerOptions = clients.map(client => new Option(clientLabel(client), client.playerId));
+  const viewerOptions = clients.map(client => new Option(clientLabel(client), client.label));
   elements.viewerSelect.replaceChildren(...viewerOptions);
-  elements.viewerSelect.value = selectedPlayerId;
+  elements.viewerSelect.value = selectedDeviceLabel;
 
+  const joinedClients = clients.filter(client => client.joined && client.playerId);
   const automatic = new Option("自动说书人", "");
-  const moderatorOptions = clients.map(client => new Option(clientLabel(client), client.playerId));
+  const moderatorOptions = joinedClients.map(client => new Option(clientLabel(client), client.playerId));
   elements.moderatorSelect.replaceChildren(automatic, ...moderatorOptions);
-  const humanModerator = clients.find(client => client.isGameModerator);
+  const humanModerator = joinedClients.find(client => client.isGameModerator);
   elements.moderatorSelect.value = humanModerator ? humanModerator.playerId : "";
 }
 
@@ -148,39 +157,306 @@ function appendAction(root, label, enabled, onClick, secondary = false) {
   root.append(button);
 }
 
+function createTextInput(value, placeholder, className = "wechat-input") {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = value;
+  input.placeholder = placeholder;
+  input.className = className;
+  return input;
+}
+
+function renderEntryPhone(root, client) {
+  const hero = phoneElement("section", "wechat-entry-hero");
+  hero.append(
+    phoneElement("div", "wechat-brand-mark", "桌"),
+    phoneElement("div", "wechat-entry-title", "血染钟楼"),
+    phoneElement("div", "wechat-copy", "一起玩桌游，更轻松"),
+  );
+  root.append(hero);
+
+  const card = phoneElement("section", "wechat-card wechat-entry-card");
+  const nameInput = createTextInput(client.name || client.label, "玩家名称");
+  card.append(phoneElement("div", "wechat-field-label", "玩家名称"), nameInput);
+
+  if (client.recoverable) {
+    card.append(createButton("继续上次房间", async () => {
+      try {
+        simulatorState = await post("/dev/simulator/api/device/continue", {
+          label: client.label,
+        });
+        phoneSubpageByDevice.set(client.label, "lobby");
+        render();
+        setStatus(client.label + " 已从保存凭证恢复上次房间。", "success");
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    }, "wechat-button primary"));
+  } else {
+    const create = createButton("创建房间", async () => {
+      try {
+        simulatorState = await post("/dev/simulator/api/room/create", {
+          label: client.label,
+          name: nameInput.value,
+        });
+        phoneSubpageByDevice.set(client.label, "lobby");
+        render();
+        setStatus(client.label + " 已通过 production bootstrap 创建房间。", "success");
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    }, "wechat-button primary");
+    card.append(create);
+  }
+
+  card.append(phoneElement("div", "wechat-field-label", "加入房间"));
+  const joinRow = phoneElement("div", "wechat-join-row");
+  const roomInput = createTextInput(
+    simulatorState && simulatorState.roomId ? simulatorState.roomId : "",
+    "4 位房间号",
+  );
+  roomInput.maxLength = 4;
+  roomInput.inputMode = "numeric";
+  const join = createButton("加入", async () => {
+    const entry = createClientEntryPresentation({
+      roomCode: normalizeClientRoomCode(roomInput.value),
+      hasRecoverableRoom: client.recoverable,
+    });
+    const roomCode = entry.roomCode;
+    if (!entry.canJoinRoom) {
+      setStatus("请输入 4 位房间号。", "error");
+      return;
+    }
+    try {
+      simulatorState = await post("/dev/simulator/api/room/join", {
+        label: client.label,
+        name: nameInput.value,
+        roomCode,
+      });
+      phoneSubpageByDevice.set(client.label, "lobby");
+      render();
+      setStatus(client.label + " 已通过 production bootstrap 加入房间。", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  }, "wechat-button secondary");
+  joinRow.append(roomInput, join);
+  card.append(joinRow);
+  root.append(card);
+
+  root.append(phoneElement(
+    "div",
+    "wechat-privacy-note",
+    client.label + " · 未加入任何房间",
+  ));
+}
+
+function moveSeat(client, model, playerId, direction) {
+  const ordered = [...model.participants].sort((a, b) => a.seat - b.seat);
+  const index = ordered.findIndex(player => player.id === playerId);
+  if (index < 0) return;
+  const targetIndex = direction < 0
+    ? Math.max(0, index - 1)
+    : Math.min(ordered.length, index + 2);
+  return sendPhoneCommand(client, "room.movePlayerSeat", {
+    targetPlayerId: playerId,
+    insertIndex: targetIndex,
+  });
+}
+
+function renderSettingsPhone(root, client, model) {
+  const header = phoneElement("div", "wechat-topbar");
+  header.append(
+    createButton("‹ 房间", () => {
+      phoneSubpageByDevice.set(client.label, "lobby");
+      renderPhone(client);
+    }, "wechat-icon-button"),
+    phoneElement("div", "wechat-title", "设置"),
+    phoneElement("div", "wechat-phase-pill", "房间管理"),
+  );
+  root.append(header);
+  root.append(phoneElement("div", "wechat-copy", "房间 " + model.roomCode));
+
+  const section = phoneElement("section", "wechat-card wechat-settings-card");
+  section.append(phoneElement("div", "wechat-section-title", "房间成员"));
+  for (const participant of model.participants) {
+    const row = phoneElement("div", "wechat-member-row");
+    const main = phoneElement("div", "wechat-member-main");
+    main.append(
+      phoneElement(
+        "div",
+        "wechat-member-name",
+        participant.seat + "号 · " + participant.name + (participant.isOwner ? " · 房主" : ""),
+      ),
+      phoneElement(
+        "div",
+        "wechat-copy",
+        participant.connected
+          ? participant.ready ? "在线 · 已准备" : "在线 · 未准备"
+          : "暂时离线",
+      ),
+    );
+    row.append(main);
+    if (model.isOwner && participant.id !== model.currentPlayerId) {
+      const actions = phoneElement("div", "wechat-member-actions");
+      actions.append(
+        createButton("移交房主", () =>
+          sendPhoneCommand(client, "room.transferHost", { targetPlayerId: participant.id }),
+        "wechat-mini-button"),
+      );
+      if (!model.gameStarted) {
+        actions.append(
+          createButton("移出", () =>
+            sendPhoneCommand(client, "room.removePlayer", { targetPlayerId: participant.id }),
+          "wechat-mini-button danger"),
+        );
+      }
+      row.append(actions);
+    }
+    section.append(row);
+  }
+  root.append(section);
+  if (!model.isOwner) {
+    root.append(phoneElement(
+      "div",
+      "wechat-privacy-note",
+      "当前你不是 Room Owner；这里仅显示 authoritative 房间状态。",
+    ));
+  }
+}
+
+function renderLobbyPhone(root, client) {
+  const model = createClientLobbyPresentation(client.roomProjection);
+  if (phoneSubpageByDevice.get(client.label) === "settings") {
+    renderSettingsPhone(root, client, model);
+    return;
+  }
+
+  const header = phoneElement("div", "wechat-topbar");
+  const title = phoneElement("div", "wechat-title-block");
+  title.append(
+    phoneElement("div", "wechat-eyebrow", "ROOM"),
+    phoneElement("div", "wechat-title", "房间 " + (model.roomCode || "----")),
+  );
+  header.append(
+    title,
+    createButton("⚙", () => {
+      phoneSubpageByDevice.set(client.label, "settings");
+      renderPhone(client);
+    }, "wechat-icon-button"),
+  );
+  root.append(header);
+
+  const table = phoneElement("section", "wechat-card wechat-lobby-card");
+  const moderator = phoneElement("div", "wechat-moderator-card");
+  moderator.append(
+    phoneElement("div", "wechat-eyebrow", "说书人"),
+    phoneElement("div", "wechat-section-title", model.moderatorName),
+  );
+  if (model.isOwner && !model.gameStarted) {
+    const moderatorActions = phoneElement("div", "wechat-inline-actions");
+    if (model.moderatorAssignment.mode === "human") {
+      moderatorActions.append(createButton(
+        "恢复自动",
+        () => sendPhoneCommand(client, "room.setGameModerator", {
+          assignment: { mode: "automatic" },
+        }),
+        "wechat-mini-button",
+      ));
+    }
+    moderator.append(moderatorActions);
+  }
+  table.append(moderator);
+  table.append(phoneElement("div", "wechat-game-option", "血染钟楼"));
+
+  const seatList = phoneElement("div", "wechat-seat-list");
+  for (const participant of model.participants) {
+    const row = phoneElement("div", "wechat-seat-row");
+    const info = phoneElement("div", "wechat-seat-info");
+    info.append(
+      phoneElement(
+        "div",
+        "wechat-member-name",
+        participant.seat + "号 · " + participant.name + (participant.isOwner ? " 👑" : ""),
+      ),
+      phoneElement(
+        "div",
+        "wechat-copy",
+        participant.ready ? "✓ 已准备" : "未准备",
+      ),
+    );
+    row.append(info);
+
+    if (model.isOwner && !model.gameStarted) {
+      const controls = phoneElement("div", "wechat-seat-actions");
+      controls.append(
+        createButton("↑", () => moveSeat(client, model, participant.id, -1), "wechat-mini-button"),
+        createButton("↓", () => moveSeat(client, model, participant.id, 1), "wechat-mini-button"),
+      );
+      if (model.moderatorAssignment.mode !== "human" ||
+          model.moderatorAssignment.playerId !== participant.id) {
+        controls.append(createButton(
+          "设为说书人",
+          () => sendPhoneCommand(client, "room.setGameModerator", {
+            assignment: { mode: "human", playerId: participant.id },
+          }),
+          "wechat-mini-button",
+        ));
+      }
+      row.append(controls);
+    }
+    seatList.append(row);
+  }
+  table.append(seatList);
+  root.append(table);
+
+  root.append(phoneElement("div", "wechat-status-line", model.statusLine));
+
+  if (model.canInvite) {
+    appendAction(root, "邀请朋友", true, () => {
+      setStatus("房间号：" + model.roomCode + "（Lab 中模拟微信邀请入口）", "success");
+    }, true);
+  }
+  if (model.canStartGame) {
+    appendAction(
+      root,
+      "开始游戏",
+      true,
+      () => sendPhoneCommand(client, "botc.startGame"),
+    );
+  }
+  if (model.canToggleReady) {
+    appendAction(
+      root,
+      model.currentPlayerReady ? "✓ 已准备好" : "已准备好",
+      true,
+      () => sendPhoneCommand(client, "room.setReady", {
+        ready: !model.currentPlayerReady,
+      }),
+      true,
+    );
+  }
+}
+
 function renderPhone(client) {
   const root = elements.phoneProductView;
-  root.replaceChildren();
-
   if (!client) {
     root.append(phoneElement(
       "div",
       "phone-empty",
-      "建立模拟桌后，这里会按微信游戏页的共享 presentation model 渲染当前 Viewer。",
+      "建立虚拟设备后，这里会从微信入口页开始镜像当前客户端。",
     ));
     return;
   }
 
+  if (!client.joined || !client.roomProjection) {
+    renderEntryPhone(root, client);
+    return;
+  }
+
   const room = client.roomProjection;
-  if (!room || !room.gameStarted) {
-    const header = phoneElement("div", "wechat-topbar");
-    const title = phoneElement("div", "wechat-title-block");
-    title.append(
-      phoneElement("div", "wechat-eyebrow", "GAME"),
-      phoneElement("div", "wechat-title", "血染钟楼"),
-    );
-    header.append(title, phoneElement("div", "wechat-phase-pill", "大厅"));
-    root.append(header);
-    root.append(phoneElement(
-      "section",
-      "wechat-card wechat-role-card",
-      "游戏尚未开始。Simulator 的房间控制仍由右侧/中间开发控制面板负责；进入游戏后这里切换为微信 game page 镜像。",
-    ));
-    root.append(phoneElement(
-      "div",
-      "wechat-privacy-note",
-      clientLabel(client) + " · Room " + (room.roomId || "—"),
-    ));
+  if (!room.gameStarted) {
+    renderLobbyPhone(root, client);
     return;
   }
 
@@ -376,20 +652,20 @@ function renderVirtualPlayers() {
   const cards = clients.map(client => {
     const card = document.createElement("article");
     card.className = "player-card" +
-      (client.connectionStatus === "Connected" ? "" : " offline") +
-      (client.playerId === selectedPlayerId ? " selected" : "");
+      (client.connectionStatus === "Connected" || !client.joined ? "" : " offline") +
+      (client.label === selectedDeviceLabel ? " selected" : "");
 
     const head = document.createElement("div");
     head.className = "player-head";
     const seat = document.createElement("span");
     seat.className = "seat";
-    seat.textContent = String(client.seat ?? "?");
+    seat.textContent = client.joined ? String(client.seat ?? "?") : "—";
     const title = document.createElement("div");
     title.className = "player-title";
     const name = document.createElement("strong");
-    name.textContent = client.name;
+    name.textContent = client.label + " · " + client.name;
     const id = document.createElement("small");
-    id.textContent = shortId(client.playerId);
+    id.textContent = client.joined ? shortId(client.playerId) : "未加入房间";
     title.append(name, id);
     const connection = document.createElement("span");
     connection.className = "connection";
@@ -419,14 +695,15 @@ function renderVirtualPlayers() {
     const actions = document.createElement("div");
     actions.className = "player-actions";
     actions.append(createButton("查看此手机", () => {
-      selectedPlayerId = client.playerId;
+      selectedDeviceLabel = client.label;
       render();
     }, "primary"));
 
     if (client.connectionStatus === "Disconnected") {
       actions.append(createButton("重新连接", async () => {
         try {
-          await post("/dev/simulator/api/reconnect", { playerId: client.playerId });
+          simulatorState = await post("/dev/simulator/api/reconnect", { playerId: client.playerId });
+          render();
           setStatus(client.name + " 已重新连接并同步 authoritative state。", "success");
         } catch (error) {
           setStatus(error.message, "error");
@@ -435,8 +712,19 @@ function renderVirtualPlayers() {
     } else if (client.connectionStatus === "Connected") {
       actions.append(createButton("模拟掉线", async () => {
         try {
-          await post("/dev/simulator/api/disconnect", { playerId: client.playerId });
+          simulatorState = await post("/dev/simulator/api/disconnect", { playerId: client.playerId });
+          render();
           setStatus(client.name + " 已模拟网络掉线。", "success");
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      }));
+      actions.append(createButton("模拟关闭微信", async () => {
+        try {
+          simulatorState = await post("/dev/simulator/api/device/close", { label: client.label });
+          phoneSubpageByDevice.delete(client.label);
+          render();
+          setStatus(client.name + " 已关闭当前 session；可从入口页“继续上次房间”。", "success");
         } catch (error) {
           setStatus(error.message, "error");
         }
@@ -469,26 +757,56 @@ function render() {
   elements.roomRevision.textContent = String(
     simulatorState && simulatorState.roomRevision !== null ? simulatorState.roomRevision : "—",
   );
-  elements.sendCommand.disabled = !initialized;
-  elements.setModerator.disabled = !initialized;
-  elements.automaticModerator.disabled = !initialized;
-  elements.viewerSelect.disabled = !initialized;
-  elements.moderatorSelect.disabled = !initialized;
 
   syncSelections();
   const client = selectedClient();
+  const joined = Boolean(client && client.joined && client.playerId);
+  const hasRoom = Boolean(simulatorState && simulatorState.roomId);
+
+  elements.sendCommand.disabled = !joined;
+  elements.setModerator.disabled = !hasRoom;
+  elements.automaticModerator.disabled = !hasRoom;
+  elements.viewerSelect.disabled = !initialized;
+  elements.moderatorSelect.disabled = !hasRoom;
+
   renderPhone(client);
   renderVirtualPlayers();
   renderInspector(client);
 }
 
+elements.resetDevices.addEventListener("click", async () => {
+  const deviceCount = Number(elements.playerCount.value);
+  elements.resetDevices.disabled = true;
+  setStatus("正在建立 " + deviceCount + " 台未进房虚拟微信客户端…");
+  try {
+    simulatorState = await post("/dev/simulator/api/devices/reset", { deviceCount });
+    selectedDeviceLabel = simulatorState.clients[0] ? simulatorState.clients[0].label : "";
+    phoneSubpageByDevice.clear();
+    render();
+    setStatus(
+      "完整客户端模式已建立：" + simulatorState.playerCount +
+        " 台设备均从微信入口页开始。",
+      "success",
+    );
+  } catch (error) {
+    setStatus(error.message, "error");
+  } finally {
+    elements.resetDevices.disabled = false;
+  }
+});
+
 elements.reset.addEventListener("click", async () => {
   const playerCount = Number(elements.playerCount.value);
+  if (!Number.isInteger(playerCount) || playerCount < 5 || playerCount > 15) {
+    setStatus("快速 BotC 模拟桌需要 5–15 名玩家。", "error");
+    return;
+  }
   elements.reset.disabled = true;
-  setStatus("正在建立 " + playerCount + " 人 BotC Simulator room…");
+  setStatus("正在快速建立 " + playerCount + " 人 BotC Simulator room…");
   try {
     simulatorState = await post("/dev/simulator/api/reset", { playerCount });
-    selectedPlayerId = simulatorState.clients[0] ? simulatorState.clients[0].playerId : "";
+    selectedDeviceLabel = simulatorState.clients[0] ? simulatorState.clients[0].label : "";
+    phoneSubpageByDevice.clear();
     render();
     setStatus(
       "Simulator room " + simulatorState.roomId + " 已建立：" +
@@ -503,7 +821,7 @@ elements.reset.addEventListener("click", async () => {
 });
 
 elements.viewerSelect.addEventListener("change", () => {
-  selectedPlayerId = elements.viewerSelect.value;
+  selectedDeviceLabel = elements.viewerSelect.value;
   render();
 });
 
@@ -531,7 +849,7 @@ elements.automaticModerator.addEventListener("click", async () => {
 
 elements.sendCommand.addEventListener("click", async () => {
   const client = selectedClient();
-  if (!client) return;
+  if (!client || !client.joined || !client.playerId) return;
   let payload;
   try {
     payload = JSON.parse(elements.commandPayload.value || "{}");

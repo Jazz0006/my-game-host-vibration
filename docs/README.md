@@ -65,7 +65,8 @@ PV-3 first-night playable UI ← IN PROGRESS
        └─ PV-3B2 first-night information resolution ← IN PROGRESS
             ├─ PV-3B2A Washerwoman information runtime ✅
             ├─ PV-3B2B Librarian + Investigator pair information ✅
-            ├─ PV-UI0 Simulator / WeChat presentation convergence ✅
+            ├─ PV-UI0 Simulator / WeChat game presentation convergence ✅
+            ├─ PV-UI1 pre-device full client-shell parity ✅
             └─ PV-3B2C Chef + Empath numeric information ← CURRENT / NEXT
   ↓
 PV-4 minimal day/night loop

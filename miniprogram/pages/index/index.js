@@ -1,3 +1,8 @@
+const {
+  createClientEntryPresentation,
+  normalizeClientRoomCode,
+} = require("../../runtime/client/ClientEntryPresentation.js");
+
 function gameClient() {
   const app = getApp();
   return app.getGameClient();
@@ -26,9 +31,7 @@ Page({
   },
 
   onRoomCodeInput(event) {
-    const roomCode = String(event.detail.value || "")
-      .replace(/\D/g, "")
-      .slice(0, 4);
+    const roomCode = normalizeClientRoomCode(event.detail.value);
     this.setData({ roomCode });
   },
 
@@ -56,7 +59,11 @@ Page({
   },
 
   async onJoinRoomTap() {
-    if (!/^\d{4}$/.test(this.data.roomCode)) {
+    const entry = createClientEntryPresentation({
+      roomCode: this.data.roomCode,
+      hasRecoverableRoom: this.data.hasRecoverableRoom,
+    });
+    if (!entry.canJoinRoom) {
       wx.showToast({
         title: "请输入 4 位房间号",
         icon: "none",

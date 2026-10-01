@@ -1,7 +1,7 @@
 # Simulator-first BotC Playable Vertical Slice Route (2026-09-30)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-UI0 COMPLETE, PV-3B2C NEXT**  
+> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-UI1 COMPLETE, PV-3B2C NEXT**  
 > Route owner: current execution order is governed by V5; this document owns the detailed Simulator-first / playable-vertical-slice decomposition.  
 > Supersedes as NEXT: continuing directly from B0C3A into B0C3B recommendation depth.
 
@@ -465,6 +465,40 @@ Acceptance:
 - automated presentation tests cover role reveal, pair/zero information, target selection and Human Storyteller action availability;
 - full test/build validation remains green.
 
+##### PV-UI1 — pre-device full client-shell parity ✅ COMPLETE
+
+The Simulator Lab acceptance role is now explicit: before WeChat Developer Tools / hardware escalation, **all application-level client semantics and end-to-end flows should be exercised in the Lab first**.
+
+Implementation:
+
+- added shared `ClientEntryPresentation` for four-digit room-code normalization / join availability and shared `ClientLobbyPresentation` for owner, readiness, Storyteller, participant ordering and action-availability semantics;
+- WeChat Entry, Lobby and Settings now consume those shared owners instead of maintaining independent derivation logic;
+- the Lab has a **Full Client mode** that creates 1–15 virtual devices with no room/session yet. A selected virtual phone can create a room, enter a four-digit room code to join, move through authoritative Lobby, ready/unready, manage seats/Storyteller, open room management, transfer ownership/remove players, start BotC and then continue into the existing game mirror;
+- the full-client path uses production bootstrap + `TestRoomClient / ClientSession`; it does not invent a browser-only room or mutate canonical state directly;
+- a virtual device can simulate network disconnect/reconnect independently, or simulate closing WeChat by disposing its active session while retaining credentials; its Entry mirror then exposes **继续上次房间** and restores through the stored credential path;
+- the existing **Quick Table mode** remains intentionally available and still requires 5–15 BotC players, so rules/role development can jump directly to a populated room without paying full entry-flow cost on every test;
+- parity guard tests require Entry/recovery, Lobby, room-management and game surfaces to retain the expected shared presentation / production-command seams.
+
+Pre-device acceptance boundary:
+
+```text
+Application semantics / permissions / multiplayer convergence
+Entry -> Create / Join / Continue
+Lobby -> Ready / seats / Storyteller / room management
+Start game -> private PlayerView -> game interactions
+disconnect / reconnect / session close / stored-session restore
+                    = Simulator Lab owner
+
+actual WXML/WXSS + WeChat navigation/touch runtime
+wx.vibrateShort and other wx capability behavior
+foreground/background lifecycle on WeChat runtime
+real phone safe-area/font/layout quirks
+deployed Cloudflare Worker + public WebSocket/network behavior
+                    = WeChat Developer Tools / staged device acceptance
+```
+
+This makes “Lab replaces real-device testing before the platform acceptance stage” an explicit architecture contract rather than merely a developer convenience. Automated validation at implementation checkpoint: 145 test files / 599 tests PASS before the final quality-gate rerun.
+
 ###### PV-3B2C — Chef + Empath numeric information ← NEXT
 
 Reuse the same information lifecycle where applicable, but introduce a separate numeric-result shape rather than forcing Chef / Empath into pair-information fields. Preserve explicit reliability/truth, private delivery, authoritative commit and acknowledgement semantics.
@@ -500,13 +534,15 @@ Using Simulator Lab V2 + TestRoomClient:
 
 This is the first meaningful "playable" engineering milestone.
 
-### PV-6 — WeChat Developer Tools parity
+### PV-6 — WeChat Developer Tools platform parity
 
-Only after Simulator milestone:
+Only after the same application semantics and flows already pass in Simulator:
 
-- wire/render the same semantic states in the generated BotC WeChat shell;
-- verify WXML/WXSS/navigation;
-- verify wx capability adapters;
+- verify the generated BotC WeChat shell renders the shared presentation states correctly in the real WXML/WXSS runtime;
+- verify WeChat navigation/touch behavior that a browser mirror cannot prove;
+- verify `wx` capability adapters such as vibration and lifecycle integration;
+- exercise the deployed Cloudflare/public-network path when integration risk requires it;
+- do **not** use this stage as the first place to discover ordinary room/game-flow defects; those belong to Simulator acceptance first;
 - keep production game truth server-side.
 
 ### PV-7 — Minimal device acceptance
@@ -524,7 +560,7 @@ Simulator Lab V2 + automated multiplayer
 1 real device + N virtual clients
 ```
 
-Use for vibration, lifecycle, real touch and network behavior.
+Use only for vibration, WeChat lifecycle, real touch/layout/device behavior and network/platform issues that the Simulator cannot faithfully reproduce.
 
 #### D2 — cross-real-client smoke
 ```text

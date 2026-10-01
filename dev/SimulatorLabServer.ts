@@ -58,6 +58,49 @@ export function mountSimulatorLab(app: Express): SimulatorLabCoordinator {
     }
   });
 
+  app.post("/dev/simulator/api/devices/reset", async (request, response) => {
+    try {
+      const raw = (request.body as { deviceCount?: unknown } | undefined)?.deviceCount;
+      const deviceCount = raw === undefined ? 8 : Number(raw);
+      response.json(await coordinator.resetDevices(deviceCount));
+    } catch (error) {
+      response.status(400).json({ ok: false, message: errorMessage(error) });
+    }
+  });
+
+  app.post("/dev/simulator/api/room/create", async (request, response) => {
+    try {
+      const body = request.body as { label?: unknown; name?: unknown } | undefined;
+      if (typeof body?.label !== "string" || !body.label.trim()) {
+        throw new Error("device label is required");
+      }
+      const name = typeof body.name === "string" ? body.name : undefined;
+      response.json(await coordinator.createRoom(body.label, name));
+    } catch (error) {
+      response.status(400).json({ ok: false, message: errorMessage(error) });
+    }
+  });
+
+  app.post("/dev/simulator/api/room/join", async (request, response) => {
+    try {
+      const body = request.body as {
+        label?: unknown;
+        roomCode?: unknown;
+        name?: unknown;
+      } | undefined;
+      if (typeof body?.label !== "string" || !body.label.trim()) {
+        throw new Error("device label is required");
+      }
+      if (typeof body.roomCode !== "string" || !/^\\d{4}$/.test(body.roomCode)) {
+        throw new Error("roomCode must be exactly 4 digits");
+      }
+      const name = typeof body.name === "string" ? body.name : undefined;
+      response.json(await coordinator.joinRoom(body.label, body.roomCode, name));
+    } catch (error) {
+      response.status(400).json({ ok: false, message: errorMessage(error) });
+    }
+  });
+
   app.post("/dev/simulator/api/command", async (request, response) => {
     try {
       const body = request.body as {
@@ -86,6 +129,30 @@ export function mountSimulatorLab(app: Express): SimulatorLabCoordinator {
         ? null
         : playerIdFromBody(request);
       response.json(await coordinator.setModerator(playerId));
+    } catch (error) {
+      response.status(400).json({ ok: false, message: errorMessage(error) });
+    }
+  });
+
+  app.post("/dev/simulator/api/device/close", (request, response) => {
+    try {
+      const label = (request.body as { label?: unknown } | undefined)?.label;
+      if (typeof label !== "string" || !label.trim()) {
+        throw new Error("device label is required");
+      }
+      response.json(coordinator.closeDevice(label));
+    } catch (error) {
+      response.status(400).json({ ok: false, message: errorMessage(error) });
+    }
+  });
+
+  app.post("/dev/simulator/api/device/continue", async (request, response) => {
+    try {
+      const label = (request.body as { label?: unknown } | undefined)?.label;
+      if (typeof label !== "string" || !label.trim()) {
+        throw new Error("device label is required");
+      }
+      response.json(await coordinator.continueDevice(label));
     } catch (error) {
       response.status(400).json({ ok: false, message: errorMessage(error) });
     }
