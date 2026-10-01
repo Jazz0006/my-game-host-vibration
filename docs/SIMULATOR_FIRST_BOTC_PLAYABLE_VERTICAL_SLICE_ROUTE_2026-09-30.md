@@ -1,7 +1,7 @@
 # Simulator-first BotC Playable Vertical Slice Route (2026-09-30)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-UI1 + MP-0 COMPLETE; NO MANDATORY PRE-PV MP-1; PV-3B2C NEXT**  
+> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-3B2C COMPLETE; PV-3B3 FORTUNE TELLER NEXT**  
 > Route owner: current execution order is governed by V5; this document owns the detailed Simulator-first / playable-vertical-slice decomposition.  
 > Supersedes as NEXT: continuing directly from B0C3A into B0C3B recommendation depth.
 
@@ -404,7 +404,7 @@ UGSM-0 is complete in `docs/UGSM0_UNIFIED_TROUBLE_BREWING_GAME_SNAPSHOT_ADOPTION
 
 UGSM-1 is complete: `src/games/botc/TroubleBrewingGameSnapshot.ts` independently owns the frozen V1 contract/codec, while `TroubleBrewingGameSnapshotProjection.ts` provides the pure `BotcGameState + explicit projection context -> TroubleBrewingGameSnapshotV1` runtime adapter; JSON field order remains Host-compatible. The projector does not invent `gameSeed` or missing revision semantics; those values remain explicit caller context / NOT_APPLICABLE until this runtime has authoritative producers. Validation: typecheck PASS; full test PASS, 137 files / 574 tests; Web and both WeChat product shells build/verify PASS.
 
-##### PV-3B2 — First-night information resolution ← IN PROGRESS
+##### PV-3B2 — First-night information resolution ✅ COMPLETE
 
 With UGSM-1 accepted, implement the information-bearing Townsfolk path before Fortune Teller/Spy specialization.
 
@@ -503,11 +503,29 @@ The browser-hosted Lab is a **development/reference client surface, not a final 
 
 MP-0 is complete. The accepted audit in `docs/MP0_MULTI_PLATFORM_CLIENT_ARCHITECTURE_AUDIT_2026-10-01.md` found no mandatory MP-1 code hardening before another information shape: protocol/session/bootstrap/effect intent and shared Entry/Lobby/BotC presentation seams are already cross-client. Browser/WeChat lifecycle recovery-policy duplication remains a bounded later hardening candidate and does not block this slice.
 
-###### PV-3B2C — Chef + Empath numeric information ← NEXT
+###### PV-3B2C — Chef + Empath numeric information ✅ COMPLETE
 
-Reuse the same information lifecycle where applicable, but introduce a separate numeric-result shape rather than forcing Chef / Empath into pair-information fields. Preserve explicit reliability/truth, private delivery, authoritative commit and acknowledgement semantics.
+Chef and Empath now reuse the same authoritative information lifecycle while keeping a distinct numeric result family:
 
-Fortune Teller dual-target + Red Herring/result semantics and Spy Grimoire remain later PV-3B sub-slices because they require distinct interaction/private-view contracts.
+- `BotcGameState` persists explicit `seatingPlayerIds` from the authoritative participant order so circular rules never infer seats from setup-assignment array order;
+- Rules / Information owns alignment registration provenance: normal actual alignment, Spy may register good, and Recluse may register evil;
+- Chef generates the complete truthful numeric domain from circular adjacent evil-player pairs, including wraparound and independent Spy/Recluse registration choices for separate pair checks;
+- Empath resolves the two closest **distinct alive** neighbours clockwise/counterclockwise, skipping dead players, and works on both first night and later nights;
+- numeric candidates/results carry stable candidate IDs, exact registration-resolution provenance, reliability and semantic truth in authoritative history;
+- `baseline_v1` deterministically chooses within the truthful legal domain; Drunk/Poisoned reliability remains separate and may still accompany a truthful result;
+- Washerwoman/Librarian/Investigator/Chef/Empath now share one commit -> private delivery -> recipient acknowledgement -> advance gate, so generic moderator step completion cannot bypass any of them;
+- ordinary PlayerView exposes only `{ kind: "number", abilityRoleId, value }`; reliability/truth/provenance remain moderator/history-only;
+- Cloudflare Automatic Storyteller auto-commits Chef/Empath through the existing generic information mutation path with no new protocol command;
+- shared `BotcGamePresentation` owns numeric display, including an explicit zero-safe presence flag, and both WeChat and Simulator render the same presentation without role-truth branches;
+- `TroubleBrewingGameSnapshotV1` remains unchanged.
+
+Validation checkpoint: typecheck PASS; full test PASS, 147 test files / 606 tests; Web client and both WeChat product shells build/verify PASS.
+
+###### PV-3B3 — Fortune Teller dual-target + Red Herring/result semantics ← NEXT
+
+Fortune Teller is the next distinct first-night interaction shape: two-target player choice plus Red Herring-aware private yes/no information. Preserve the existing player-choice/idempotency and committed-information/privacy owners rather than creating a Fortune-Teller-only client path.
+
+Spy Grimoire remains a later PV-3B sub-slice because it requires a distinct full-private-state presentation contract.
 
 ### PV-4 — Minimal day / night loop
 
@@ -669,6 +687,6 @@ SIM-0 established the Simulator-first development surface. PV-0 closed the share
 
 Immediate next task:
 
-> **PV-3B2 — implement authoritative first-night information resolution.**
+> **PV-3B3 — Fortune Teller dual-target + Red Herring/result semantics.**
 
-PV-3B1 has closed the reusable player-choice foundation for Poisoner and Butler, including canonical effect persistence and a role-agnostic client target selector. PV-3B2 should now make Washerwoman/Librarian/Investigator/Chef/Empath information real and reconnect-stable by committing server-owned private results before delivery. Poisoning must be part of the rules context, but recommendation quality remains a separate intelligence concern: use the simplest rules-legal baseline necessary for the playable slice rather than resuming broad B0C3B. Fortune Teller and Spy remain distinct later PV-3B slices.
+PV-3B1 established reusable player-choice handling for Poisoner/Butler, and PV-3B2 now closes the shared committed-information family for Washerwoman/Librarian/Investigator/Chef/Empath. The next slice should combine those two proven seams for Fortune Teller: two player targets plus an authoritative private yes/no result that incorporates Red Herring and registration semantics. Keep Spy Grimoire separate because it requires a distinct full-private-state view.

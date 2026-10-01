@@ -4,6 +4,9 @@ import type {
   TroubleBrewingDemonInfoFacts,
   TroubleBrewingInformationCandidate,
   TroubleBrewingInformationReliability,
+  TroubleBrewingNumericInformationAbilityRoleId,
+  TroubleBrewingNumericInformationCandidate,
+  TroubleBrewingNumericInformationResolution,
   TroubleBrewingPairInformationAbilityRoleId,
 } from "./TroubleBrewingInformation.js";
 
@@ -211,6 +214,108 @@ export function recommendPairInformationBaselineV1(
     throw new Error("Pair information baseline has no legal candidate");
   }
   return validatePairInformationRecommendation(request, {
+    candidateId: selected.candidateId,
+  });
+}
+
+export type NumericInformationRecommendationRequest = {
+  decisionPoint: "numeric_information";
+  requiredContext: {
+    abilityRoleId: TroubleBrewingNumericInformationAbilityRoleId;
+    recipientPlayerId: string;
+    reliability: TroubleBrewingInformationReliability;
+    legalCandidates: TroubleBrewingNumericInformationCandidate[];
+  };
+};
+
+export type NumericInformationRecommendation = {
+  candidateId: string;
+};
+
+function cloneNumericInformationResolution(
+  resolution: TroubleBrewingNumericInformationResolution,
+): TroubleBrewingNumericInformationResolution {
+  if (resolution.kind === "chef_pairs") {
+    return {
+      kind: "chef_pairs",
+      pairs: resolution.pairs.map(pair => ({
+        ...pair,
+        playerIds: [...pair.playerIds] as [string, string],
+        leftRegistration: { ...pair.leftRegistration },
+        rightRegistration: { ...pair.rightRegistration },
+      })),
+    };
+  }
+  return {
+    ...resolution,
+    clockwiseRegistration: { ...resolution.clockwiseRegistration },
+    counterclockwiseRegistration: { ...resolution.counterclockwiseRegistration },
+  };
+}
+
+function cloneNumericInformationCandidate(
+  candidate: TroubleBrewingNumericInformationCandidate,
+): TroubleBrewingNumericInformationCandidate {
+  return {
+    ...candidate,
+    legalResolutions: candidate.legalResolutions.map(cloneNumericInformationResolution),
+  };
+}
+
+export function createNumericInformationRecommendationRequest(
+  abilityRoleId: TroubleBrewingNumericInformationAbilityRoleId,
+  recipientPlayerId: string,
+  reliability: TroubleBrewingInformationReliability,
+  legalCandidates: readonly TroubleBrewingNumericInformationCandidate[],
+): NumericInformationRecommendationRequest {
+  if (!recipientPlayerId.trim()) {
+    throw new Error("Numeric information recipient cannot be blank");
+  }
+  if (legalCandidates.length === 0) {
+    throw new Error("Numeric information requires at least one legal candidate");
+  }
+  return {
+    decisionPoint: "numeric_information",
+    requiredContext: {
+      abilityRoleId,
+      recipientPlayerId,
+      reliability,
+      legalCandidates: legalCandidates.map(cloneNumericInformationCandidate),
+    },
+  };
+}
+
+export function validateNumericInformationRecommendation(
+  request: NumericInformationRecommendationRequest,
+  recommendation: NumericInformationRecommendation,
+): NumericInformationRecommendation {
+  if (
+    !request.requiredContext.legalCandidates.some(
+      candidate => candidate.candidateId === recommendation.candidateId,
+    )
+  ) {
+    throw new Error(
+      "Numeric information recommendation must select a legal information candidate",
+    );
+  }
+  return { candidateId: recommendation.candidateId };
+}
+
+/**
+ * Minimal automatic Storyteller baseline for Chef/Empath numeric information.
+ * The baseline remains inside the Rules/Information-owned truthful domain even
+ * for Drunk/Poisoned recipients; unreliable information is allowed to be true.
+ */
+export function recommendNumericInformationBaselineV1(
+  request: NumericInformationRecommendationRequest,
+): NumericInformationRecommendation {
+  const selected = [...request.requiredContext.legalCandidates].sort(
+    (left, right) => left.value - right.value || left.candidateId.localeCompare(right.candidateId),
+  )[0];
+  if (!selected) {
+    throw new Error("Numeric information baseline has no legal candidate");
+  }
+  return validateNumericInformationRecommendation(request, {
     candidateId: selected.candidateId,
   });
 }

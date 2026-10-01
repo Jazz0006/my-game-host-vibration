@@ -28,17 +28,17 @@ Use these in this order:
   - **inserted client-architecture route; MP-0 is COMPLETE**;
   - Simulator Lab full-client phone view is the Browser Reference Client for development/application semantics, not a final player product;
   - production player targets are WeChat + future Android/iOS because reliable private haptic alerting is mandatory;
-  - MP-0 found no mandatory pre-PV-3B2C MP-1 code hardening; NEXT returns to PV-3B2C;
-  - Donut/Capacitor/React Native/mobile framework selection is deferred and does not block PV-3B2C.
+  - MP-0 found no mandatory pre-PV-3B2C MP-1 code hardening; that handoff has now been consumed successfully by PV-3B2C;
+  - Donut/Capacitor/React Native/mobile framework selection remains deferred and does not block the playable mainline.
 - `docs/MP0_MULTI_PLATFORM_CLIENT_ARCHITECTURE_AUDIT_2026-10-01.md`
   - accepted owner/seam map for Shared Client Core / Browser Reference Client / WeChat adapters;
   - records lifecycle recovery-policy duplication as non-blocking later hardening;
-  - freezes the PV-3B2C fan-out through authoritative private projection -> shared `BotcGamePresentation` -> thin WeChat/Simulator renderers.
+  - froze the cross-client fan-out now used by completed PV-3B2C: authoritative private projection -> shared `BotcGamePresentation` -> thin WeChat/Simulator renderers.
 - `docs/UGSM0_UNIFIED_TROUBLE_BREWING_GAME_SNAPSHOT_ADOPTION_AUDIT_2026-09-30.md`
   - cross-project canonical `TroubleBrewingGameSnapshotV1` adoption boundary;
   - keeps mutable online `BotcGameState` as runtime authority while the independent V1 contract/codec and pure runtime snapshot projector provide the shared read boundary;
   - freezes KNOWN / UNCOMMITTED / UNKNOWN / NOT_APPLICABLE semantics and excludes room/network/client state;
-  - UGSM-1 exact V1 contract + pure projector is complete; PV-3B2B pair-information reuse and MP-0 are complete; PV-3B2C numeric information is NEXT.
+  - UGSM-1 exact V1 contract + pure projector remains unchanged; PV-3B2C numeric information completed without altering the V1 wire schema.
 - `docs/B0C_TROUBLE_BREWING_INFORMATION_RECOMMENDATION_HANDOFF_2026-09-30.md`
   - B0C1/B0C2/B0C3A completed foundation and recommendation-boundary history;
   - B0C3A registration + truthful Washerwoman candidate boundary is retained;
@@ -72,14 +72,15 @@ PV-3 first-night playable UI ← IN PROGRESS
        ├─ PV-3B1 single-target player choice ✅
        ├─ UGSM-0 canonical snapshot adoption audit ✅
        ├─ UGSM-1 exact V1 snapshot contract + pure projector ✅
-       └─ PV-3B2 first-night information resolution ← IN PROGRESS
+       ├─ PV-3B2 first-night information resolution ✅
             ├─ PV-3B2A Washerwoman information runtime ✅
             ├─ PV-3B2B Librarian + Investigator pair information ✅
             ├─ PV-UI0 Simulator / WeChat game presentation convergence ✅
             ├─ PV-UI1 pre-device full client-shell parity ✅
             ├─ MP-0 multi-platform client architecture audit ✅
             ├─ MP-1 mandatory pre-PV hardening — NONE REQUIRED
-            └─ PV-3B2C Chef + Empath numeric information ← NEXT
+            ├─ PV-3B2C Chef + Empath numeric information ✅
+            └─ PV-3B3 Fortune Teller dual-target + Red Herring/result semantics ← NEXT
   ↓
 PV-4 minimal day/night loop
   ↓

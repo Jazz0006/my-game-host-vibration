@@ -579,11 +579,17 @@ function renderPhone(client) {
       presentation.demonBluffNames ? "三个伪装身份：" + presentation.demonBluffNames : "",
     ]);
   }
-  if (presentation.privateInformationRoleName || presentation.privateInformationZeroLabel) {
+  if (
+    presentation.privateInformationRoleName ||
+    presentation.privateInformationZeroLabel ||
+    presentation.privateInformationNumber !== null
+  ) {
     const card = appendInfoCard(root, "PRIVATE INFO", [
-      presentation.privateInformationRoleName
-        ? presentation.privateInformationPlayerNames + " 中有 1 人是 " + presentation.privateInformationRoleName
-        : presentation.privateInformationZeroLabel,
+      presentation.privateInformationNumber !== null
+        ? "你得知的数字是 " + presentation.privateInformationNumber
+        : presentation.privateInformationRoleName
+          ? presentation.privateInformationPlayerNames + " 中有 1 人是 " + presentation.privateInformationRoleName
+          : presentation.privateInformationZeroLabel,
     ]);
     appendAction(
       card,

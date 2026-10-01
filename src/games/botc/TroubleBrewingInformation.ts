@@ -5,7 +5,9 @@ import {
 } from "./TroubleBrewing.js";
 import type { BotcCanonicalSetupAssignment } from "./TroubleBrewingSetup.js";
 import {
+  troubleBrewingAlignmentRegistrations,
   troubleBrewingCharacterRegistrations,
+  type TroubleBrewingAlignmentRegistration,
   type TroubleBrewingCharacterRegistrationSource,
 } from "./TroubleBrewingRegistration.js";
 
@@ -143,6 +145,53 @@ export type TroubleBrewingWasherwomanInformationResult = Extract<
 > & {
   abilityRoleId: "washerwoman";
 };
+
+export type TroubleBrewingNumericInformationAbilityRoleId = "chef" | "empath";
+
+export type TroubleBrewingChefPairResolution = {
+  playerIds: [string, string];
+  leftRegistration: TroubleBrewingAlignmentRegistration;
+  rightRegistration: TroubleBrewingAlignmentRegistration;
+  countsAsEvilPair: boolean;
+};
+
+export type TroubleBrewingChefInformationResolution = {
+  kind: "chef_pairs";
+  pairs: TroubleBrewingChefPairResolution[];
+};
+
+export type TroubleBrewingEmpathInformationResolution = {
+  kind: "empath_neighbors";
+  clockwiseNeighborPlayerId: string;
+  counterclockwiseNeighborPlayerId: string;
+  clockwiseRegistration: TroubleBrewingAlignmentRegistration;
+  counterclockwiseRegistration: TroubleBrewingAlignmentRegistration;
+};
+
+export type TroubleBrewingNumericInformationResolution =
+  | TroubleBrewingChefInformationResolution
+  | TroubleBrewingEmpathInformationResolution;
+
+export type TroubleBrewingNumericInformationCandidate = {
+  candidateId: string;
+  value: number;
+  legalResolutions: TroubleBrewingNumericInformationResolution[];
+};
+
+export type TroubleBrewingNumericInformationResult = {
+  kind: "number";
+  abilityRoleId: TroubleBrewingNumericInformationAbilityRoleId;
+  recipientPlayerId: string;
+  value: number;
+  reliability: TroubleBrewingInformationReliability;
+  semanticTruth: TroubleBrewingSemanticTruth;
+  selectedCandidateId: string;
+  selectedResolution: TroubleBrewingNumericInformationResolution;
+};
+
+export type TroubleBrewingNightInformationResult =
+  | TroubleBrewingPairInformationResult
+  | TroubleBrewingNumericInformationResult;
 
 export function isTroubleBrewingPairCandidate(
   candidate: TroubleBrewingInformationCandidate,
@@ -296,4 +345,223 @@ export function createTroubleBrewingInvestigatorInformationCandidates(
     "investigator",
     recipientPlayerId,
   ).filter(isTroubleBrewingPairCandidate);
+}
+
+function seatingAssignments(
+  assignments: readonly BotcCanonicalSetupAssignment[],
+  seatingPlayerIds: readonly string[],
+): BotcCanonicalSetupAssignment[] {
+  if (seatingPlayerIds.length !== assignments.length || seatingPlayerIds.length < 3) {
+    throw new Error("Trouble Brewing numeric information requires the full seating order");
+  }
+  if (new Set(seatingPlayerIds).size !== seatingPlayerIds.length) {
+    throw new Error("Trouble Brewing seating order contains duplicate players");
+  }
+
+  const byPlayerId = new Map(assignments.map(assignment => [assignment.playerId, assignment]));
+  if (byPlayerId.size !== assignments.length) {
+    throw new Error("Trouble Brewing assignments contain duplicate players");
+  }
+
+  const ordered = seatingPlayerIds.map(playerId => {
+    const assignment = byPlayerId.get(playerId);
+    if (!assignment) {
+      throw new Error("Trouble Brewing seating order references a non-player");
+    }
+    return assignment;
+  });
+  if (ordered.length !== byPlayerId.size) {
+    throw new Error("Trouble Brewing seating order does not cover every player");
+  }
+  return ordered;
+}
+
+function cloneAlignmentRegistration(
+  registration: TroubleBrewingAlignmentRegistration,
+): TroubleBrewingAlignmentRegistration {
+  return { ...registration };
+}
+
+function chefPairOptions(
+  left: BotcCanonicalSetupAssignment,
+  right: BotcCanonicalSetupAssignment,
+): TroubleBrewingChefPairResolution[] {
+  const options: TroubleBrewingChefPairResolution[] = [];
+  for (const leftRegistration of troubleBrewingAlignmentRegistrations(left)) {
+    for (const rightRegistration of troubleBrewingAlignmentRegistrations(right)) {
+      options.push({
+        playerIds: [left.playerId, right.playerId],
+        leftRegistration: cloneAlignmentRegistration(leftRegistration),
+        rightRegistration: cloneAlignmentRegistration(rightRegistration),
+        countsAsEvilPair:
+          leftRegistration.alignment === "evil" &&
+          rightRegistration.alignment === "evil",
+      });
+    }
+  }
+  return options;
+}
+
+function collectChefResolutions(
+  optionGroups: readonly TroubleBrewingChefPairResolution[][],
+  index: number,
+  current: TroubleBrewingChefPairResolution[],
+  output: TroubleBrewingChefInformationResolution[],
+): void {
+  if (index >= optionGroups.length) {
+    output.push({
+      kind: "chef_pairs",
+      pairs: current.map(pair => ({
+        ...pair,
+        playerIds: [...pair.playerIds] as [string, string],
+        leftRegistration: cloneAlignmentRegistration(pair.leftRegistration),
+        rightRegistration: cloneAlignmentRegistration(pair.rightRegistration),
+      })),
+    });
+    return;
+  }
+
+  for (const option of optionGroups[index] ?? []) {
+    current.push(option);
+    collectChefResolutions(optionGroups, index + 1, current, output);
+    current.pop();
+  }
+}
+
+function numericCandidates(
+  abilityRoleId: TroubleBrewingNumericInformationAbilityRoleId,
+  resolutions: readonly TroubleBrewingNumericInformationResolution[],
+  valueFor: (resolution: TroubleBrewingNumericInformationResolution) => number,
+): TroubleBrewingNumericInformationCandidate[] {
+  const candidates = new Map<number, TroubleBrewingNumericInformationCandidate>();
+  for (const resolution of resolutions) {
+    const value = valueFor(resolution);
+    const existing = candidates.get(value);
+    if (existing) {
+      existing.legalResolutions.push(resolution);
+      continue;
+    }
+    candidates.set(value, {
+      candidateId: `${abilityRoleId}:number:${value}`,
+      value,
+      legalResolutions: [resolution],
+    });
+  }
+  return [...candidates.values()].sort((left, right) => left.value - right.value);
+}
+
+/**
+ * Generates every rules-legal Chef number for the current circular seating.
+ * Spy/Recluse registration is evaluated independently for each adjacent pair,
+ * matching the Trouble Brewing rule that one player may register differently
+ * for separate pair checks within the same Chef information event.
+ */
+export function createTroubleBrewingChefInformationCandidates(
+  assignments: readonly BotcCanonicalSetupAssignment[],
+  seatingPlayerIds: readonly string[],
+): TroubleBrewingNumericInformationCandidate[] {
+  const ordered = seatingAssignments(assignments, seatingPlayerIds);
+  const optionGroups = ordered.map((left, index) =>
+    chefPairOptions(left, ordered[(index + 1) % ordered.length]!),
+  );
+  const resolutions: TroubleBrewingChefInformationResolution[] = [];
+  collectChefResolutions(optionGroups, 0, [], resolutions);
+  return numericCandidates(
+    "chef",
+    resolutions,
+    resolution =>
+      resolution.kind === "chef_pairs"
+        ? resolution.pairs.filter(pair => pair.countsAsEvilPair).length
+        : 0,
+  );
+}
+
+function closestAliveNeighbor(
+  seatingPlayerIds: readonly string[],
+  deadPlayerIds: ReadonlySet<string>,
+  recipientIndex: number,
+  direction: -1 | 1,
+): string | undefined {
+  for (let offset = 1; offset < seatingPlayerIds.length; offset += 1) {
+    const index =
+      (recipientIndex + direction * offset + seatingPlayerIds.length) %
+      seatingPlayerIds.length;
+    const playerId = seatingPlayerIds[index]!;
+    if (!deadPlayerIds.has(playerId)) return playerId;
+  }
+  return undefined;
+}
+
+/**
+ * Generates every rules-legal Empath number from the two closest distinct alive
+ * neighbours. Dead seated players are skipped independently clockwise and
+ * counterclockwise. Registration ambiguity remains explicit provenance.
+ */
+export function createTroubleBrewingEmpathInformationCandidates(
+  assignments: readonly BotcCanonicalSetupAssignment[],
+  seatingPlayerIds: readonly string[],
+  deadPlayerIds: readonly string[],
+  recipientPlayerId: string,
+): TroubleBrewingNumericInformationCandidate[] {
+  const ordered = seatingAssignments(assignments, seatingPlayerIds);
+  const recipientIndex = seatingPlayerIds.indexOf(recipientPlayerId);
+  if (recipientIndex < 0) {
+    throw new Error("Empath recipient is not in the seating order");
+  }
+
+  const dead = new Set(deadPlayerIds);
+  if (dead.has(recipientPlayerId)) {
+    throw new Error("Dead Empath cannot receive living-neighbour information");
+  }
+  for (const playerId of dead) {
+    if (!seatingPlayerIds.includes(playerId)) {
+      throw new Error("Empath dead-player state references a non-player");
+    }
+  }
+
+  const clockwiseNeighborPlayerId = closestAliveNeighbor(
+    seatingPlayerIds,
+    dead,
+    recipientIndex,
+    1,
+  );
+  const counterclockwiseNeighborPlayerId = closestAliveNeighbor(
+    seatingPlayerIds,
+    dead,
+    recipientIndex,
+    -1,
+  );
+  if (
+    !clockwiseNeighborPlayerId ||
+    !counterclockwiseNeighborPlayerId ||
+    clockwiseNeighborPlayerId === counterclockwiseNeighborPlayerId
+  ) {
+    throw new Error("Empath requires two distinct alive neighbours");
+  }
+
+  const byPlayerId = new Map(ordered.map(assignment => [assignment.playerId, assignment]));
+  const clockwise = byPlayerId.get(clockwiseNeighborPlayerId)!;
+  const counterclockwise = byPlayerId.get(counterclockwiseNeighborPlayerId)!;
+  const resolutions: TroubleBrewingEmpathInformationResolution[] = [];
+  for (const clockwiseRegistration of troubleBrewingAlignmentRegistrations(clockwise)) {
+    for (const counterclockwiseRegistration of troubleBrewingAlignmentRegistrations(counterclockwise)) {
+      resolutions.push({
+        kind: "empath_neighbors",
+        clockwiseNeighborPlayerId,
+        counterclockwiseNeighborPlayerId,
+        clockwiseRegistration: cloneAlignmentRegistration(clockwiseRegistration),
+        counterclockwiseRegistration: cloneAlignmentRegistration(counterclockwiseRegistration),
+      });
+    }
+  }
+
+  return numericCandidates(
+    "empath",
+    resolutions,
+    resolution => {
+      if (resolution.kind !== "empath_neighbors") return 0;
+      return Number(resolution.clockwiseRegistration.alignment === "evil") +
+        Number(resolution.counterclockwiseRegistration.alignment === "evil");
+    },
+  );
 }

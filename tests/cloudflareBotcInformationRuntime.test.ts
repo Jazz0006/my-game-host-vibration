@@ -272,10 +272,45 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
             {
               acknowledged: true,
             },
+            {
+              stepId: "role:chef",
+              recipientPlayerId: "p5",
+              acknowledged: false,
+              selectionSource: "baseline_v1",
+              result: {
+                kind: "number",
+                abilityRoleId: "chef",
+                value: 1,
+                reliability: "reliable",
+                semanticTruth: "true",
+                selectedCandidateId: "chef:number:1",
+              },
+            },
           ],
         },
       },
     });
+
+    const chefEnvelope = createGamePlayerStateEnvelope(
+      acknowledged.snapshot,
+      "p5",
+    );
+    expect(chefEnvelope).toMatchObject({
+      payload: {
+        mode: "night_wake",
+        nightStep: { id: "role:chef" },
+        privateInformation: {
+          kind: "number",
+          abilityRoleId: "chef",
+          value: 1,
+        },
+      },
+    });
+    expect(JSON.stringify(chefEnvelope)).not.toContain('"reliability"');
+    expect(JSON.stringify(chefEnvelope)).not.toContain('"selectedResolution"');
+    expect(
+      JSON.stringify(createGamePlayerStateEnvelope(acknowledged.snapshot, "p6")),
+    ).not.toContain("privateInformation");
 
     const replay = await commands.execute("p4", ackCommand);
     expect(replay).toMatchObject({
@@ -287,7 +322,7 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
     expect(persisted?.revision).toBe(11);
     expect(
       (persisted?.game as BotcGameState | undefined)?.informationHistory,
-    ).toHaveLength(1);
+    ).toHaveLength(2);
   });
 
   it("auto-commits typed Librarian zero information and keeps authoritative truth metadata out of PlayerView", async () => {

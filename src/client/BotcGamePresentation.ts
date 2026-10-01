@@ -40,6 +40,8 @@ export type BotcGamePresentation = {
   privateInformationRoleName: string;
   privateInformationPlayerNames: string;
   privateInformationZeroLabel: string;
+  privateInformationNumber: number | null;
+  hasPrivateInformationNumber: boolean;
   confirmedRoles: number;
   playerCount: number;
   allConfirmed: boolean;
@@ -65,6 +67,10 @@ function asString(value: unknown): string {
 function asNumber(value: unknown): number {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function asFiniteNumberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function asStringArray(value: unknown): string[] {
@@ -279,6 +285,13 @@ export function createBotcGamePresentation(
       asString(privateInformation?.noCharacterCategory) === "outsider"
         ? "本局没有外来者"
         : "",
+    privateInformationNumber:
+      asString(privateInformation?.kind) === "number"
+        ? asFiniteNumberOrNull(privateInformation?.value)
+        : null,
+    hasPrivateInformationNumber:
+      asString(privateInformation?.kind) === "number" &&
+      asFiniteNumberOrNull(privateInformation?.value) !== null,
     confirmedRoles,
     playerCount,
     allConfirmed,

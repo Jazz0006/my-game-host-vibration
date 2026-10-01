@@ -40,6 +40,8 @@ Page({
     privateInformationRoleName: "",
     privateInformationPlayerNames: "",
     privateInformationZeroLabel: "",
+    privateInformationNumber: null,
+    hasPrivateInformationNumber: false,
     confirmedRoles: 0,
     playerCount: 0,
     allConfirmed: false,
