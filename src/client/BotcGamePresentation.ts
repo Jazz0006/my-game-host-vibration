@@ -6,6 +6,7 @@ export type BotcGamePresentationInput = {
   connectionStatus?: unknown;
   error?: unknown;
   selectedNightChoiceIds?: readonly string[];
+  selectedRedHerringPlayerId?: string;
 };
 
 export type BotcNightChoiceOption = {
@@ -31,6 +32,9 @@ export type BotcGamePresentation = {
   nightChoiceMinTargets: number;
   nightChoiceMaxTargets: number;
   nightChoiceSelectedCount: number;
+  redHerringKey: string;
+  redHerringOptions: BotcNightChoiceOption[];
+  redHerringSelectedPlayerId: string;
   moderatorStepId: string;
   moderatorActorNames: string;
   minionDemonName: string;
@@ -42,11 +46,13 @@ export type BotcGamePresentation = {
   privateInformationZeroLabel: string;
   privateInformationNumber: number | null;
   hasPrivateInformationNumber: boolean;
+  privateInformationBooleanLabel: string;
   confirmedRoles: number;
   playerCount: number;
   allConfirmed: boolean;
   statusLine: string;
   canConfirmRole: boolean;
+  canSetRedHerring: boolean;
   canBeginFirstNight: boolean;
   canCommitNightInformation: boolean;
   canAcknowledgeNightInformation: boolean;
@@ -219,6 +225,26 @@ export function createBotcGamePresentation(
     selected: selectedNightChoiceIds.includes(playerId),
   }));
 
+  const redHerringDecision = asRecord(game?.redHerringDecision);
+  const redHerringPlayerIds = asStringArray(redHerringDecision?.candidatePlayerIds);
+  const committedRedHerringPlayerId = asString(redHerringDecision?.selectedPlayerId);
+  const requestedRedHerringPlayerId = asString(input.selectedRedHerringPlayerId);
+  const redHerringSelectedPlayerId = redHerringPlayerIds.includes(
+    requestedRedHerringPlayerId,
+  )
+    ? requestedRedHerringPlayerId
+    : redHerringPlayerIds.includes(committedRedHerringPlayerId)
+      ? committedRedHerringPlayerId
+      : "";
+  const redHerringKey = redHerringPlayerIds.length > 0
+    ? redHerringPlayerIds.join(",") + ":" + committedRedHerringPlayerId
+    : "";
+  const redHerringOptions = redHerringPlayerIds.map(playerId => ({
+    id: playerId,
+    name: playerName(room, playerId),
+    selected: playerId === redHerringSelectedPlayerId,
+  }));
+
   const moderatorStep = asRecord(game?.nightStep);
   const moderatorActorNames = asStringArray(moderatorStep?.actorPlayerIds)
     .map(playerId => playerName(room, playerId))
@@ -259,6 +285,9 @@ export function createBotcGamePresentation(
     nightChoiceMinTargets: minTargets,
     nightChoiceMaxTargets: maxTargets,
     nightChoiceSelectedCount: selectedNightChoiceIds.length,
+    redHerringKey,
+    redHerringOptions,
+    redHerringSelectedPlayerId,
     moderatorStepId: asString(moderatorStep?.id),
     moderatorActorNames,
     minionDemonName: playerName(room, asString(minionInfo?.demonPlayerId)),
@@ -292,6 +321,14 @@ export function createBotcGamePresentation(
     hasPrivateInformationNumber:
       asString(privateInformation?.kind) === "number" &&
       asFiniteNumberOrNull(privateInformation?.value) !== null,
+    privateInformationBooleanLabel:
+      asString(privateInformation?.kind) === "boolean"
+        ? privateInformation?.value === true
+          ? "是"
+          : privateInformation?.value === false
+            ? "否"
+            : ""
+        : "",
     confirmedRoles,
     playerCount,
     allConfirmed,
@@ -302,10 +339,16 @@ export function createBotcGamePresentation(
       phase === "role_reveal" &&
       mode === "role_reveal" &&
       !roleConfirmed,
+    canSetRedHerring:
+      controller &&
+      phase === "role_reveal" &&
+      redHerringDecision !== null &&
+      Boolean(redHerringSelectedPlayerId),
     canBeginFirstNight:
       controller &&
       phase === "role_reveal" &&
-      allConfirmed,
+      allConfirmed &&
+      (redHerringDecision === null || Boolean(committedRedHerringPlayerId)),
     canCommitNightInformation:
       controller &&
       informationDecision !== null &&

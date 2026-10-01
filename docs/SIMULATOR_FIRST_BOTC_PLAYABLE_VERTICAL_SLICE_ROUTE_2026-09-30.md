@@ -1,7 +1,7 @@
 # Simulator-first BotC Playable Vertical Slice Route (2026-09-30)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-3B2C COMPLETE; PV-3B3 FORTUNE TELLER NEXT**  
+> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-3B3 FORTUNE TELLER COMPLETE; PV-3B4 SPY GRIMOIRE NEXT**  
 > Route owner: current execution order is governed by V5; this document owns the detailed Simulator-first / playable-vertical-slice decomposition.  
 > Supersedes as NEXT: continuing directly from B0C3A into B0C3B recommendation depth.
 
@@ -521,11 +521,26 @@ Chef and Empath now reuse the same authoritative information lifecycle while kee
 
 Validation checkpoint: typecheck PASS; full test PASS, 147 test files / 606 tests; Web client and both WeChat product shells build/verify PASS.
 
-###### PV-3B3 — Fortune Teller dual-target + Red Herring/result semantics ← NEXT
+###### PV-3B3 — Fortune Teller dual-target + Red Herring/result semantics ✅ COMPLETE
 
-Fortune Teller is the next distinct first-night interaction shape: two-target player choice plus Red Herring-aware private yes/no information. Preserve the existing player-choice/idempotency and committed-information/privacy owners rather than creating a Fortune-Teller-only client path.
+Fortune Teller now composes the existing player-choice and committed-information seams instead of introducing a role-specific transport path:
 
-Spy Grimoire remains a later PV-3B sub-slice because it requires a distinct full-private-state presentation contract.
+- Rules / Information owns the Red Herring legal domain: only **actual-good** players are legal candidates; Spy is therefore excluded even though it may register good, while Recluse remains eligible because its actual alignment is good;
+- Automatic Storyteller Red Herring choice is routed through a Recommendation request / `baseline_v1` policy, keeping legal-candidate generation separate from decision quality;
+- Human Storyteller mode exposes `botc.setRedHerring` before first night, restricted to the designated human Storyteller; ordinary players never receive the Red Herring fact;
+- the same Red Herring persists for the game and is committed before Fortune Teller information is resolved;
+- Fortune Teller's existing generic target selector now accepts exactly two **distinct** participant targets, including self or dead players; target submission records an authoritative per-night choice but does **not** advance the night cursor;
+- after target submission, the normal information gate becomes ready: Human Storyteller may explicitly commit, while Automatic Storyteller reuses the existing same-mutation auto-commit hook;
+- YES is rules-legal when either selected target is the Red Herring or can register as a Demon; actual Imp therefore forces YES, while Recluse registration may create both YES and NO legal candidates;
+- authoritative history retains selected targets, registration / Red-Herring resolution provenance, reliability and semantic truth; ordinary PlayerView receives only `{ kind: "boolean", abilityRoleId: "fortune_teller", value }`;
+- the shared `BotcGamePresentation` renders `是 / 否` explicitly so `false` is not lost to truthy/falsy UI handling; WeChat and Simulator consume the same presentation owner;
+- reconnect/idempotency remains on the existing `ClientSession` / command-ledger / RoomSnapshot seams, and `TroubleBrewingGameSnapshotV1` remains unchanged.
+
+Final validation: `quality` PASS; 321 source files scanned; typecheck PASS; Web client and both WeChat product shells build/verify PASS; 150 test files / 618 tests PASS. `BotcGameModule.ts` is 45,692 bytes, above the 40KB warning line but below the 50KB hard failure line; treat further growth as a bounded decomposition concern before/within PV-3B4 rather than expanding PV-3B3.
+
+###### PV-3B4 — Spy Grimoire private-state presentation ← NEXT
+
+Spy is intentionally separate from the ordinary information-result family: its ability exposes a broad private view of the Grimoire rather than a scalar/pair/boolean result. Reuse the existing authoritative game state and privacy/projection boundaries, but define an explicit Spy-only private-state contract rather than leaking `BotcModeratorView` wholesale.
 
 ### PV-4 — Minimal day / night loop
 
@@ -687,6 +702,6 @@ SIM-0 established the Simulator-first development surface. PV-0 closed the share
 
 Immediate next task:
 
-> **PV-3B3 — Fortune Teller dual-target + Red Herring/result semantics.**
+> **PV-3B4 — Spy Grimoire private-state presentation.**
 
-PV-3B1 established reusable player-choice handling for Poisoner/Butler, and PV-3B2 now closes the shared committed-information family for Washerwoman/Librarian/Investigator/Chef/Empath. The next slice should combine those two proven seams for Fortune Teller: two player targets plus an authoritative private yes/no result that incorporates Red Herring and registration semantics. Keep Spy Grimoire separate because it requires a distinct full-private-state view.
+PV-3B3 now closes the dual-target + persistent setup-fact + boolean-information shape for Fortune Teller without adding a parallel client architecture. The next unresolved first-night private-information role is Spy. Treat Spy as a bounded full-private-state projection problem: define exactly what Grimoire facts the Spy may see, keep that contract narrower than `BotcModeratorView`, preserve reconnect/privacy behavior, and reuse the shared WeChat/Simulator presentation seam.

@@ -61,6 +61,17 @@ describe("PV-UI1 Simulator pre-device client-shell parity", () => {
     expect(wxml).toContain("你得知的数字是 {{privateInformationNumber}}");
     expect(lab).toContain("privateInformationNumber");
     expect(lab).toContain("你得知的数字是 ");
+    expect(game).toContain("privateInformationBooleanLabel");
+    expect(wxml).toContain("占卜结果：{{privateInformationBooleanLabel}}");
+    expect(lab).toContain("占卜结果：");
+
+    const products = text("scripts/wechat-products.mjs");
+    expect(products).toContain('setRedHerringCommand: "botc.setRedHerring"');
+    expect(game).toContain("redHerringOptions");
+    expect(game).toContain("setRedHerringCommand");
+    expect(wxml).toContain("选择占卜师的红鲱鱼");
+    expect(lab).toContain('"botc.setRedHerring"');
+    expect(lab).toContain("redHerringOptions");
   });
 
   it("keeps quick-table mode alongside the full-client mode", () => {

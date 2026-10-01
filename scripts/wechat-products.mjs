@@ -18,6 +18,7 @@ export const WECHAT_PRODUCTS = [
     startCommand: "botc.startGame",
     confirmRoleCommand: "botc.confirmRole",
     beginFirstNightCommand: "botc.beginFirstNight",
+    setRedHerringCommand: "botc.setRedHerring",
     nightChoiceCommand: "botc.submitNightChoice",
     commitNightInformationCommand: "botc.commitNightInformation",
     acknowledgeNightInformationCommand: "botc.acknowledgeNightInformation",

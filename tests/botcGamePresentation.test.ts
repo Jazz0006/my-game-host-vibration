@@ -141,6 +141,36 @@ describe("PV-UI0 BotC shared game presentation", () => {
       privateInformationZeroLabel: "",
       privateInformationNumber: 0,
       hasPrivateInformationNumber: true,
+      privateInformationBooleanLabel: "",
+      canAcknowledgeNightInformation: true,
+    });
+
+    const fortuneNo = createBotcGamePresentation({
+      room: room({
+        game: {
+          phase: "first_night",
+          playerCount: 3,
+          confirmedRoles: 3,
+          informationDecision: { committed: true },
+        },
+      }),
+      playerView: {
+        phase: "first_night",
+        mode: "night_wake",
+        roleNameZh: "占卜师",
+        nightStep: { id: "role:fortune_teller", kind: "role", roleId: "fortune_teller" },
+        privateInformation: {
+          kind: "boolean",
+          abilityRoleId: "fortune_teller",
+          value: false,
+        },
+      },
+    });
+
+    expect(fortuneNo).toMatchObject({
+      privateInformationBooleanLabel: "否",
+      privateInformationNumber: null,
+      hasPrivateInformationNumber: false,
       canAcknowledgeNightInformation: true,
     });
   });
@@ -207,6 +237,61 @@ describe("PV-UI0 BotC shared game presentation", () => {
       moderatorActorNames: "Bob",
       canCommitNightInformation: true,
       canCompleteNightStep: false,
+    });
+  });
+
+  it("projects Human Storyteller Red Herring setup before first night", () => {
+    const baseRoom = {
+      ...room(),
+      viewer: {
+        playerId: "p1",
+        isHost: false,
+        isGameModerator: true,
+      },
+      gameModerator: { mode: "human", playerId: "p1" },
+      game: {
+        phase: "role_reveal",
+        playerCount: 3,
+        confirmedRoles: 3,
+        redHerringDecision: {
+          candidatePlayerIds: ["p2", "p3"],
+        },
+      },
+    };
+    const selecting = createBotcGamePresentation({
+      room: baseRoom,
+      playerView: { phase: "role_reveal", mode: "spectator" },
+      selectedRedHerringPlayerId: "p3",
+    });
+
+    expect(selecting).toMatchObject({
+      redHerringSelectedPlayerId: "p3",
+      canSetRedHerring: true,
+      canBeginFirstNight: false,
+    });
+    expect(selecting.redHerringOptions).toEqual([
+      { id: "p2", name: "Bob", selected: false },
+      { id: "p3", name: "Carol", selected: true },
+    ]);
+
+    const committed = createBotcGamePresentation({
+      room: {
+        ...baseRoom,
+        game: {
+          ...baseRoom.game,
+          redHerringDecision: {
+            candidatePlayerIds: ["p2", "p3"],
+            selectedPlayerId: "p3",
+          },
+        },
+      },
+      playerView: { phase: "role_reveal", mode: "spectator" },
+    });
+
+    expect(committed).toMatchObject({
+      redHerringSelectedPlayerId: "p3",
+      canSetRedHerring: true,
+      canBeginFirstNight: true,
     });
   });
 

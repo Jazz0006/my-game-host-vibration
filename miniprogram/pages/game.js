@@ -31,6 +31,9 @@ Page({
     nightChoiceMaxTargets: 0,
     nightChoiceSelectedCount: 0,
     canSubmitNightChoice: false,
+    redHerringOptions: [],
+    redHerringSelectedPlayerId: "",
+    canSetRedHerring: false,
     moderatorStepId: "",
     moderatorActorNames: "",
     minionDemonName: "",
@@ -42,6 +45,7 @@ Page({
     privateInformationZeroLabel: "",
     privateInformationNumber: null,
     hasPrivateInformationNumber: false,
+    privateInformationBooleanLabel: "",
     confirmedRoles: 0,
     playerCount: 0,
     allConfirmed: false,
@@ -92,10 +96,15 @@ Page({
       connectionStatus: view.connectionStatus,
       error: view.error,
       selectedNightChoiceIds: this._selectedNightChoiceIds || [],
+      selectedRedHerringPlayerId: this._selectedRedHerringPlayerId || "",
     });
     if (firstPresentation.nightChoiceKey !== this._nightChoiceKey) {
       this._nightChoiceKey = firstPresentation.nightChoiceKey;
       this._selectedNightChoiceIds = [];
+    }
+    if (firstPresentation.redHerringKey !== this._redHerringKey) {
+      this._redHerringKey = firstPresentation.redHerringKey;
+      this._selectedRedHerringPlayerId = "";
     }
 
     const presentation = createBotcGamePresentation({
@@ -104,6 +113,7 @@ Page({
       connectionStatus: view.connectionStatus,
       error: view.error,
       selectedNightChoiceIds: this._selectedNightChoiceIds || [],
+      selectedRedHerringPlayerId: this._selectedRedHerringPlayerId || "",
     });
 
     if (
@@ -127,6 +137,9 @@ Page({
       ...presentation,
       canConfirmRole: Boolean(
         this._product.confirmRoleCommand && presentation.canConfirmRole
+      ),
+      canSetRedHerring: Boolean(
+        this._product.setRedHerringCommand && presentation.canSetRedHerring
       ),
       canBeginFirstNight: Boolean(
         this._product.beginFirstNightCommand && presentation.canBeginFirstNight
@@ -172,6 +185,30 @@ Page({
       this._product.confirmRoleCommand,
       {},
       "正在确认…"
+    );
+  },
+
+  onRedHerringTap(event) {
+    const playerId = event.currentTarget.dataset.playerId;
+    const options = this.data.redHerringOptions || [];
+    if (!playerId || !options.some(option => option.id === playerId)) return;
+    this._selectedRedHerringPlayerId = playerId;
+    this.setData({
+      redHerringSelectedPlayerId: playerId,
+      redHerringOptions: options.map(option => ({
+        ...option,
+        selected: option.id === playerId,
+      })),
+      canSetRedHerring: Boolean(this._product.setRedHerringCommand),
+    });
+  },
+
+  onSetRedHerringTap() {
+    if (!this.data.canSetRedHerring || !this._selectedRedHerringPlayerId) return;
+    return this.sendProductCommand(
+      this._product.setRedHerringCommand,
+      { playerId: this._selectedRedHerringPlayerId },
+      "设置红鲱鱼…"
     );
   },
 

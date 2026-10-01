@@ -8,6 +8,7 @@ export type BotcClientCommandEnvelope =
   | ClientCommandEnvelope<"botc.startGame", Record<string, never>>
   | ClientCommandEnvelope<"botc.confirmRole", Record<string, never>>
   | ClientCommandEnvelope<"botc.beginFirstNight", Record<string, never>>
+  | ClientCommandEnvelope<"botc.setRedHerring", { playerId: string }>
   | ClientCommandEnvelope<"botc.submitNightChoice", { playerIds: string[] }>
   | ClientCommandEnvelope<"botc.commitNightInformation", Record<string, never>>
   | ClientCommandEnvelope<"botc.acknowledgeNightInformation", Record<string, never>>
@@ -17,6 +18,7 @@ export const BOTC_CLIENT_COMMAND_TYPES = [
   "botc.startGame",
   "botc.confirmRole",
   "botc.beginFirstNight",
+  "botc.setRedHerring",
   "botc.submitNightChoice",
   "botc.commitNightInformation",
   "botc.acknowledgeNightInformation",
@@ -72,6 +74,19 @@ export function parseBotcClientCommandEnvelope(
         type: record.type,
         payload: {},
       };
+    case "botc.setRedHerring": {
+      const payload = record.payload as Record<string, unknown>;
+      if (typeof payload.playerId !== "string" || !payload.playerId.trim()) {
+        throw new Error("playerId must be a non-empty string");
+      }
+      return {
+        protocolVersion: CLIENT_PROTOCOL_VERSION,
+        kind: "command",
+        commandId,
+        type: "botc.setRedHerring",
+        payload: { playerId: payload.playerId.trim() },
+      };
+    }
     case "botc.submitNightChoice": {
       const payload = record.payload as Record<string, unknown>;
       if (

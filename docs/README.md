@@ -80,7 +80,8 @@ PV-3 first-night playable UI ← IN PROGRESS
             ├─ MP-0 multi-platform client architecture audit ✅
             ├─ MP-1 mandatory pre-PV hardening — NONE REQUIRED
             ├─ PV-3B2C Chef + Empath numeric information ✅
-            └─ PV-3B3 Fortune Teller dual-target + Red Herring/result semantics ← NEXT
+            ├─ PV-3B3 Fortune Teller dual-target + Red Herring/result semantics ✅
+            └─ PV-3B4 Spy Grimoire private-state presentation ← NEXT
   ↓
 PV-4 minimal day/night loop
   ↓
