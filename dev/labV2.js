@@ -447,6 +447,7 @@ function renderLobbyPhone(root, client) {
 
 function renderPhone(client) {
   const root = elements.phoneProductView;
+  root.replaceChildren();
   if (!client) {
     root.append(phoneElement(
       "div",
