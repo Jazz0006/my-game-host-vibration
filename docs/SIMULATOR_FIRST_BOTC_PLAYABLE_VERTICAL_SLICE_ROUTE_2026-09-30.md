@@ -1,7 +1,7 @@
 # Simulator-first BotC Playable Vertical Slice Route (2026-09-30)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-3B2A COMPLETE, PV-3B2B NEXT**  
+> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-UI0 COMPLETE, PV-3B2C NEXT**  
 > Route owner: current execution order is governed by V5; this document owns the detailed Simulator-first / playable-vertical-slice decomposition.  
 > Supersedes as NEXT: continuing directly from B0C3A into B0C3B recommendation depth.
 
@@ -445,6 +445,25 @@ PV-3B2A's lifecycle is now a shared pair-information family rather than three ro
 Cross-project follow-up: the live CampBoardGameHost natural pair generator currently excludes the information source seat, while the official Washerwoman run procedure permits the Washerwoman themself to be the matching Townsfolk when necessary. This Web Host implementation follows the rules-correct domain and records the discrepancy for later Host alignment; it does **not** change the frozen `TroubleBrewingGameSnapshotV1` wire schema.
 
 Validation checkpoint: typecheck PASS; full test PASS, 141 test files / 587 tests; Web client and both WeChat product shells build/verify PASS. Cloudflare acceptance covers Librarian zero automatic same-mutation commit / secrecy plus Investigator Human Storyteller authority.
+
+##### PV-UI0 — Simulator / WeChat presentation convergence ✅ COMPLETE
+
+This bounded UI-infrastructure checkpoint is inserted before further role UI expansion so daily Simulator work does not drift from the product client:
+
+- added shared pure `BotcGamePresentation` under `src/client` as the single derivation owner for phase labels, role display, wake/wait state, target-choice display, private information labels, progress, status copy and semantic action availability;
+- the WeChat `pages/game` thin page now consumes that shared presentation model instead of independently deriving those semantics;
+- the Simulator Lab phone-size viewer imports the same browser-built presentation module and renders a WeChat-style game page mirror for role reveal, Storyteller view, wake/wait, night choices, Minion/Demon info, pair/zero private info, progress and action buttons;
+- actions performed from the mirrored phone surface still travel through `/dev/simulator/api/command -> TestRoomClient -> production ClientSession / runtime seams`; the mirror does not mutate canonical state or calculate BotC truth;
+- Simulator remains local-first over `InMemoryCloudflareMultiplayerHarness`. It deliberately does **not** require the deployed Cloudflare Worker for daily development; real Cloudflare + WeChat Developer Tools remains a later integration acceptance layer;
+- visual CSS is a browser mirror of the current WeChat game page, while WXML/WXSS remain the actual product renderer. Future game-display semantics should first enter the shared presentation model so both surfaces converge by construction.
+
+Acceptance:
+
+- both WeChat and Simulator consume `createBotcGamePresentation`;
+- role-specific UI logic remains outside the thin renderers where the generic presentation contract can express it;
+- Simulator phone controls can issue current production BotC commands for confirm-role, begin-night, target choice, information acknowledgement/commit and generic night-step advance;
+- automated presentation tests cover role reveal, pair/zero information, target selection and Human Storyteller action availability;
+- full test/build validation remains green.
 
 ###### PV-3B2C — Chef + Empath numeric information ← NEXT
 

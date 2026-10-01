@@ -8,6 +8,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const entries = [
   ["src/client/WeChatNativeClient.ts", "WeChatNativeClient.js"],
   ["src/client/WeChatMinimalPageController.ts", "WeChatMinimalPageController.js"],
+  ["src/client/BotcGamePresentation.ts", "BotcGamePresentation.js"],
 ];
 
 for (const product of WECHAT_PRODUCTS) {

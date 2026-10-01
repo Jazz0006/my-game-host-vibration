@@ -138,19 +138,19 @@ http://localhost:3000/dev/lab
 
 Simulator Lab V2 默认建立 5–15 人 BotC 虚拟桌。每名虚拟玩家都有独立的 production `ClientSession`，并通过共享 `BrowserRoomBootstrapClient -> CloudflareRealtimeTransport -> GameRoomDurableObject` 语义链路运行；本地只替换 Cloudflare network/storage capability，不复制 GameModule 规则或 projection。页面提供：
 
-- 一个接近手机尺寸的 selected-viewer；
+- 一个接近手机尺寸、与微信 `pages/game` 共用 `BotcGamePresentation` 的游戏界面镜像 selected-viewer；
 - N 个简化虚拟玩家控制卡；
 - Human/Automatic Storyteller assignment；
 - semantic-command 调试入口；
 - authoritative room / PlayerView / bounded ClientSession trace inspector；
 - deterministic disconnect/reconnect 操作。
 
-日常 BotC 功能开发默认使用该 Lab + 自动化多人测试，不再使用旧 Node/Socket.IO `npm run simulate` 或旧狼人杀 `/dev/lab` 实现，也不要求真机。
+日常 BotC 功能开发默认使用该 Lab + 自动化多人测试，不再使用旧 Node/Socket.IO `npm run simulate` 或旧狼人杀 `/dev/lab` 实现，也不要求真机。Lab 默认使用本地 `InMemoryCloudflareMultiplayerHarness` 替代 Cloudflare network/storage capability；它不依赖已部署 Worker，真实 Cloudflare + WeChat Developer Tools 留作阶段性集成验收。
 
 ## 长期产品边界
 
 - 狼人杀已验证当前平台基础；W3D3 与 MG0A–MG0D 已完成；BotC 已具备 B0A–B0B3 与 B0C1–B0C3A 后端基础，当前优先级转为 Simulator-first playable vertical slice，而不是继续让推荐算法深度领先于真实客户端可玩性；
-- 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；PV-0 已完成 shared Lobby authoritative interactions，PV-1 已完成最小 Trouble Brewing automatic setup + `botc.startGame` production path，PV-2 已完成 private role reveal + `botc.confirmRole` production path；PV-3A 已完成 first-night production orchestration，PV-3B1 已完成 Poisoner/Butler 单目标 choice/effect production path，当前 NEXT 为 PV-3B2 first-night information resolution；
+- 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；PV-0 已完成 shared Lobby authoritative interactions，PV-1 已完成最小 Trouble Brewing automatic setup + `botc.startGame` production path，PV-2 已完成 private role reveal + `botc.confirmRole` production path；PV-3A 已完成 first-night production orchestration，PV-3B1 已完成 Poisoner/Butler 单目标 choice/effect，PV-3B2A/B 已完成 Washerwoman/Librarian/Investigator 信息链；PV-UI0 已让 Simulator 手机 Viewer 与微信 game page 共用展示模型，当前 NEXT 为 PV-3B2C Chef + Empath numeric information；
 - 讨论、发言和社交推理仍在线下完成；
 - 断线、熄屏、切 App 和网络切换视为正常生命周期；
 - Room Owner 是房间管理/Recovery Controller，不等同于 Game Moderator/Storyteller；

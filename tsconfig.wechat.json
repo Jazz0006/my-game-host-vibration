@@ -16,6 +16,7 @@
   },
   "include": [
     "src/client/WeChatNativeClient.ts",
-    "src/client/WeChatMinimalPageController.ts"
+    "src/client/WeChatMinimalPageController.ts",
+    "src/client/BotcGamePresentation.ts"
   ]
 }
