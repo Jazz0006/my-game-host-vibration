@@ -25,16 +25,20 @@ Use these in this order:
   - normal development defaults to zero real devices;
   - B0C3B/deeper recommendation quality is deferred until the playable path needs it.
 - `docs/MP_MULTI_PLATFORM_CLIENT_ARCHITECTURE_ROUTE_2026-10-01.md`
-  - **current inserted client-architecture route; MP-0 is NEXT**;
+  - **inserted client-architecture route; MP-0 is COMPLETE**;
   - Simulator Lab full-client phone view is the Browser Reference Client for development/application semantics, not a final player product;
   - production player targets are WeChat + future Android/iOS because reliable private haptic alerting is mandatory;
-  - complete MP-0 plus only necessary MP-1 hardening, then resume PV-3B2C;
+  - MP-0 found no mandatory pre-PV-3B2C MP-1 code hardening; NEXT returns to PV-3B2C;
   - Donut/Capacitor/React Native/mobile framework selection is deferred and does not block PV-3B2C.
+- `docs/MP0_MULTI_PLATFORM_CLIENT_ARCHITECTURE_AUDIT_2026-10-01.md`
+  - accepted owner/seam map for Shared Client Core / Browser Reference Client / WeChat adapters;
+  - records lifecycle recovery-policy duplication as non-blocking later hardening;
+  - freezes the PV-3B2C fan-out through authoritative private projection -> shared `BotcGamePresentation` -> thin WeChat/Simulator renderers.
 - `docs/UGSM0_UNIFIED_TROUBLE_BREWING_GAME_SNAPSHOT_ADOPTION_AUDIT_2026-09-30.md`
   - cross-project canonical `TroubleBrewingGameSnapshotV1` adoption boundary;
   - keeps mutable online `BotcGameState` as runtime authority while the independent V1 contract/codec and pure runtime snapshot projector provide the shared read boundary;
   - freezes KNOWN / UNCOMMITTED / UNKNOWN / NOT_APPLICABLE semantics and excludes room/network/client state;
-  - UGSM-1 exact V1 contract + pure projector is complete; PV-3B2B pair-information reuse is complete; PV-3B2C numeric information resumes after the inserted MP-0 + necessary MP-1 checkpoint.
+  - UGSM-1 exact V1 contract + pure projector is complete; PV-3B2B pair-information reuse and MP-0 are complete; PV-3B2C numeric information is NEXT.
 - `docs/B0C_TROUBLE_BREWING_INFORMATION_RECOMMENDATION_HANDOFF_2026-09-30.md`
   - B0C1/B0C2/B0C3A completed foundation and recommendation-boundary history;
   - B0C3A registration + truthful Washerwoman candidate boundary is retained;
@@ -73,9 +77,9 @@ PV-3 first-night playable UI ← IN PROGRESS
             ├─ PV-3B2B Librarian + Investigator pair information ✅
             ├─ PV-UI0 Simulator / WeChat game presentation convergence ✅
             ├─ PV-UI1 pre-device full client-shell parity ✅
-            ├─ MP-0 multi-platform client architecture audit ← CURRENT / NEXT
-            ├─ MP-1 necessary Shared Client / Platform Port hardening
-            └─ PV-3B2C Chef + Empath numeric information — RESUME AFTER MP-0 + NECESSARY MP-1
+            ├─ MP-0 multi-platform client architecture audit ✅
+            ├─ MP-1 mandatory pre-PV hardening — NONE REQUIRED
+            └─ PV-3B2C Chef + Empath numeric information ← NEXT
   ↓
 PV-4 minimal day/night loop
   ↓
