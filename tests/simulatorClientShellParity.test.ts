@@ -35,10 +35,30 @@ describe("PV-UI1 Simulator pre-device client-shell parity", () => {
     );
   });
 
+  it("treats the WeChat product UI as the selected-phone reference surface", () => {
+    const html = text("dev/lab.html");
+    const lab = text("dev/labV2.js");
+    const css = text("dev/wechatReference.css");
+
+    expect(html).toContain('/dev/assets/wechatReference.css');
+    expect(lab).toContain('/client-runtime/client/RoundedTableLayout.js');
+    expect(lab).toContain('appName: "骏骏桌游-血染"');
+    expect(lab).not.toContain('"玩家名称"');
+    expect(lab).toContain('"wechat-lobby-table-stage"');
+    expect(lab).toContain("computeRoundedTableSeats(model.playerOrder, byId)");
+    expect(lab).not.toContain('"wechat-seat-list"');
+    expect(css).toContain(".wechat-index-page");
+    expect(css).toContain(".wechat-lobby-table-stage");
+    expect(css).toContain(".wechat-settings-page");
+    expect(css).toContain(".wechat-game-page");
+  });
+
   it("covers Lobby and room-management product actions in the phone mirror", () => {
     const lobby = text("miniprogram/pages/lobby.js");
     const settings = text("miniprogram/pages/settings.js");
     const lab = text("dev/labV2.js");
+    const interactions = text("dev/wechatReferenceInteractions.js");
+    const labSurface = lab + interactions;
 
     for (const command of [
       "room.setReady",
@@ -46,7 +66,7 @@ describe("PV-UI1 Simulator pre-device client-shell parity", () => {
       "room.setGameModerator",
     ]) {
       expect(lobby).toContain(command);
-      expect(lab).toContain(command);
+      expect(labSurface).toContain(command);
     }
 
     expect(lobby).toContain("this._product.startCommand");

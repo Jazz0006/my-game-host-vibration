@@ -68,6 +68,7 @@ describe("MG0D WeChat game-specific product shells", () => {
       "src/client/BotcGamePresentation.ts",
       "src/client/ClientLobbyPresentation.ts",
       "src/client/ClientEntryPresentation.ts",
+      "src/client/RoundedTableLayout.ts",
     ]);
 
     const pkg = json("package.json");
@@ -101,6 +102,11 @@ describe("MG0D WeChat game-specific product shells", () => {
           `wechat-build/${product.id}/miniprogram/runtime/client/ClientEntryPresentation.js`,
         ),
       ).toBe(true);
+      expect(
+        fs.existsSync(
+          `wechat-build/${product.id}/miniprogram/runtime/client/RoundedTableLayout.js`,
+        ),
+      ).toBe(true);
     }
 
     const ignore = text(".gitignore");
@@ -125,7 +131,7 @@ describe("MG0D WeChat game-specific product shells", () => {
 
     const lobby = text("miniprogram/pages/lobby.js");
     const lobbyMarkup = text("miniprogram/pages/lobby.wxml");
-    expect(lobby).toContain('require("../rounded-table-layout.js")');
+    expect(lobby).toContain('require("../runtime/client/RoundedTableLayout.js")');
     expect(lobby).toContain('require("../runtime/client/ClientLobbyPresentation.js")');
     expect(lobby).toContain("createClientLobbyPresentation");
     expect(lobby).toContain("applyLobbyModel");

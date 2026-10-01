@@ -11,6 +11,7 @@ const entries = [
   ["src/client/BotcGamePresentation.ts", "BotcGamePresentation.js"],
   ["src/client/ClientLobbyPresentation.ts", "ClientLobbyPresentation.js"],
   ["src/client/ClientEntryPresentation.ts", "ClientEntryPresentation.js"],
+  ["src/client/RoundedTableLayout.ts", "RoundedTableLayout.js"],
 ];
 
 for (const product of WECHAT_PRODUCTS) {

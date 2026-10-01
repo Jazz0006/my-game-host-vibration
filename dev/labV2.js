@@ -4,6 +4,19 @@ import {
   createClientEntryPresentation,
   normalizeClientRoomCode,
 } from "/client-runtime/client/ClientEntryPresentation.js";
+import {
+  computeRoundedTableSeats,
+} from "/client-runtime/client/RoundedTableLayout.js";
+import {
+  bindModeratorLongPressDrag,
+  bindSeatLongPressDrag,
+} from "/dev/assets/wechatReferenceInteractions.js";
+
+const BOTC_PRODUCT = {
+  appName: "骏骏桌游-血染",
+  gameLabel: "血染钟楼",
+  moderatorLabel: "说书人",
+};
 
 const elements = {
   playerCount: document.querySelector("#player-count"),
@@ -174,17 +187,61 @@ function createTextInput(value, placeholder, className = "wechat-input") {
 }
 
 function renderEntryPhone(root, client) {
-  const hero = phoneElement("section", "wechat-entry-hero");
+  root.className = "wechat-product-page wechat-index-page";
+
+  const hero = phoneElement("section", "wechat-index-hero");
   hero.append(
-    phoneElement("div", "wechat-brand-mark", "桌"),
-    phoneElement("div", "wechat-entry-title", "血染钟楼"),
-    phoneElement("div", "wechat-copy", "一起玩桌游，更轻松"),
+    phoneElement("div", "wechat-index-brand-mark", "桌"),
+    phoneElement("div", "wechat-index-title", BOTC_PRODUCT.appName),
+    phoneElement("div", "wechat-index-subtitle", "一起玩桌游，更轻松"),
   );
   root.append(hero);
 
-  const card = phoneElement("section", "wechat-card wechat-entry-card");
-  const nameInput = createTextInput(client.name || client.label, "玩家名称");
-  card.append(phoneElement("div", "wechat-field-label", "玩家名称"), nameInput);
+  const card = phoneElement("section", "wechat-index-main-card");
+  card.append(createButton("创建房间", async () => {
+    try {
+      simulatorState = await post("/dev/simulator/api/room/create", {
+        label: client.label,
+        name: client.name,
+      });
+      phoneSubpageByDevice.set(client.label, "lobby");
+      render();
+      setStatus(client.label + " 已通过 production bootstrap 创建房间。", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  }, "wechat-index-create-button"));
+
+  card.append(phoneElement("div", "wechat-index-join-label", "加入房间"));
+  const joinRow = phoneElement("div", "wechat-index-join-row");
+  const roomInput = createTextInput("", "4 位房间号", "wechat-index-room-input");
+  roomInput.maxLength = 4;
+  roomInput.inputMode = "numeric";
+  roomInput.type = "number";
+  const join = createButton("加入", async () => {
+    const entry = createClientEntryPresentation({
+      roomCode: normalizeClientRoomCode(roomInput.value),
+      hasRecoverableRoom: client.recoverable,
+    });
+    if (!entry.canJoinRoom) {
+      setStatus("请输入 4 位房间号", "error");
+      return;
+    }
+    try {
+      simulatorState = await post("/dev/simulator/api/room/join", {
+        label: client.label,
+        name: client.name,
+        roomCode: entry.roomCode,
+      });
+      phoneSubpageByDevice.set(client.label, "lobby");
+      render();
+      setStatus(client.label + " 已通过 production bootstrap 加入房间。", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  }, "wechat-index-join-button");
+  joinRow.append(roomInput, join);
+  card.append(joinRow);
 
   if (client.recoverable) {
     card.append(createButton("继续上次房间", async () => {
@@ -198,138 +255,108 @@ function renderEntryPhone(root, client) {
       } catch (error) {
         setStatus(error.message, "error");
       }
-    }, "wechat-button primary"));
-  } else {
-    const create = createButton("创建房间", async () => {
-      try {
-        simulatorState = await post("/dev/simulator/api/room/create", {
-          label: client.label,
-          name: nameInput.value,
-        });
-        phoneSubpageByDevice.set(client.label, "lobby");
-        render();
-        setStatus(client.label + " 已通过 production bootstrap 创建房间。", "success");
-      } catch (error) {
-        setStatus(error.message, "error");
-      }
-    }, "wechat-button primary");
-    card.append(create);
+    }, "wechat-index-continue-button"));
   }
-
-  card.append(phoneElement("div", "wechat-field-label", "加入房间"));
-  const joinRow = phoneElement("div", "wechat-join-row");
-  const roomInput = createTextInput(
-    simulatorState && simulatorState.roomId ? simulatorState.roomId : "",
-    "4 位房间号",
-  );
-  roomInput.maxLength = 4;
-  roomInput.inputMode = "numeric";
-  const join = createButton("加入", async () => {
-    const entry = createClientEntryPresentation({
-      roomCode: normalizeClientRoomCode(roomInput.value),
-      hasRecoverableRoom: client.recoverable,
-    });
-    const roomCode = entry.roomCode;
-    if (!entry.canJoinRoom) {
-      setStatus("请输入 4 位房间号。", "error");
-      return;
-    }
-    try {
-      simulatorState = await post("/dev/simulator/api/room/join", {
-        label: client.label,
-        name: nameInput.value,
-        roomCode,
-      });
-      phoneSubpageByDevice.set(client.label, "lobby");
-      render();
-      setStatus(client.label + " 已通过 production bootstrap 加入房间。", "success");
-    } catch (error) {
-      setStatus(error.message, "error");
-    }
-  }, "wechat-button secondary");
-  joinRow.append(roomInput, join);
-  card.append(joinRow);
   root.append(card);
 
-  root.append(phoneElement(
-    "div",
-    "wechat-privacy-note",
-    client.label + " · 未加入任何房间",
-  ));
-}
-
-function moveSeat(client, model, playerId, direction) {
-  const ordered = [...model.participants].sort((a, b) => a.seat - b.seat);
-  const index = ordered.findIndex(player => player.id === playerId);
-  if (index < 0) return;
-  const targetIndex = direction < 0
-    ? Math.max(0, index - 1)
-    : Math.min(ordered.length, index + 2);
-  return sendPhoneCommand(client, "room.movePlayerSeat", {
-    targetPlayerId: playerId,
-    insertIndex: targetIndex,
-  });
+  const developer = phoneElement("section", "wechat-index-developer-card");
+  developer.append(
+    phoneElement("div", "wechat-index-developer-title", "开发阶段快捷入口"),
+    phoneElement(
+      "div",
+      "wechat-index-developer-copy",
+      "Diagnostics 保留 E3.7 真机 lifecycle 验证；桌面 UI 与多客户端调试统一使用 Simulator Lab V2。",
+    ),
+    createButton("E3.7 Diagnostics", () => {
+      setStatus("Simulator Lab 中请使用右侧 Inspector；真机 Diagnostics 仍在微信 Developer Tools 中验收。");
+    }, "wechat-index-diagnostics-button"),
+  );
+  root.append(developer);
 }
 
 function renderSettingsPhone(root, client, model) {
-  const header = phoneElement("div", "wechat-topbar");
-  header.append(
-    createButton("‹ 房间", () => {
-      phoneSubpageByDevice.set(client.label, "lobby");
-      renderPhone(client);
-    }, "wechat-icon-button"),
-    phoneElement("div", "wechat-title", "设置"),
-    phoneElement("div", "wechat-phase-pill", "房间管理"),
-  );
-  root.append(header);
-  root.append(phoneElement("div", "wechat-copy", "房间 " + model.roomCode));
+  root.className = "wechat-product-page wechat-settings-page";
+  root.append(phoneElement("div", "wechat-settings-title", "设置"));
 
-  const section = phoneElement("section", "wechat-card wechat-settings-card");
-  section.append(phoneElement("div", "wechat-section-title", "房间成员"));
+  const tabs = phoneElement("div", "wechat-settings-tabs");
+  tabs.append(phoneElement("div", "wechat-settings-tab active", "房间管理"));
+  root.append(tabs);
+  root.append(phoneElement("div", "wechat-settings-room-meta", "房间 " + (model.roomCode || "----")));
+
+  const section = phoneElement("section", "wechat-settings-section");
+  section.append(phoneElement("div", "wechat-settings-section-title", "房间成员"));
   for (const participant of model.participants) {
-    const row = phoneElement("div", "wechat-member-row");
-    const main = phoneElement("div", "wechat-member-main");
+    const row = phoneElement("div", "wechat-settings-member-row");
+    const main = phoneElement("div", "wechat-settings-member-main");
+    const name = phoneElement("div", "wechat-settings-member-name");
+    name.append(document.createTextNode(participant.seat + "号 · " + participant.name));
+    if (participant.isOwner) {
+      name.append(phoneElement("span", "wechat-settings-owner-label", "房主"));
+    }
     main.append(
+      name,
       phoneElement(
         "div",
-        "wechat-member-name",
-        participant.seat + "号 · " + participant.name + (participant.isOwner ? " · 房主" : ""),
-      ),
-      phoneElement(
-        "div",
-        "wechat-copy",
+        "wechat-settings-member-meta",
         participant.connected
           ? participant.ready ? "在线 · 已准备" : "在线 · 未准备"
           : "暂时离线",
       ),
     );
     row.append(main);
+
     if (model.isOwner && participant.id !== model.currentPlayerId) {
-      const actions = phoneElement("div", "wechat-member-actions");
-      actions.append(
-        createButton("移交房主", () =>
-          sendPhoneCommand(client, "room.transferHost", { targetPlayerId: participant.id }),
-        "wechat-mini-button"),
-      );
-      if (!model.gameStarted) {
-        actions.append(
-          createButton("移出", () =>
-            sendPhoneCommand(client, "room.removePlayer", { targetPlayerId: participant.id }),
-          "wechat-mini-button danger"),
+      const actions = phoneElement("div", "wechat-settings-member-actions");
+      const transfer = createButton("移交房主", async () => {
+        if (!participant.connected) return;
+        const confirmed = window.confirm(
+          "确定把房主移交给 " + participant.name + "？说书人/法官 assignment 不会改变。",
         );
-      }
+        if (confirmed) {
+          await sendPhoneCommand(client, "room.transferHost", {
+            targetPlayerId: participant.id,
+          });
+        }
+      }, "wechat-settings-mini-button");
+      transfer.disabled = !participant.connected;
+      actions.append(transfer);
+
+      const remove = createButton("移出", async () => {
+        if (model.gameStarted) return;
+        const confirmed = window.confirm("确定将 " + participant.name + " 移出房间？");
+        if (confirmed) {
+          await sendPhoneCommand(client, "room.removePlayer", {
+            targetPlayerId: participant.id,
+          });
+        }
+      }, "wechat-settings-mini-button warn");
+      remove.disabled = model.gameStarted;
+      actions.append(remove);
       row.append(actions);
     }
     section.append(row);
   }
   root.append(section);
+
   if (!model.isOwner) {
     root.append(phoneElement(
       "div",
-      "wechat-privacy-note",
+      "wechat-settings-read-only-note",
       "当前你不是 Room Owner；这里仅显示 authoritative 房间状态。",
     ));
   }
+  root.append(phoneElement(
+    "div",
+    "wechat-settings-footnote",
+    "Room Owner 与游戏主持人是独立职责；移交房主不会改变说书人/法官 assignment。若移出当前人工主持人，服务器会自动恢复 Automatic。",
+  ));
+
+  const nativeBack = createButton("‹", () => {
+    phoneSubpageByDevice.set(client.label, "lobby");
+    renderPhone(client);
+  }, "wechat-native-back");
+  nativeBack.title = "模拟微信原生返回";
+  root.append(nativeBack);
 }
 
 function renderLobbyPhone(root, client) {
@@ -339,109 +366,114 @@ function renderLobbyPhone(root, client) {
     return;
   }
 
-  const header = phoneElement("div", "wechat-topbar");
-  const title = phoneElement("div", "wechat-title-block");
+  root.className = "wechat-product-page wechat-lobby-page";
+
+  const header = phoneElement("div", "wechat-lobby-topbar");
+  const title = phoneElement("div", "");
   title.append(
-    phoneElement("div", "wechat-eyebrow", "ROOM"),
-    phoneElement("div", "wechat-title", "房间 " + (model.roomCode || "----")),
+    phoneElement("div", "wechat-lobby-eyebrow", "ROOM"),
+    phoneElement("div", "wechat-lobby-room-title", "房间 " + (model.roomCode || "----")),
   );
   header.append(
     title,
     createButton("⚙", () => {
       phoneSubpageByDevice.set(client.label, "settings");
       renderPhone(client);
-    }, "wechat-icon-button"),
+    }, "wechat-lobby-icon-button"),
   );
   root.append(header);
 
-  const table = phoneElement("section", "wechat-card wechat-lobby-card");
-  const moderator = phoneElement("div", "wechat-moderator-card");
+  const table = phoneElement("section", "wechat-lobby-table-stage");
+  const byId = Object.fromEntries(model.participants.map(participant => [participant.id, participant]));
+  const seats = computeRoundedTableSeats(model.playerOrder, byId);
+  const seatElements = [];
+  for (const seat of seats) {
+    const seatElement = phoneElement(
+      "div",
+      "wechat-lobby-seat" +
+        (seat.ready ? " ready" : "") +
+        (seat.connected === false ? " offline" : ""),
+    );
+    seatElement.style.left = (seat.xRpx / 2) + "px";
+    seatElement.style.top = (seat.yRpx / 2) + "px";
+    const name = phoneElement("div", "wechat-lobby-seat-name", seat.name || seat.id);
+    if (seat.isOwner) {
+      name.append(phoneElement("span", "wechat-lobby-owner-badge", "👑"));
+    }
+    seatElement.append(
+      name,
+      phoneElement("div", "wechat-lobby-seat-state", seat.ready ? "✓ 已准备" : "未准备"),
+    );
+    table.append(seatElement);
+    seatElements.push({ seat, element: seatElement });
+  }
+
+  const center = phoneElement("div", "wechat-lobby-table-center");
+  const moderator = phoneElement("div", "wechat-lobby-moderator-card");
   moderator.append(
-    phoneElement("div", "wechat-eyebrow", "说书人"),
-    phoneElement("div", "wechat-section-title", model.moderatorName),
+    phoneElement("div", "wechat-lobby-moderator-role", BOTC_PRODUCT.moderatorLabel),
+    phoneElement("div", "wechat-lobby-moderator-name", model.moderatorName),
   );
   if (model.isOwner && !model.gameStarted) {
-    const moderatorActions = phoneElement("div", "wechat-inline-actions");
-    if (model.moderatorAssignment.mode === "human") {
-      moderatorActions.append(createButton(
-        "恢复自动",
-        () => sendPhoneCommand(client, "room.setGameModerator", {
-          assignment: { mode: "automatic" },
-        }),
-        "wechat-mini-button",
+    moderator.append(phoneElement(
+      "div",
+      "wechat-lobby-moderator-hint",
+      model.moderatorName === "自动" ? "长按玩家拖到这里" : "长按主持位拖回桌边",
+    ));
+  }
+  center.append(
+    moderator,
+    phoneElement("div", "wechat-lobby-divider"),
+  );
+  const gameList = phoneElement("div", "wechat-lobby-game-list");
+  gameList.append(phoneElement("div", "wechat-lobby-game-option selected", BOTC_PRODUCT.gameLabel));
+  center.append(gameList);
+  table.append(center);
+  root.append(table);
+  for (const item of seatElements) {
+    bindSeatLongPressDrag(
+      item.element,
+      moderator,
+      table,
+      client,
+      model,
+      item.seat,
+      sendPhoneCommand,
+    );
+  }
+  bindModeratorLongPressDrag(moderator, table, client, model, sendPhoneCommand);
+
+  root.append(phoneElement("div", "wechat-lobby-status-line", model.statusLine));
+
+  if (!model.gameStarted && (model.isOwner || model.canControlGame)) {
+    const actions = phoneElement("div", "wechat-lobby-host-actions");
+    if (model.isOwner) {
+      actions.append(createButton("邀请朋友", () => {
+        setStatus("房间号：" + model.roomCode, "success");
+      }, "wechat-lobby-secondary-button"));
+    }
+    if (model.canControlGame) {
+      actions.append(createButton(
+        "开始游戏",
+        () => sendPhoneCommand(client, "botc.startGame"),
+        "wechat-lobby-primary-button",
       ));
     }
-    moderator.append(moderatorActions);
+    root.append(actions);
   }
-  table.append(moderator);
-  table.append(phoneElement("div", "wechat-game-option", "血染钟楼"));
 
-  const seatList = phoneElement("div", "wechat-seat-list");
-  for (const participant of model.participants) {
-    const row = phoneElement("div", "wechat-seat-row");
-    const info = phoneElement("div", "wechat-seat-info");
-    info.append(
-      phoneElement(
-        "div",
-        "wechat-member-name",
-        participant.seat + "号 · " + participant.name + (participant.isOwner ? " 👑" : ""),
-      ),
-      phoneElement(
-        "div",
-        "wechat-copy",
-        participant.ready ? "✓ 已准备" : "未准备",
-      ),
-    );
-    row.append(info);
-
-    if (model.isOwner && !model.gameStarted) {
-      const controls = phoneElement("div", "wechat-seat-actions");
-      controls.append(
-        createButton("↑", () => moveSeat(client, model, participant.id, -1), "wechat-mini-button"),
-        createButton("↓", () => moveSeat(client, model, participant.id, 1), "wechat-mini-button"),
-      );
-      if (model.moderatorAssignment.mode !== "human" ||
-          model.moderatorAssignment.playerId !== participant.id) {
-        controls.append(createButton(
-          "设为说书人",
-          () => sendPhoneCommand(client, "room.setGameModerator", {
-            assignment: { mode: "human", playerId: participant.id },
-          }),
-          "wechat-mini-button",
-        ));
-      }
-      row.append(controls);
-    }
-    seatList.append(row);
-  }
-  table.append(seatList);
-  root.append(table);
-
-  root.append(phoneElement("div", "wechat-status-line", model.statusLine));
-
-  if (model.canInvite) {
-    appendAction(root, "邀请朋友", true, () => {
-      setStatus("房间号：" + model.roomCode + "（Lab 中模拟微信邀请入口）", "success");
-    }, true);
-  }
-  if (model.canStartGame) {
-    appendAction(
-      root,
-      "开始游戏",
-      true,
-      () => sendPhoneCommand(client, "botc.startGame"),
-    );
-  }
-  if (model.canToggleReady) {
-    appendAction(
-      root,
+  if (!model.isGameModerator) {
+    root.append(createButton(
       model.currentPlayerReady ? "✓ 已准备好" : "已准备好",
-      true,
-      () => sendPhoneCommand(client, "room.setReady", {
-        ready: !model.currentPlayerReady,
-      }),
-      true,
-    );
+      () => {
+        const nextReady = !model.currentPlayerReady;
+        void sendPhoneCommand(client, "room.setReady", { ready: nextReady });
+        if (nextReady) {
+          setStatus(client.name + "：微信真机会在首次 Ready 时触发 heavy vibration；Lab 仅记录 capability event。");
+        }
+      },
+      "wechat-lobby-ready-button" + (model.currentPlayerReady ? " active" : ""),
+    ));
   }
 }
 
@@ -449,6 +481,7 @@ function renderPhone(client) {
   const root = elements.phoneProductView;
   root.replaceChildren();
   if (!client) {
+    root.className = "wechat-product-page wechat-empty-page";
     root.append(phoneElement(
       "div",
       "phone-empty",
@@ -468,12 +501,13 @@ function renderPhone(client) {
     return;
   }
 
+  root.className = "wechat-product-page wechat-game-page";
   const presentation = presentationForClient(client);
   const header = phoneElement("div", "wechat-topbar");
   const title = phoneElement("div", "wechat-title-block");
   title.append(
     phoneElement("div", "wechat-eyebrow", "GAME"),
-    phoneElement("div", "wechat-title", "血染钟楼"),
+    phoneElement("div", "wechat-title", BOTC_PRODUCT.gameLabel),
   );
   header.append(title, phoneElement("div", "wechat-phase-pill", presentation.phaseLabel));
   root.append(header);
@@ -513,24 +547,12 @@ function renderPhone(client) {
     root.append(storyteller);
   }
 
-  if (presentation.isNightWake) {
-    const wake = phoneElement("section", "wechat-card wechat-night-card wake");
-    wake.append(
-      phoneElement("div", "wechat-eyebrow", "WAKE"),
-      phoneElement("div", "wechat-night-title", "请睁眼"),
-    );
-    if (presentation.nightStepId) {
-      wake.append(phoneElement("div", "wechat-copy", "当前步骤：" + presentation.nightStepId));
-    }
-    root.append(wake);
-  }
-
   if (presentation.redHerringOptions.length) {
     const setup = phoneElement("section", "wechat-card wechat-choice-card");
     setup.append(
       phoneElement("div", "wechat-eyebrow", "STORYTELLER SETUP"),
       phoneElement("div", "wechat-section-title", "选择占卜师的红鲱鱼"),
-      phoneElement("div", "wechat-copy", "选择 1 名实际善良玩家；占卜师不会看到这项设置。"),
+      phoneElement("div", "wechat-copy", "必须选择 1 名实际善良玩家；占卜师不会看到这项设置。"),
     );
     const grid = phoneElement("div", "wechat-choice-grid");
     for (const option of presentation.redHerringOptions) {
@@ -541,15 +563,28 @@ function renderPhone(client) {
     }
     setup.append(grid);
     const refreshed = presentationForClient(client);
-    appendAction(
-      setup,
+    const confirmRedHerring = createButton(
       "确认红鲱鱼",
-      refreshed.canSetRedHerring,
       () => sendPhoneCommand(client, "botc.setRedHerring", {
         playerId: refreshed.redHerringSelectedPlayerId,
       }),
+      "wechat-button primary",
     );
+    confirmRedHerring.disabled = !refreshed.canSetRedHerring;
+    setup.append(confirmRedHerring);
     root.append(setup);
+  }
+
+  if (presentation.isNightWake) {
+    const wake = phoneElement("section", "wechat-card wechat-night-card wake");
+    wake.append(
+      phoneElement("div", "wechat-eyebrow", "WAKE"),
+      phoneElement("div", "wechat-night-title", "请睁眼"),
+    );
+    if (presentation.nightStepId) {
+      wake.append(phoneElement("div", "wechat-copy", "当前步骤：" + presentation.nightStepId));
+    }
+    root.append(wake);
   }
 
   if (presentation.isNightWaiting) {
@@ -591,14 +626,15 @@ function renderPhone(client) {
     }
     choice.append(grid);
     const refreshed = presentationForClient(client);
-    appendAction(
-      choice,
+    const confirmChoice = createButton(
       "确认选择",
-      refreshed.canSubmitNightChoice,
       () => sendPhoneCommand(client, "botc.submitNightChoice", {
         playerIds: [...(client._selectedNightChoiceIds || [])],
       }),
+      "wechat-button primary",
     );
+    confirmChoice.disabled = !refreshed.canSubmitNightChoice;
+    choice.append(confirmChoice);
     root.append(choice);
   }
 
@@ -636,13 +672,16 @@ function renderPhone(client) {
     presentation.privateInformationBooleanLabel
   ) {
     const card = appendInfoCard(root, "PRIVATE INFO", [
+      presentation.privateInformationRoleName
+        ? presentation.privateInformationPlayerNames + " 中有 1 人是 " + presentation.privateInformationRoleName
+        : "",
+      presentation.privateInformationZeroLabel || "",
+      presentation.privateInformationNumber !== null
+        ? "你得知的数字是 " + presentation.privateInformationNumber
+        : "",
       presentation.privateInformationBooleanLabel
         ? "占卜结果：" + presentation.privateInformationBooleanLabel
-        : presentation.privateInformationNumber !== null
-          ? "你得知的数字是 " + presentation.privateInformationNumber
-          : presentation.privateInformationRoleName
-            ? presentation.privateInformationPlayerNames + " 中有 1 人是 " + presentation.privateInformationRoleName
-            : presentation.privateInformationZeroLabel,
+        : "",
     ]);
     appendAction(
       card,
