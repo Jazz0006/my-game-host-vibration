@@ -91,7 +91,7 @@ export function mountSimulatorLab(app: Express): SimulatorLabCoordinator {
       if (typeof body?.label !== "string" || !body.label.trim()) {
         throw new Error("device label is required");
       }
-      if (typeof body.roomCode !== "string" || !/^\\d{4}$/.test(body.roomCode)) {
+      if (typeof body.roomCode !== "string" || !/^\d{4}$/.test(body.roomCode)) {
         throw new Error("roomCode must be exactly 4 digits");
       }
       const name = typeof body.name === "string" ? body.name : undefined;
