@@ -116,6 +116,31 @@
     </view>
   </view>
 
+  <view class="private-info-card" wx:if="{{spyGrimoireRows.length}}">
+    <view class="eyebrow">GRIMOIRE</view>
+    <view
+      wx:for="{{spyGrimoireRows}}"
+      wx:key="playerId"
+      class="private-info-line"
+    >
+      #{{item.seat}} {{item.name}} · {{item.alive ? '存活' : '死亡'}} · {{item.roleName}}{{item.shownRoleName ? '（展示：' + item.shownRoleName + '）' : ''}}
+    </view>
+    <view
+      wx:for="{{spyGrimoireReminderLines}}"
+      wx:key="*this"
+      class="private-info-line"
+    >
+      {{item}}
+    </view>
+    <button
+      wx:if="{{canAcknowledgeNightInformation}}"
+      class="primary-button"
+      bindtap="onAcknowledgeNightInformationTap"
+    >
+      我看完魔典了
+    </button>
+  </view>
+
   <view class="private-info-card" wx:if="{{privateInformationRoleName || privateInformationZeroLabel || hasPrivateInformationNumber || privateInformationBooleanLabel}}">
     <view class="eyebrow">PRIVATE INFO</view>
     <view class="private-info-line" wx:if="{{privateInformationRoleName}}">

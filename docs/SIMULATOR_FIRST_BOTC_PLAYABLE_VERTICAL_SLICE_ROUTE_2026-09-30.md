@@ -1,7 +1,7 @@
 # Simulator-first BotC Playable Vertical Slice Route (2026-09-30)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-3B3 FORTUNE TELLER COMPLETE; PV-3B4 SPY GRIMOIRE NEXT**  
+> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV-3B4 SPY GRIMOIRE COMPLETE; PV-4 MINIMAL DAY/NIGHT LOOP NEXT**  
 > Route owner: current execution order is governed by V5; this document owns the detailed Simulator-first / playable-vertical-slice decomposition.  
 > Supersedes as NEXT: continuing directly from B0C3A into B0C3B recommendation depth.
 
@@ -538,9 +538,20 @@ Fortune Teller now composes the existing player-choice and committed-information
 
 Final validation: `quality` PASS; 321 source files scanned; typecheck PASS; Web client and both WeChat product shells build/verify PASS; 150 test files / 618 tests PASS. `BotcGameModule.ts` is 45,692 bytes, above the 40KB warning line but below the 50KB hard failure line; treat further growth as a bounded decomposition concern before/within PV-3B4 rather than expanding PV-3B3.
 
-###### PV-3B4 — Spy Grimoire private-state presentation ← NEXT
+###### PV-3B4 — Spy Grimoire private-state presentation ✅ COMPLETE
 
-Spy is intentionally separate from the ordinary information-result family: its ability exposes a broad private view of the Grimoire rather than a scalar/pair/boolean result. Reuse the existing authoritative game state and privacy/projection boundaries, but define an explicit Spy-only private-state contract rather than leaking `BotcModeratorView` wholesale.
+Spy is now implemented as an explicit committed private-information family rather than by exposing `BotcModeratorView`:
+
+- `TroubleBrewingSpyGrimoire` builds the truthful canonical Grimoire snapshot from authoritative assignments, seating order, life state and currently modeled reminder-token facts;
+- the Spy snapshot includes actual/shown roles, alive/dead state, Drunk, Poisoner target, Butler master, Red Herring, and first-night Washerwoman/Librarian/Investigator reminder information; it excludes recommendation metadata, semantic-truth/reliability labels, histories, command/idempotency state and moderator controls;
+- Spy reuses the same authoritative `commit -> private delivery -> recipient acknowledge -> advance` lifecycle as other night information, so reconnect/idempotency and Automatic Storyteller same-mutation auto-commit remain on existing production seams;
+- a poisoned Spy still receives the truthful baseline Grimoire in `baseline_v1`, while authoritative history records `poisoned` reliability; future deceptive/fake-Grimoire quality policy is deferred to Recommendation/Storyteller policy rather than embedded in rendering;
+- Trouble Brewing does not permit Drunk-shown-Spy because Drunk may only be shown a Townsfolk role; invalid test/branch semantics were explicitly rejected;
+- dead actual Spy does not wake on later nights; the Spy's "even if dead" clause applies to registration, not to waking eligibility;
+- ordinary players/public projection never receive the Spy Grimoire; shared `BotcGamePresentation` produces semantic Grimoire rows/reminder lines and both WeChat and Simulator remain thin renderers;
+- bounded decomposition moved cohesive private-view ownership into `BotcPlayerPrivateViews.ts` and night-information orchestration into `BotcNightInformationRuntime.ts`. The source-size gate is back below warning level: 326 source files scanned, largest file `dev/labV2.js` at 34,129 bytes; `BotcGameModule.ts` is no longer the largest/over-40KB file.
+
+Validation before merge: typecheck PASS; Web client and both WeChat product shells build/verify PASS; 152 test files / 622 tests PASS. `TroubleBrewingGameSnapshotV1` remains unchanged.
 
 ### PV-4 — Minimal day / night loop
 
@@ -702,6 +713,6 @@ SIM-0 established the Simulator-first development surface. PV-0 closed the share
 
 Immediate next task:
 
-> **PV-3B4 — Spy Grimoire private-state presentation.**
+> **PV-4 — Minimal day / night loop.**
 
-PV-3B3 now closes the dual-target + persistent setup-fact + boolean-information shape for Fortune Teller without adding a parallel client architecture. The next unresolved first-night private-information role is Spy. Treat Spy as a bounded full-private-state projection problem: define exactly what Grimoire facts the Spy may see, keep that contract narrower than `BotcModeratorView`, preserve reconnect/privacy behavior, and reuse the shared WeChat/Simulator presentation seam.
+PV-3B4 now closes the remaining first-night Spy private-information shape and also extracts the night-information/private-view owners that had pushed `BotcGameModule.ts` above the source-size warning line. The next slice should add only the minimum repeated-play day/night state machine—nomination, voting, execution/death, next-night transition and the minimum dependent Trouble Brewing interactions—while continuing to use the existing authoritative RoomSnapshot/ClientSession/Simulator-first path.

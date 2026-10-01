@@ -15,6 +15,15 @@ export type BotcNightChoiceOption = {
   selected: boolean;
 };
 
+export type BotcSpyGrimoireRow = {
+  playerId: string;
+  seat: number;
+  name: string;
+  roleName: string;
+  shownRoleName: string;
+  alive: boolean;
+};
+
 export type BotcGamePresentation = {
   phase: string;
   phaseLabel: string;
@@ -47,6 +56,8 @@ export type BotcGamePresentation = {
   privateInformationNumber: number | null;
   hasPrivateInformationNumber: boolean;
   privateInformationBooleanLabel: string;
+  spyGrimoireRows: BotcSpyGrimoireRow[];
+  spyGrimoireReminderLines: string[];
   confirmedRoles: number;
   playerCount: number;
   allConfirmed: boolean;
@@ -82,6 +93,12 @@ function asFiniteNumberOrNull(value: unknown): number | null {
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function asRecordArray(value: unknown): UnknownRecord[] {
+  return Array.isArray(value)
+    ? value.map(asRecord).filter((item): item is UnknownRecord => item !== null)
     : [];
 }
 
@@ -190,6 +207,69 @@ function roleDisplayName(role: UnknownRecord | null): string {
     : "";
 }
 
+function spyGrimoirePresentation(privateInformation: UnknownRecord | null): {
+  rows: BotcSpyGrimoireRow[];
+  reminderLines: string[];
+} {
+  if (asString(privateInformation?.kind) !== "spy_grimoire") {
+    return { rows: [], reminderLines: [] };
+  }
+
+  const playerRecords = asRecordArray(privateInformation?.players);
+  const rows = playerRecords.map(player => {
+    const actualRoleName = roleDisplayName(asRecord(player.actualRole));
+    const shownRoleName = roleDisplayName(asRecord(player.shownRole));
+    return {
+      playerId: asString(player.playerId),
+      seat: asNumber(player.seat),
+      name: asString(player.name) || asString(player.playerId),
+      roleName: actualRoleName,
+      shownRoleName:
+        shownRoleName && shownRoleName !== actualRoleName ? shownRoleName : "",
+      alive: player.alive !== false,
+    };
+  });
+  const nameByPlayerId = new Map(rows.map(row => [row.playerId, row.name] as const));
+  const nameFor = (playerId: string): string =>
+    nameByPlayerId.get(playerId) || playerId;
+
+  const reminderLines: string[] = [];
+  const reminders = asRecord(privateInformation?.reminders);
+  const simpleReminders: Array<[string, string]> = [
+    ["drunkPlayerId", "酒鬼"],
+    ["poisonedPlayerId", "中毒"],
+    ["butlerMasterPlayerId", "管家主人"],
+    ["redHerringPlayerId", "红鲱鱼"],
+  ];
+  for (const [key, label] of simpleReminders) {
+    const playerId = asString(reminders?.[key]);
+    if (playerId) reminderLines.push(`${label}：${nameFor(playerId)}`);
+  }
+
+  for (const reminder of asRecordArray(reminders?.pairInformation)) {
+    const abilityRoleName =
+      roleDisplayName(asRecord(reminder.abilityRole)) ||
+      asString(reminder.abilityRoleId);
+    const recipientName = nameFor(asString(reminder.recipientPlayerId));
+    if (asString(reminder.kind) === "pair") {
+      const shownNames = asStringArray(reminder.shownPlayerIds)
+        .map(nameFor)
+        .join("、");
+      const learnedRoleName = roleDisplayName(asRecord(reminder.learnedRole));
+      reminderLines.push(
+        `${abilityRoleName}（${recipientName}）：${shownNames} 中有 1 人是 ${learnedRoleName}`,
+      );
+    } else if (
+      asString(reminder.kind) === "no_characters" &&
+      asString(reminder.noCharacterCategory) === "outsider"
+    ) {
+      reminderLines.push(`${abilityRoleName}（${recipientName}）：本局没有外来者`);
+    }
+  }
+
+  return { rows, reminderLines };
+}
+
 export function createBotcGamePresentation(
   input: BotcGamePresentationInput,
 ): BotcGamePresentation {
@@ -254,6 +334,7 @@ export function createBotcGamePresentation(
   const demonInfo = asRecord(playerView?.demonInfo);
   const privateInformation = asRecord(playerView?.privateInformation);
   const learnedRole = asRecord(privateInformation?.learnedRole);
+  const spyGrimoire = spyGrimoirePresentation(privateInformation);
 
   const connectionStatus = asString(input.connectionStatus);
   const connectionLine = connectionStatusLine(
@@ -329,6 +410,8 @@ export function createBotcGamePresentation(
             ? "否"
             : ""
         : "",
+    spyGrimoireRows: spyGrimoire.rows,
+    spyGrimoireReminderLines: spyGrimoire.reminderLines,
     confirmedRoles,
     playerCount,
     allConfirmed,

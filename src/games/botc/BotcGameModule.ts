@@ -28,9 +28,7 @@ import {
   type TroubleBrewingNightChoiceSpec,
 } from "./TroubleBrewingNightInteraction.js";
 import {
-  createTroubleBrewingFortuneTellerInformationCandidates,
   createTroubleBrewingRedHerringCandidates,
-  type TroubleBrewingFortuneTellerInformationResolution,
   type TroubleBrewingRedHerringSelectionSource,
 } from "./TroubleBrewingFortuneTeller.js";
 import {
@@ -39,34 +37,46 @@ import {
   type BotcSetupAssignment,
 } from "./TroubleBrewingSetup.js";
 import {
-  createTroubleBrewingChefInformationCandidates,
   createTroubleBrewingDemonInfoFacts,
-  createTroubleBrewingEmpathInformationCandidates,
-  createTroubleBrewingPairInformationCandidates,
-  isTroubleBrewingPairCandidate,
   type TroubleBrewingDemonInfoFacts,
-  type TroubleBrewingInformationReliability,
-  type TroubleBrewingNightInformationResult,
-  type TroubleBrewingNumericInformationAbilityRoleId,
-  type TroubleBrewingNumericInformationResolution,
-  type TroubleBrewingPairInformationAbilityRoleId,
-  type TroubleBrewingPairInformationResult,
 } from "./TroubleBrewingInformation.js";
 import {
   createDemonBluffRecommendationRequest,
-  createFortuneTellerInformationRecommendationRequest,
-  createNumericInformationRecommendationRequest,
   createRedHerringRecommendationRequest,
-  createPairInformationRecommendationRequest,
   recommendDemonBluffsBaselineV1,
-  recommendFortuneTellerInformationBaselineV1,
-  recommendNumericInformationBaselineV1,
-  recommendPairInformationBaselineV1,
   recommendRedHerringBaselineV1,
   validateDemonBluffRecommendation,
 } from "./TroubleBrewingRecommendation.js";
+import {
+  cloneNightInformationState,
+  commitCurrentNightInformation,
+  currentFortuneTellerChoice,
+  currentInformationState,
+  informationReadyStep,
+  moderatorInformationDecision,
+  type BotcModeratorInformationDecisionView,
+  type BotcNightInformationState,
+} from "./BotcNightInformationRuntime.js";
+import {
+  createBotcDemonInfoView,
+  createBotcMinionInfoView,
+  createBotcPrivateInformationView,
+  type BotcDemonInfoView,
+  type BotcMinionInfoView,
+  type BotcPrivateInformationView,
+} from "./BotcPlayerPrivateViews.js";
 
 export type { BotcSetupAssignment } from "./TroubleBrewingSetup.js";
+export type {
+  BotcDemonInfoView,
+  BotcMinionInfoView,
+  BotcPrivateInformationView,
+} from "./BotcPlayerPrivateViews.js";
+export type {
+  BotcModeratorInformationDecisionView,
+  BotcNightInformationSelectionSource,
+  BotcNightInformationState,
+} from "./BotcNightInformationRuntime.js";
 
 export type BotcGameConfig = {
   scriptId: typeof TROUBLE_BREWING_SCRIPT_ID;
@@ -91,17 +101,6 @@ export type BotcDemonInfoState = {
   minionPlayerIds: string[];
   bluffRoleIds: TroubleBrewingRoleId[];
   selectionSource: BotcDemonInfoSelectionSource;
-};
-
-export type BotcNightInformationSelectionSource = "baseline_v1";
-
-export type BotcNightInformationState = {
-  stepId: BotcNightStep["id"];
-  nightNumber: number;
-  recipientPlayerId: string;
-  result: TroubleBrewingNightInformationResult;
-  selectionSource: BotcNightInformationSelectionSource;
-  acknowledged: boolean;
 };
 
 export type BotcGameState = {
@@ -185,7 +184,7 @@ export type BotcCommandOutcome =
       stepId: BotcNightStep["id"];
       recipientPlayerId: string;
       candidateId: string;
-      selectionSource: BotcNightInformationSelectionSource;
+      selectionSource: BotcNightInformationState["selectionSource"];
     }
   | {
       kind: "nightInformationAcknowledged";
@@ -205,54 +204,6 @@ export type BotcPlayerNightStepView = {
   kind: BotcNightStep["kind"];
   roleId?: TroubleBrewingRoleId;
   choice?: TroubleBrewingNightChoiceSpec;
-};
-
-export type BotcMinionInfoView = {
-  demonPlayerId: string;
-  fellowMinionPlayerIds: string[];
-};
-
-export type BotcDemonInfoView = {
-  minionPlayerIds: string[];
-  bluffRoles: Array<{
-    id: TroubleBrewingRoleId;
-    name: string;
-    nameZh: string;
-  }>;
-};
-
-export type BotcPrivateInformationView =
-  | {
-      kind: "pair";
-      abilityRoleId: TroubleBrewingPairInformationAbilityRoleId;
-      learnedRole: {
-        id: TroubleBrewingRoleId;
-        name: string;
-        nameZh: string;
-      };
-      shownPlayerIds: [string, string];
-    }
-  | {
-      kind: "no_characters";
-      abilityRoleId: "librarian";
-      noCharacterCategory: "outsider";
-    }
-  | {
-      kind: "number";
-      abilityRoleId: TroubleBrewingNumericInformationAbilityRoleId;
-      value: number;
-    }
-  | {
-      kind: "boolean";
-      abilityRoleId: "fortune_teller";
-      value: boolean;
-    };
-
-export type BotcModeratorInformationDecisionView = {
-  stepId: BotcNightStep["id"];
-  recipientPlayerId: string;
-  roleId: TroubleBrewingRoleId;
-  committed: boolean;
 };
 
 export type BotcRedHerringDecisionView = {
@@ -386,439 +337,6 @@ function ensureAutomaticRedHerring(
   commitRedHerring(state, recommendation.playerId, "baseline_v1");
 }
 
-function minionInfoView(
-  state: BotcGameState,
-  playerId: string,
-): BotcMinionInfoView | undefined {
-  const facts = demonInfoFacts(state);
-  if (!facts.minionPlayerIds.includes(playerId)) return undefined;
-  return {
-    demonPlayerId: facts.demonPlayerId,
-    fellowMinionPlayerIds: facts.minionPlayerIds.filter(
-      minionPlayerId => minionPlayerId !== playerId,
-    ),
-  };
-}
-
-function demonInfoView(state: BotcGameState): BotcDemonInfoView | undefined {
-  const info = state.demonInfo;
-  if (!info) return undefined;
-
-  return {
-    minionPlayerIds: [...info.minionPlayerIds],
-    bluffRoles: info.bluffRoleIds.map(roleId => {
-      const role = troubleBrewingRole(roleId);
-      return {
-        id: role.id,
-        name: role.name,
-        nameZh: role.nameZh,
-      };
-    }),
-  };
-}
-
-type BotcInformationAbilityRoleId =
-  | TroubleBrewingPairInformationAbilityRoleId
-  | TroubleBrewingNumericInformationAbilityRoleId
-  | "fortune_teller";
-
-type BotcInformationStep = Extract<BotcNightStep, { kind: "role" }> & {
-  roleId: BotcInformationAbilityRoleId;
-};
-
-function informationStep(
-  step: BotcNightStep | undefined,
-): BotcInformationStep | undefined {
-  if (step?.kind !== "role") return undefined;
-  if (
-    step.roleId !== "washerwoman" &&
-    step.roleId !== "librarian" &&
-    step.roleId !== "investigator" &&
-    step.roleId !== "chef" &&
-    step.roleId !== "empath" &&
-    step.roleId !== "fortune_teller"
-  ) {
-    return undefined;
-  }
-  return step as BotcInformationStep;
-}
-
-function isPairInformationRole(
-  roleId: BotcInformationAbilityRoleId,
-): roleId is TroubleBrewingPairInformationAbilityRoleId {
-  return roleId === "washerwoman" || roleId === "librarian" || roleId === "investigator";
-}
-
-function isNumericInformationRole(
-  roleId: BotcInformationAbilityRoleId,
-): roleId is TroubleBrewingNumericInformationAbilityRoleId {
-  return roleId === "chef" || roleId === "empath";
-}
-
-function currentFortuneTellerChoice(
-  state: BotcGameState,
-): BotcGameState["fortuneTellerChoice"] | undefined {
-  return state.fortuneTellerChoice?.nightNumber === state.nightNumber
-    ? state.fortuneTellerChoice
-    : undefined;
-}
-
-function informationReadyStep(
-  state: BotcGameState,
-  step: BotcNightStep | undefined,
-): BotcInformationStep | undefined {
-  const candidate = informationStep(step);
-  if (!candidate) return undefined;
-  if (candidate.roleId === "fortune_teller" && !currentFortuneTellerChoice(state)) {
-    return undefined;
-  }
-  return candidate;
-}
-
-function currentInformationState(
-  state: BotcGameState,
-  step: BotcNightStep | undefined = currentNightStep(state),
-): BotcNightInformationState | undefined {
-  if (!step) return undefined;
-  for (let index = state.informationHistory.length - 1; index >= 0; index -= 1) {
-    const item = state.informationHistory[index]!;
-    if (
-      item.nightNumber === state.nightNumber &&
-      item.stepId === step.id &&
-      step.actorPlayerIds.includes(item.recipientPlayerId)
-    ) {
-      return item;
-    }
-  }
-  return undefined;
-}
-
-function informationReliability(
-  state: BotcGameState,
-  step: Extract<BotcNightStep, { kind: "role" }>,
-  recipientPlayerId: string,
-): TroubleBrewingInformationReliability {
-  if (step.actorSource === "shown_drunk") return "drunk";
-  if (state.poisonedPlayerId === recipientPlayerId) return "poisoned";
-  return "reliable";
-}
-
-function cloneNumericInformationResolution(
-  resolution: TroubleBrewingNumericInformationResolution,
-): TroubleBrewingNumericInformationResolution {
-  if (resolution.kind === "chef_pairs") {
-    return {
-      kind: "chef_pairs",
-      pairs: resolution.pairs.map(pair => ({
-        ...pair,
-        playerIds: [...pair.playerIds] as [string, string],
-        leftRegistration: { ...pair.leftRegistration },
-        rightRegistration: { ...pair.rightRegistration },
-      })),
-    };
-  }
-  return {
-    ...resolution,
-    clockwiseRegistration: { ...resolution.clockwiseRegistration },
-    counterclockwiseRegistration: { ...resolution.counterclockwiseRegistration },
-  };
-}
-
-function cloneFortuneTellerInformationResolution(
-  resolution: TroubleBrewingFortuneTellerInformationResolution,
-): TroubleBrewingFortuneTellerInformationResolution {
-  return {
-    ...resolution,
-    selectedPlayerIds: [...resolution.selectedPlayerIds] as [string, string],
-    targets: resolution.targets.map(target => ({
-      ...target,
-      registration: { ...target.registration },
-    })) as TroubleBrewingFortuneTellerInformationResolution["targets"],
-  };
-}
-
-function createCommittedPairInformationResult(
-  state: BotcGameState,
-  step: BotcInformationStep & { roleId: TroubleBrewingPairInformationAbilityRoleId },
-  recipientPlayerId: string,
-  reliability: TroubleBrewingInformationReliability,
-): TroubleBrewingPairInformationResult {
-  const legalCandidates = createTroubleBrewingPairInformationCandidates(
-    state.assignments,
-    step.roleId,
-    recipientPlayerId,
-  );
-  const request = createPairInformationRecommendationRequest(
-    step.roleId,
-    recipientPlayerId,
-    reliability,
-    legalCandidates,
-  );
-  const recommendation = recommendPairInformationBaselineV1(request);
-  const selected = legalCandidates.find(
-    candidate => candidate.candidateId === recommendation.candidateId,
-  );
-  if (!selected) {
-    throw new Error("Pair information recommendation selected a missing legal candidate");
-  }
-
-  if (isTroubleBrewingPairCandidate(selected)) {
-    const selectedResolution = [...selected.legalResolutions].sort((left, right) =>
-      `${left.matchingPlayerId}:${left.matchSource}`.localeCompare(
-        `${right.matchingPlayerId}:${right.matchSource}`,
-      ),
-    )[0];
-    if (!selectedResolution) {
-      throw new Error("Pair information candidate has no legal resolution");
-    }
-    return {
-      kind: "pair",
-      abilityRoleId: step.roleId,
-      recipientPlayerId,
-      learnedRoleId: selected.learnedRoleId,
-      shownPlayerIds: [...selected.shownPlayerIds] as [string, string],
-      reliability,
-      semanticTruth: "true",
-      selectedCandidateId: selected.candidateId,
-      selectedResolution: { ...selectedResolution },
-    };
-  }
-
-  if (step.roleId !== "librarian") {
-    throw new Error("Only Librarian can commit a no-characters information result");
-  }
-  const selectedResolution = selected.legalResolutions[0];
-  if (!selectedResolution) {
-    throw new Error("No-characters information candidate has no legal resolution");
-  }
-  return {
-    kind: "no_characters",
-    abilityRoleId: "librarian",
-    recipientPlayerId,
-    noCharacterCategory: selected.noCharacterCategory,
-    reliability,
-    semanticTruth: "true",
-    selectedCandidateId: selected.candidateId,
-    selectedResolution: { ...selectedResolution },
-  };
-}
-
-function createCommittedNumericInformationResult(
-  state: BotcGameState,
-  step: BotcInformationStep & { roleId: TroubleBrewingNumericInformationAbilityRoleId },
-  recipientPlayerId: string,
-  reliability: TroubleBrewingInformationReliability,
-): TroubleBrewingNightInformationResult {
-  const legalCandidates = step.roleId === "chef"
-    ? createTroubleBrewingChefInformationCandidates(
-        state.assignments,
-        state.seatingPlayerIds,
-      )
-    : createTroubleBrewingEmpathInformationCandidates(
-        state.assignments,
-        state.seatingPlayerIds,
-        state.deadPlayerIds,
-        recipientPlayerId,
-      );
-  const request = createNumericInformationRecommendationRequest(
-    step.roleId,
-    recipientPlayerId,
-    reliability,
-    legalCandidates,
-  );
-  const recommendation = recommendNumericInformationBaselineV1(request);
-  const selected = legalCandidates.find(
-    candidate => candidate.candidateId === recommendation.candidateId,
-  );
-  if (!selected) {
-    throw new Error("Numeric information recommendation selected a missing legal candidate");
-  }
-  const selectedResolution = selected.legalResolutions[0];
-  if (!selectedResolution) {
-    throw new Error("Numeric information candidate has no legal resolution");
-  }
-  return {
-    kind: "number",
-    abilityRoleId: step.roleId,
-    recipientPlayerId,
-    value: selected.value,
-    reliability,
-    semanticTruth: "true",
-    selectedCandidateId: selected.candidateId,
-    selectedResolution: cloneNumericInformationResolution(selectedResolution),
-  };
-}
-
-function createCommittedFortuneTellerInformationResult(
-  state: BotcGameState,
-  step: BotcInformationStep & { roleId: "fortune_teller" },
-  recipientPlayerId: string,
-  reliability: TroubleBrewingInformationReliability,
-): TroubleBrewingNightInformationResult {
-  const choice = currentFortuneTellerChoice(state);
-  if (!choice) {
-    throw new Error("Fortune Teller must choose two players before information can be committed");
-  }
-  if (!state.redHerring) {
-    throw new Error("Fortune Teller Red Herring is not committed");
-  }
-  const legalCandidates = createTroubleBrewingFortuneTellerInformationCandidates(
-    state.assignments,
-    choice.playerIds,
-    state.redHerring.playerId,
-  );
-  const request = createFortuneTellerInformationRecommendationRequest(
-    recipientPlayerId,
-    reliability,
-    legalCandidates,
-  );
-  const recommendation = recommendFortuneTellerInformationBaselineV1(request);
-  const selected = legalCandidates.find(
-    candidate => candidate.candidateId === recommendation.candidateId,
-  );
-  if (!selected) {
-    throw new Error("Fortune Teller recommendation selected a missing legal candidate");
-  }
-  const selectedResolution = selected.legalResolutions[0];
-  if (!selectedResolution) {
-    throw new Error("Fortune Teller information candidate has no legal resolution");
-  }
-  return {
-    kind: "boolean",
-    abilityRoleId: step.roleId,
-    recipientPlayerId,
-    value: selected.value,
-    reliability,
-    semanticTruth: "true",
-    selectedCandidateId: selected.candidateId,
-    selectedResolution: cloneFortuneTellerInformationResolution(selectedResolution),
-  };
-}
-
-function commitCurrentNightInformation(
-  state: BotcGameState,
-): BotcNightInformationState {
-  const step = informationReadyStep(state, currentNightStep(state));
-  if (!step) {
-    throw new Error("Active BotC night step does not support committed information yet");
-  }
-  const recipientPlayerId = step.actorPlayerIds[0];
-  if (!recipientPlayerId || step.actorPlayerIds.length !== 1) {
-    throw new Error("Night information requires exactly one active recipient");
-  }
-  if (currentInformationState(state, step)) {
-    throw new Error("Active BotC night information is already committed");
-  }
-
-  const reliability = informationReliability(state, step, recipientPlayerId);
-  const result = isPairInformationRole(step.roleId)
-    ? createCommittedPairInformationResult(
-        state,
-        step as BotcInformationStep & {
-          roleId: TroubleBrewingPairInformationAbilityRoleId;
-        },
-        recipientPlayerId,
-        reliability,
-      )
-    : isNumericInformationRole(step.roleId)
-      ? createCommittedNumericInformationResult(
-          state,
-          step as BotcInformationStep & {
-            roleId: TroubleBrewingNumericInformationAbilityRoleId;
-          },
-          recipientPlayerId,
-          reliability,
-        )
-      : createCommittedFortuneTellerInformationResult(
-          state,
-          step as BotcInformationStep & { roleId: "fortune_teller" },
-          recipientPlayerId,
-          reliability,
-        );
-
-  const committed: BotcNightInformationState = {
-    stepId: step.id,
-    nightNumber: state.nightNumber,
-    recipientPlayerId,
-    result,
-    selectionSource: "baseline_v1",
-    acknowledged: false,
-  };
-  state.informationHistory.push(committed);
-  return committed;
-}
-
-function cloneNightInformationState(
-  information: BotcNightInformationState,
-): BotcNightInformationState {
-  const result = information.result.kind === "pair"
-    ? {
-        ...information.result,
-        shownPlayerIds: [...information.result.shownPlayerIds] as [string, string],
-        selectedResolution: { ...information.result.selectedResolution },
-      }
-    : information.result.kind === "number"
-      ? {
-          ...information.result,
-          selectedResolution: cloneNumericInformationResolution(
-            information.result.selectedResolution,
-          ),
-        }
-      : information.result.kind === "boolean"
-        ? {
-            ...information.result,
-            selectedResolution: cloneFortuneTellerInformationResolution(
-              information.result.selectedResolution,
-            ),
-          }
-        : {
-            ...information.result,
-            selectedResolution: { ...information.result.selectedResolution },
-          };
-  return {
-    ...information,
-    result,
-  };
-}
-
-function privateInformationView(
-  information: BotcNightInformationState,
-): BotcPrivateInformationView {
-  if (information.result.kind === "no_characters") {
-    return {
-      kind: "no_characters",
-      abilityRoleId: information.result.abilityRoleId,
-      noCharacterCategory: information.result.noCharacterCategory,
-    };
-  }
-  if (information.result.kind === "number") {
-    return {
-      kind: "number",
-      abilityRoleId: information.result.abilityRoleId,
-      value: information.result.value,
-    };
-  }
-  if (information.result.kind === "boolean") {
-    return {
-      kind: "boolean",
-      abilityRoleId: information.result.abilityRoleId,
-      value: information.result.value,
-    };
-  }
-
-  const learnedRole = troubleBrewingRole(information.result.learnedRoleId);
-  return {
-    kind: "pair",
-    abilityRoleId: information.result.abilityRoleId,
-    learnedRole: {
-      id: learnedRole.id,
-      name: learnedRole.name,
-      nameZh: learnedRole.nameZh,
-    },
-    shownPlayerIds: [...information.result.shownPlayerIds] as [string, string],
-  };
-}
-
 function redHerringDecision(
   state: BotcGameState,
 ): BotcRedHerringDecisionView | undefined {
@@ -832,21 +350,6 @@ function redHerringDecision(
   return {
     candidatePlayerIds: createTroubleBrewingRedHerringCandidates(state.assignments),
     ...(state.redHerring ? { selectedPlayerId: state.redHerring.playerId } : {}),
-  };
-}
-
-function moderatorInformationDecision(
-  state: BotcGameState,
-  step: BotcNightStep | undefined,
-): BotcModeratorInformationDecisionView | undefined {
-  const activeInformationStep = informationReadyStep(state, step);
-  const recipientPlayerId = activeInformationStep?.actorPlayerIds[0];
-  if (!activeInformationStep || !recipientPlayerId) return undefined;
-  return {
-    stepId: activeInformationStep.id,
-    recipientPlayerId,
-    roleId: activeInformationStep.roleId,
-    committed: Boolean(currentInformationState(state, activeInformationStep)),
   };
 }
 
@@ -1249,7 +752,10 @@ export class BotcGameModule implements GameModule<
         if (!context.isModerator) {
           throw new Error("Only the BotC moderator can commit night information");
         }
-        const committed = commitCurrentNightInformation(state);
+        const committed = commitCurrentNightInformation(
+          state,
+          currentNightStep(state),
+        );
         return {
           state,
           outcome: {
@@ -1339,7 +845,7 @@ export class BotcGameModule implements GameModule<
   getPlayerView(
     state: BotcGameState,
     playerId: string,
-    _context: GameViewContext,
+    context: GameViewContext,
   ): BotcPlayerView {
     const assignment = state.assignments.find(item => item.playerId === playerId);
     if (!assignment) return { phase: state.phase, mode: "spectator" };
@@ -1375,19 +881,19 @@ export class BotcGameModule implements GameModule<
       if (step?.actorPlayerIds.includes(playerId)) {
         const activeMinionInfo =
           step.id === "minion_info"
-            ? minionInfoView(state, playerId)
+            ? createBotcMinionInfoView(demonInfoFacts(state), playerId)
             : undefined;
         const activeDemonInfo =
           step.id === "demon_info" &&
           state.demonInfo?.demonPlayerId === playerId
-            ? demonInfoView(state)
+            ? createBotcDemonInfoView(state.demonInfo)
             : undefined;
         const activeInformation = currentInformationState(state, step);
         const privateInformation =
           activeInformation &&
           !activeInformation.acknowledged &&
           activeInformation.recipientPlayerId === playerId
-            ? privateInformationView(activeInformation)
+            ? createBotcPrivateInformationView(activeInformation.result, context)
             : undefined;
         return {
           ...base,
@@ -1422,7 +928,7 @@ export class BotcGameModule implements GameModule<
     _context: GameViewContext,
   ): BotcModeratorView {
     const step = currentNightStep(state);
-    const privateDemonInfo = demonInfoView(state);
+    const privateDemonInfo = createBotcDemonInfoView(state.demonInfo);
     const informationDecision = moderatorInformationDecision(state, step);
     const currentInformation = currentInformationState(state, step);
     const activeRedHerringDecision = redHerringDecision(state);

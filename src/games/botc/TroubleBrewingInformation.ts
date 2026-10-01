@@ -5,6 +5,7 @@ import {
 } from "./TroubleBrewing.js";
 import type { BotcCanonicalSetupAssignment } from "./TroubleBrewingSetup.js";
 import type { TroubleBrewingFortuneTellerInformationResolution } from "./TroubleBrewingFortuneTeller.js";
+import type { TroubleBrewingSpyGrimoireSnapshot } from "./TroubleBrewingSpyGrimoire.js";
 import {
   troubleBrewingAlignmentRegistrations,
   troubleBrewingCharacterRegistrations,
@@ -201,10 +202,21 @@ export type TroubleBrewingBooleanInformationResult = {
   selectedResolution: TroubleBrewingFortuneTellerInformationResolution;
 };
 
+export type TroubleBrewingSpyGrimoireInformationResult =
+  TroubleBrewingSpyGrimoireSnapshot & {
+    kind: "spy_grimoire";
+    abilityRoleId: "spy";
+    recipientPlayerId: string;
+    reliability: TroubleBrewingInformationReliability;
+    semanticTruth: TroubleBrewingSemanticTruth;
+    selectedCandidateId: "spy:grimoire:truthful";
+  };
+
 export type TroubleBrewingNightInformationResult =
   | TroubleBrewingPairInformationResult
   | TroubleBrewingNumericInformationResult
-  | TroubleBrewingBooleanInformationResult;
+  | TroubleBrewingBooleanInformationResult
+  | TroubleBrewingSpyGrimoireInformationResult;
 
 export function isTroubleBrewingPairCandidate(
   candidate: TroubleBrewingInformationCandidate,
