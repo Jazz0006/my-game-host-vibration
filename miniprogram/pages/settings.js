@@ -1,3 +1,7 @@
+const {
+  createClientLobbyPresentation,
+} = require("../runtime/client/ClientLobbyPresentation.js");
+
 function errorMessage(error) {
   if (error && typeof error.message === "string" && error.message.trim()) {
     return error.message.trim();
@@ -20,22 +24,13 @@ Page({
     this._client = app.getGameClient();
     this._detachClient = this._client.subscribe(view => {
       if (!view.room) return;
-      const players = Array.isArray(view.room.players)
-        ? [...view.room.players].sort((left, right) => left.seat - right.seat)
-        : [];
+      const model = createClientLobbyPresentation(view.room);
       this.setData({
-        roomCode: view.room.roomId || "",
-        currentPlayerId: view.room.viewer ? view.room.viewer.playerId : "",
-        isOwner: Boolean(view.room.viewer && view.room.viewer.isHost),
-        gameStarted: Boolean(view.room.gameStarted),
-        participants: players.map(player => ({
-          id: player.id,
-          name: player.name,
-          seat: player.seat,
-          isOwner: Boolean(player.isHost),
-          connected: player.connected !== false,
-          ready: Boolean(player.ready),
-        })),
+        roomCode: model.roomCode,
+        currentPlayerId: model.currentPlayerId,
+        isOwner: model.isOwner,
+        gameStarted: model.gameStarted,
+        participants: model.participants,
       });
     });
   },

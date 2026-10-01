@@ -245,6 +245,14 @@ export class TestRoomClient<TPlayerView = unknown> {
     return { ...this.credentials };
   }
 
+  hasSession(): boolean {
+    return this.session !== null;
+  }
+
+  hasCredentials(): boolean {
+    return this.credentials !== null;
+  }
+
   subscribe(listener: TestRoomClientListener): () => void {
     this.listeners.add(listener);
     listener();

@@ -4,6 +4,9 @@ const {
   computeRoundedTableSeats,
   resolveRoundedTableRingIndex,
 } = require("../rounded-table-layout.js");
+const {
+  createClientLobbyPresentation,
+} = require("../runtime/client/ClientLobbyPresentation.js");
 function toParticipantMap(participants) {
   const result = {};
   for (const participant of participants || []) {
@@ -41,47 +44,6 @@ function containsPoint(rect, point) {
   );
 }
 
-function canonicalModeratorAssignment(value) {
-  if (value && value.mode === "human" && value.playerId) {
-    return { mode: "human", playerId: value.playerId };
-  }
-  return { mode: "automatic" };
-}
-
-function authoritativeLobbyModel(room) {
-  const players = Array.isArray(room.players)
-    ? [...room.players].sort((left, right) => left.seat - right.seat)
-    : [];
-  const owner = players.find(player => player.isHost);
-  const moderatorAssignment = canonicalModeratorAssignment(room.gameModerator);
-  const moderatorPlayerId =
-    moderatorAssignment.mode === "human" ? moderatorAssignment.playerId : "";
-  const viewer = room.viewer || {};
-  return {
-    roomCode: room.roomId || "",
-    gameType: room.gameType || "",
-    participants: players.map(player => ({
-      id: player.id,
-      name: player.name,
-      seat: player.seat,
-      isOwner: Boolean(player.isHost),
-      ready: Boolean(player.ready),
-      connected: player.connected !== false,
-    })),
-    playerOrder: players
-      .filter(player => player.id !== moderatorPlayerId)
-      .map(player => player.id),
-    currentPlayerId: viewer.playerId || "",
-    ownerId: owner ? owner.id : "",
-    moderatorAssignment,
-    isGameModerator: Boolean(viewer.isGameModerator),
-    canControlGame:
-      moderatorAssignment.mode === "human"
-        ? Boolean(viewer.isGameModerator)
-        : Boolean(viewer.isHost),
-    gameStarted: Boolean(room.gameStarted),
-  };
-}
 
 function connectionStatusLine(view) {
   if (view.error) return view.error;
@@ -143,7 +105,7 @@ Page({
     this._client = app.getGameClient();
     this._detachClient = this._client.subscribe(view => {
       if (view.room) {
-        this.applyLobbyModel(authoritativeLobbyModel(view.room));
+        this.applyLobbyModel(createClientLobbyPresentation(view.room));
         this.routeToGameIfNeeded(view.room);
         return;
       }
@@ -204,7 +166,7 @@ Page({
     const participants = Array.isArray(model.participants) ? model.participants : [];
     const participantMap = toParticipantMap(participants);
     const currentPlayer = participantMap[model.currentPlayerId];
-    const moderatorAssignment = canonicalModeratorAssignment(model.moderatorAssignment);
+    const moderatorAssignment = model.moderatorAssignment || { mode: "automatic" };
     const humanModerator =
       moderatorAssignment.mode === "human"
         ? participantMap[moderatorAssignment.playerId]
@@ -219,22 +181,24 @@ Page({
 
     this.setData({
       roomCode: model.roomCode || "",
-      moderatorName: humanModerator ? humanModerator.name : "自动",
+      moderatorName: model.moderatorName || (humanModerator ? humanModerator.name : "自动"),
       seats: computeRoundedTableSeats(this._lobbyModel.playerOrder, participantMap),
       participants,
       playerOrder: this._lobbyModel.playerOrder,
       currentPlayerId: model.currentPlayerId || "",
-      currentPlayerReady: Boolean(currentPlayer && currentPlayer.ready),
-      isOwner: model.ownerId === model.currentPlayerId,
+      currentPlayerReady: Boolean(model.currentPlayerReady ?? (currentPlayer && currentPlayer.ready)),
+      isOwner: Boolean(model.isOwner ?? (model.ownerId === model.currentPlayerId)),
       isGameModerator: Boolean(model.isGameModerator),
       canControlGame: Boolean(model.canControlGame),
       gameStarted: Boolean(model.gameStarted),
       draggingPlayerId: "",
       draggingModerator: false,
       dragOverModerator: false,
-      statusLine: model.gameStarted
-        ? "服务器已开始游戏，authoritative PlayerView 已切换到游戏状态。"
-        : "已连接 authoritative room projection。",
+      statusLine: model.statusLine || (
+        model.gameStarted
+          ? "服务器已开始游戏，authoritative PlayerView 已切换到游戏状态。"
+          : "已连接 authoritative room projection。"
+      ),
     });
   },
 

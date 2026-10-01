@@ -136,21 +136,21 @@ http://localhost:3000/dev/lab
 
 `NODE_ENV=production` 时不会开放 Simulator Lab 或其 dev API。
 
-Simulator Lab V2 默认建立 5–15 人 BotC 虚拟桌。每名虚拟玩家都有独立的 production `ClientSession`，并通过共享 `BrowserRoomBootstrapClient -> CloudflareRealtimeTransport -> GameRoomDurableObject` 语义链路运行；本地只替换 Cloudflare network/storage capability，不复制 GameModule 规则或 projection。页面提供：
+Simulator Lab V2 现在承担 **真机/微信平台验收之前的客户端功能与流程验收**。每台虚拟设备都通过 production `BrowserRoomBootstrapClient -> CloudflareRealtimeTransport -> ClientSession -> GameRoomDurableObject/GameModule` 语义链路运行；本地只替换 Cloudflare network/storage capability，不复制房间规则、游戏规则或 projection。
 
-- 一个接近手机尺寸、与微信 `pages/game` 共用 `BotcGamePresentation` 的游戏界面镜像 selected-viewer；
-- N 个简化虚拟玩家控制卡；
-- Human/Automatic Storyteller assignment；
-- semantic-command 调试入口；
-- authoritative room / PlayerView / bounded ClientSession trace inspector；
-- deterministic disconnect/reconnect 操作。
+Lab 保留两种互补模式：
 
-日常 BotC 功能开发默认使用该 Lab + 自动化多人测试，不再使用旧 Node/Socket.IO `npm run simulate` 或旧狼人杀 `/dev/lab` 实现，也不要求真机。Lab 默认使用本地 `InMemoryCloudflareMultiplayerHarness` 替代 Cloudflare network/storage capability；它不依赖已部署 Worker，真实 Cloudflare + WeChat Developer Tools 留作阶段性集成验收。
+- **完整客户端模式**：建立 1–15 台尚未进房的虚拟微信客户端，从入口页开始逐台执行创建房间、4 位房间号加入、继续上次房间、Lobby、准备、座位调整、Human/Automatic Storyteller、房间管理、开始游戏、游戏内交互、网络掉线/重连与“关闭微信后恢复”；
+- **快速建立 N 人桌**：仍要求 5–15 人，一键建立完整 BotC 房间，供角色规则、首夜编排与自动化回归快速使用；
+- Entry 使用共享 `ClientEntryPresentation`，Lobby/Settings 使用共享 `ClientLobbyPresentation`，游戏页使用共享 `BotcGamePresentation`；Simulator 与微信薄页面不各自维护第二套显示/权限语义；
+- 仍保留 N 个虚拟设备控制卡、semantic-command 调试入口、authoritative room / PlayerView / bounded ClientSession trace inspector 和 deterministic fault injection。
+
+因此，日常 BotC 功能开发和“真机前”的应用层验收默认都应先在 Lab 完成。Lab 默认使用本地 `InMemoryCloudflareMultiplayerHarness`，不依赖已部署 Worker。只有微信/设备/公网平台本身无法由 Lab 证明的事项——例如 WXML/WXSS 与触摸手势的真实运行时表现、`wx.vibrateShort`、前后台生命周期、真实机型安全区/字体布局，以及真实部署 Cloudflare/Public WebSocket 网络——才进入 WeChat Developer Tools / staged real-device acceptance。
 
 ## 长期产品边界
 
 - 狼人杀已验证当前平台基础；W3D3 与 MG0A–MG0D 已完成；BotC 已具备 B0A–B0B3 与 B0C1–B0C3A 后端基础，当前优先级转为 Simulator-first playable vertical slice，而不是继续让推荐算法深度领先于真实客户端可玩性；
-- 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；PV-0 已完成 shared Lobby authoritative interactions，PV-1 已完成最小 Trouble Brewing automatic setup + `botc.startGame` production path，PV-2 已完成 private role reveal + `botc.confirmRole` production path；PV-3A 已完成 first-night production orchestration，PV-3B1 已完成 Poisoner/Butler 单目标 choice/effect，PV-3B2A/B 已完成 Washerwoman/Librarian/Investigator 信息链；PV-UI0 已让 Simulator 手机 Viewer 与微信 game page 共用展示模型，当前 NEXT 为 PV-3B2C Chef + Empath numeric information；
+- 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；PV-0 已完成 shared Lobby authoritative interactions，PV-1 已完成最小 Trouble Brewing automatic setup + `botc.startGame` production path，PV-2 已完成 private role reveal + `botc.confirmRole` production path；PV-3A 已完成 first-night production orchestration，PV-3B1 已完成 Poisoner/Butler 单目标 choice/effect，PV-3B2A/B 已完成 Washerwoman/Librarian/Investigator 信息链；PV-UI0 已完成 game-page presentation convergence，PV-UI1 已把 Entry/Lobby/Settings/恢复流程纳入完整客户端 Lab，使 Lab 成为真机前应用层验收 owner；当前 NEXT 为 PV-3B2C Chef + Empath numeric information；
 - 讨论、发言和社交推理仍在线下完成；
 - 断线、熄屏、切 App 和网络切换视为正常生命周期；
 - Room Owner 是房间管理/Recovery Controller，不等同于 Game Moderator/Storyteller；
