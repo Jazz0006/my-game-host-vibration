@@ -28,7 +28,7 @@ Use these in this order:
   - cross-project canonical `TroubleBrewingGameSnapshotV1` adoption boundary;
   - keeps mutable online `BotcGameState` as runtime authority while the independent V1 contract/codec and pure runtime snapshot projector provide the shared read boundary;
   - freezes KNOWN / UNCOMMITTED / UNKNOWN / NOT_APPLICABLE semantics and excludes room/network/client state;
-  - UGSM-1 exact V1 contract + pure projector is complete; PV-3B2 is again the current gameplay NEXT.
+  - UGSM-1 exact V1 contract + pure projector is complete; PV-3B2B pair-information reuse is complete and PV-3B2C numeric information is current NEXT.
 - `docs/B0C_TROUBLE_BREWING_INFORMATION_RECOMMENDATION_HANDOFF_2026-09-30.md`
   - B0C1/B0C2/B0C3A completed foundation and recommendation-boundary history;
   - B0C3A registration + truthful Washerwoman candidate boundary is retained;
@@ -64,7 +64,8 @@ PV-3 first-night playable UI ← IN PROGRESS
        ├─ UGSM-1 exact V1 snapshot contract + pure projector ✅
        └─ PV-3B2 first-night information resolution ← IN PROGRESS
             ├─ PV-3B2A Washerwoman information runtime ✅
-            └─ PV-3B2B Librarian + Investigator pair information ← CURRENT / NEXT
+            ├─ PV-3B2B Librarian + Investigator pair information ✅
+            └─ PV-3B2C Chef + Empath numeric information ← CURRENT / NEXT
   ↓
 PV-4 minimal day/night loop
   ↓

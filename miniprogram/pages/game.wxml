@@ -92,10 +92,13 @@
     </view>
   </view>
 
-  <view class="private-info-card" wx:if="{{privateInformationRoleName}}">
+  <view class="private-info-card" wx:if="{{privateInformationRoleName || privateInformationZeroLabel}}">
     <view class="eyebrow">PRIVATE INFO</view>
-    <view class="private-info-line">
+    <view class="private-info-line" wx:if="{{privateInformationRoleName}}">
       {{privateInformationPlayerNames}} 中有 1 人是 {{privateInformationRoleName}}
+    </view>
+    <view class="private-info-line" wx:if="{{privateInformationZeroLabel}}">
+      {{privateInformationZeroLabel}}
     </view>
     <button
       wx:if="{{canAcknowledgeNightInformation}}"

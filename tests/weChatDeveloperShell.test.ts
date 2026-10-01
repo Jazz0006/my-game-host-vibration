@@ -130,6 +130,10 @@ describe("MG0D WeChat game-specific product shells", () => {
     expect(game).toContain("this._product.nightChoiceCommand");
     expect(game).not.toContain("poisoner");
     expect(game).not.toContain("butler");
+    expect(game).not.toContain("librarian");
+    expect(game).not.toContain("investigator");
+    expect(game).toContain('privateInformation.kind === "no_characters"');
+    expect(game).toContain("本局没有外来者");
     expect(game).not.toContain("actualRoleId");
     expect(game).not.toContain("shownRoleId");
     expect(game).not.toContain("assignments");
@@ -144,6 +148,7 @@ describe("MG0D WeChat game-specific product shells", () => {
     expect(gameMarkup).toContain("DEMON INFO");
     expect(gameMarkup).toContain("NIGHT CHOICE");
     expect(gameMarkup).toContain("确认选择");
+    expect(gameMarkup).toContain("privateInformationZeroLabel");
     expect(gameMarkup).toContain("authoritative PlayerView");
 
     const settings = text("miniprogram/pages/settings.js");

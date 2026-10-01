@@ -121,6 +121,7 @@ Page({
     demonBluffNames: "",
     privateInformationRoleName: "",
     privateInformationPlayerNames: "",
+    privateInformationZeroLabel: "",
     confirmedRoles: 0,
     playerCount: 0,
     allConfirmed: false,
@@ -373,6 +374,12 @@ Page({
           ? privateInformation.shownPlayerIds
               .map(playerId => playerName(room, playerId))
               .join("、")
+          : "",
+      privateInformationZeroLabel:
+        privateInformation &&
+        privateInformation.kind === "no_characters" &&
+        privateInformation.noCharacterCategory === "outsider"
+          ? "本局没有外来者"
           : "",
       confirmedRoles,
       playerCount,
