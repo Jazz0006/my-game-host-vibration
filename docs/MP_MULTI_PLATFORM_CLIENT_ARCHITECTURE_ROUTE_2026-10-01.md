@@ -1,9 +1,9 @@
 # Multi-platform Client Architecture Route (2026-10-01)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE INSERTED ROUTE — MP-0 NEXT**  
+> Status: **NORMATIVE INSERTED ROUTE — MP-0 COMPLETE; NO MANDATORY PRE-PV MP-1; PV-3B2C NEXT**  
 > Scope: client/runtime architecture for Browser/Simulator as the development reference surface, WeChat Mini Program as a production client, and future Android/iOS production clients.  
-> Execution rule: **complete MP-0 plus only the necessary MP-1 seam hardening, then resume PV-3B2C.** Mobile app implementation and framework selection must not block the BotC playable mainline.
+> Execution result: MP-0 found the next BotC information shape already has a shared client path. No MP-1 code hardening is required before PV-3B2C; later mobile-framework work remains deferred.
 
 ---
 
@@ -21,11 +21,11 @@ The project therefore inserts a short multi-platform architecture checkpoint bef
 ```text
 PV-UI1 COMPLETE
     ↓
-MP-0 Multi-platform Client Architecture Audit      ← NEXT
+MP-0 Multi-platform Client Architecture Audit      ✅ COMPLETE
     ↓
-MP-1 Necessary Shared Client / Platform Port hardening
+MP-1 mandatory pre-PV hardening                    NONE REQUIRED
     ↓
-PV-3B2C Chef + Empath numeric information
+PV-3B2C Chef + Empath numeric information          ← NEXT
     ↓
 continue PV-3B / playable BotC mainline
 ```
@@ -132,7 +132,7 @@ Platform adapters own capability mapping and platform failure handling. Game rul
 
 ---
 
-## 5. MP-0 — Multi-platform Client Architecture Audit ← NEXT
+## 5. MP-0 — Multi-platform Client Architecture Audit ✅ COMPLETE
 
 ### Goal
 
@@ -177,11 +177,15 @@ MP-0 is complete when:
 - MP-1 work is reduced to a bounded list of changes necessary before further PV-3B client expansion;
 - no mobile framework is selected merely on expectation.
 
+Accepted audit result is recorded in `docs/MP0_MULTI_PLATFORM_CLIENT_ARCHITECTURE_AUDIT_2026-10-01.md`.
+
+The audit found protocol/session/retry/revision/bootstrap/effect intent and Entry/Lobby/BotC presentation already shared. Browser and WeChat lifecycle adapters duplicate one recovery decision switch (`Connected -> resync`, `Disconnected -> reconnect`), but that drift point does not intersect Chef/Empath numeric information and is therefore deferred rather than promoted into a blocking refactor.
+
 ---
 
 ## 6. MP-1 — Necessary Shared Client / Platform Port hardening
 
-MP-1 implements only the seams that MP-0 proves are needed **before PV-3B2C**.
+MP-1 implements only the seams that MP-0 proves are needed **before PV-3B2C**. MP-0 found **no mandatory pre-PV-3B2C MP-1 implementation**.
 
 Typical candidates may include:
 
@@ -199,13 +203,13 @@ Do not:
 - replace functioning platform adapters only to normalize names;
 - redesign Cloudflare or GameModule ownership.
 
-MP-1 finishes when the next new BotC private-information/action shape can be added without choosing a client platform first.
+MP-1's acceptance condition is already satisfied by the current code: the next new BotC private-information/action shape can be added through the authoritative projection -> shared `BotcGamePresentation` -> thin WeChat/Simulator renderers without choosing a client platform first. Lifecycle-policy extraction and credential-store generalization remain bounded later candidates, not current blockers.
 
 ---
 
 ## 7. Resume point
 
-After MP-0 and the necessary MP-1 changes pass local acceptance:
+After MP-0 acceptance, with no mandatory MP-1 changes identified:
 
 ```text
 resume PV-3B2C
