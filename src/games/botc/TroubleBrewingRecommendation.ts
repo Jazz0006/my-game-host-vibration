@@ -2,8 +2,9 @@ import type { RandomProvider } from "../../core/random/RandomProvider.js";
 import type { TroubleBrewingRoleId } from "./TroubleBrewing.js";
 import type {
   TroubleBrewingDemonInfoFacts,
+  TroubleBrewingInformationCandidate,
   TroubleBrewingInformationReliability,
-  TroubleBrewingWasherwomanInformationCandidate,
+  TroubleBrewingPairInformationAbilityRoleId,
 } from "./TroubleBrewingInformation.js";
 
 export type DemonBluffRecommendationOptionalContext = {
@@ -115,83 +116,101 @@ export function recommendDemonBluffsBaselineV1(
   return validateDemonBluffRecommendation(request, { roleIds });
 }
 
-export type WasherwomanInformationRecommendationRequest = {
-  decisionPoint: "washerwoman_information";
+export type PairInformationRecommendationRequest = {
+  decisionPoint: "pair_information";
   requiredContext: {
+    abilityRoleId: TroubleBrewingPairInformationAbilityRoleId;
     recipientPlayerId: string;
     reliability: TroubleBrewingInformationReliability;
-    legalCandidates: TroubleBrewingWasherwomanInformationCandidate[];
+    legalCandidates: TroubleBrewingInformationCandidate[];
   };
 };
 
-export type WasherwomanInformationRecommendation = {
+export type PairInformationRecommendation = {
   candidateId: string;
 };
 
-/**
- * Creates the Recommendation-layer request from the rules-owned Washerwoman
- * candidate domain. Reliability is explicit context, but does not alter the
- * rules-owned healthy candidate set in PV-3B2A.
- */
-export function createWasherwomanInformationRecommendationRequest(
-  recipientPlayerId: string,
-  reliability: TroubleBrewingInformationReliability,
-  legalCandidates: readonly TroubleBrewingWasherwomanInformationCandidate[],
-): WasherwomanInformationRecommendationRequest {
-  if (!recipientPlayerId.trim()) {
-    throw new Error("Washerwoman information recipient cannot be blank");
-  }
-  if (legalCandidates.length === 0) {
-    throw new Error("Washerwoman information requires at least one legal candidate");
+function clonePairInformationCandidate(
+  candidate: TroubleBrewingInformationCandidate,
+): TroubleBrewingInformationCandidate {
+  if ("shownPlayerIds" in candidate) {
+    return {
+      ...candidate,
+      shownPlayerIds: [...candidate.shownPlayerIds] as [string, string],
+      legalResolutions: candidate.legalResolutions.map(resolution => ({
+        ...resolution,
+      })),
+    };
   }
   return {
-    decisionPoint: "washerwoman_information",
+    ...candidate,
+    legalResolutions: candidate.legalResolutions.map(resolution => ({
+      ...resolution,
+    })),
+  };
+}
+
+/**
+ * Creates one Recommendation-layer request for the shared
+ * Washerwoman/Librarian/Investigator information family. Reliability is
+ * explicit context, but the baseline continues to choose only from the
+ * Rules/Information-owned natural truthful domain.
+ */
+export function createPairInformationRecommendationRequest(
+  abilityRoleId: TroubleBrewingPairInformationAbilityRoleId,
+  recipientPlayerId: string,
+  reliability: TroubleBrewingInformationReliability,
+  legalCandidates: readonly TroubleBrewingInformationCandidate[],
+): PairInformationRecommendationRequest {
+  if (!recipientPlayerId.trim()) {
+    throw new Error("Pair information recipient cannot be blank");
+  }
+  if (legalCandidates.length === 0) {
+    throw new Error("Pair information requires at least one legal candidate");
+  }
+  return {
+    decisionPoint: "pair_information",
     requiredContext: {
+      abilityRoleId,
       recipientPlayerId,
       reliability,
-      legalCandidates: legalCandidates.map(candidate => ({
-        ...candidate,
-        shownPlayerIds: [...candidate.shownPlayerIds] as [string, string],
-        legalResolutions: candidate.legalResolutions.map(resolution => ({
-          ...resolution,
-        })),
-      })),
+      legalCandidates: legalCandidates.map(clonePairInformationCandidate),
     },
   };
 }
 
-export function validateWasherwomanInformationRecommendation(
-  request: WasherwomanInformationRecommendationRequest,
-  recommendation: WasherwomanInformationRecommendation,
-): WasherwomanInformationRecommendation {
+export function validatePairInformationRecommendation(
+  request: PairInformationRecommendationRequest,
+  recommendation: PairInformationRecommendation,
+): PairInformationRecommendation {
   if (
     !request.requiredContext.legalCandidates.some(
       candidate => candidate.candidateId === recommendation.candidateId,
     )
   ) {
-    throw new Error("Washerwoman recommendation must select a legal information candidate");
+    throw new Error(
+      "Pair information recommendation must select a legal information candidate",
+    );
   }
   return { candidateId: recommendation.candidateId };
 }
 
 /**
- * Minimal automatic Storyteller baseline for PV-3B2A.
- *
- * It deliberately has no narrative scoring. The stable candidate ID ordering
- * makes reconnect/replay deterministic, and unreliable abilities may still
- * receive truthful information because that is rules-legal. Richer impaired
- * misinformation selection remains a future versioned recommendation policy.
+ * Minimal automatic Storyteller baseline for the PV-3B2 pair-information
+ * family. Stable candidate-ID ordering makes replay deterministic. An
+ * unreliable ability may still receive truthful information because that is
+ * rules-legal; richer misinformation policy remains a later version.
  */
-export function recommendWasherwomanInformationBaselineV1(
-  request: WasherwomanInformationRecommendationRequest,
-): WasherwomanInformationRecommendation {
+export function recommendPairInformationBaselineV1(
+  request: PairInformationRecommendationRequest,
+): PairInformationRecommendation {
   const selected = [...request.requiredContext.legalCandidates].sort((left, right) =>
     left.candidateId.localeCompare(right.candidateId),
   )[0];
   if (!selected) {
-    throw new Error("Washerwoman baseline has no legal candidate");
+    throw new Error("Pair information baseline has no legal candidate");
   }
-  return validateWasherwomanInformationRecommendation(request, {
+  return validatePairInformationRecommendation(request, {
     candidateId: selected.candidateId,
   });
 }

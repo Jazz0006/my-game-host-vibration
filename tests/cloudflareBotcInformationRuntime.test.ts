@@ -49,21 +49,38 @@ function playerContext(playerId: string): GameCommandContext {
   return { playerId, isModerator: false, now: 1 };
 }
 
-function activePoisonerGame(): BotcGameState {
+type PairInformationRoleId = "washerwoman" | "librarian" | "investigator";
+
+function activePoisonerGame(
+  informationRoleId: PairInformationRoleId = "washerwoman",
+): BotcGameState {
   const module = new BotcGameModule();
-  const playerIds = ["p1", "p2", "p3", "p4", "p5", "p6"];
+  const playerIds =
+    informationRoleId === "washerwoman"
+      ? ["p1", "p2", "p3", "p4", "p5", "p6"]
+      : ["p1", "p2", "p3", "p4", "p5"];
+  const assignments =
+    informationRoleId === "washerwoman"
+      ? [
+          { playerId: "p1", actualRoleId: "poisoner" as const },
+          { playerId: "p2", actualRoleId: "imp" as const },
+          { playerId: "p3", actualRoleId: "butler" as const },
+          { playerId: "p4", actualRoleId: "washerwoman" as const },
+          { playerId: "p5", actualRoleId: "chef" as const },
+          { playerId: "p6", actualRoleId: "empath" as const },
+        ]
+      : [
+          { playerId: "p1", actualRoleId: "poisoner" as const },
+          { playerId: "p2", actualRoleId: "imp" as const },
+          { playerId: "p3", actualRoleId: "chef" as const },
+          { playerId: "p4", actualRoleId: informationRoleId },
+          { playerId: "p5", actualRoleId: "empath" as const },
+        ];
   const game = module.createGame(
     {
       playerIds,
       config: { scriptId: "trouble-brewing" },
-      assignments: [
-        { playerId: "p1", actualRoleId: "poisoner" },
-        { playerId: "p2", actualRoleId: "imp" },
-        { playerId: "p3", actualRoleId: "butler" },
-        { playerId: "p4", actualRoleId: "washerwoman" },
-        { playerId: "p5", actualRoleId: "chef" },
-        { playerId: "p6", actualRoleId: "empath" },
-      ],
+      assignments,
     },
     dependencies,
   );
@@ -85,10 +102,15 @@ function activePoisonerGame(): BotcGameState {
   return game;
 }
 
-function roomPlayers(includeStoryteller = false) {
-  const ids = includeStoryteller
-    ? ["p1", "p2", "p3", "p4", "p5", "p6", "st"]
-    : ["p1", "p2", "p3", "p4", "p5", "p6"];
+function roomPlayers(
+  includeStoryteller = false,
+  playerCount = 6,
+) {
+  const playerIds = Array.from(
+    { length: playerCount },
+    (_, index) => `p${index + 1}`,
+  );
+  const ids = includeStoryteller ? [...playerIds, "st"] : playerIds;
   return ids.map((id, index) => ({
     id,
     name: id === "st" ? "Storyteller" : `Player ${index + 1}`,
@@ -104,9 +126,11 @@ async function seedRoom(
   mode:
     | { mode: "automatic" }
     | { mode: "human"; playerId: string },
+  informationRoleId: PairInformationRoleId = "washerwoman",
 ): Promise<void> {
-  const game = activePoisonerGame();
-  const players = roomPlayers(mode.mode === "human");
+  const game = activePoisonerGame(informationRoleId);
+  const playerCount = informationRoleId === "washerwoman" ? 6 : 5;
+  const players = roomPlayers(mode.mode === "human", playerCount);
   const room = {
     id: "2468",
     gameType: "botc",
@@ -148,7 +172,7 @@ function command(
   );
 }
 
-describe("PV-3B2A Cloudflare Washerwoman information runtime", () => {
+describe("PV-3B2 pair-information Cloudflare runtime", () => {
   it("auto-commits information in the same authoritative mutation, keeps it private, and replays acknowledgement idempotently", async () => {
     const storage = new MemoryStorage();
     await seedRoom(storage, { mode: "automatic" });
@@ -266,17 +290,92 @@ describe("PV-3B2A Cloudflare Washerwoman information runtime", () => {
     ).toHaveLength(1);
   });
 
-  it("preserves Human Storyteller authority: owner cannot commit and explicit Storyteller commit does not advance the night cursor", async () => {
+  it("auto-commits typed Librarian zero information and keeps authoritative truth metadata out of PlayerView", async () => {
     const storage = new MemoryStorage();
-    await seedRoom(storage, { mode: "human", playerId: "st" });
+    await seedRoom(storage, { mode: "automatic" }, "librarian");
     const commands = runtime(storage);
 
     const poison = await commands.execute(
       "p1",
       command(
         "botc.submitNightChoice",
-        { playerIds: ["p4"] },
-        "human-poison-washerwoman",
+        { playerIds: ["p3"] },
+        "poison-before-librarian",
+      ),
+    );
+
+    expect(poison).toMatchObject({
+      replayed: false,
+      revision: 10,
+      outcome: {
+        kind: "nightChoiceCommitted",
+        completedStepId: "role:poisoner",
+        nextStepId: "role:librarian",
+      },
+      snapshot: {
+        game: {
+          informationHistory: [
+            {
+              stepId: "role:librarian",
+              recipientPlayerId: "p4",
+              selectionSource: "baseline_v1",
+              acknowledged: false,
+              result: {
+                kind: "no_characters",
+                abilityRoleId: "librarian",
+                noCharacterCategory: "outsider",
+                reliability: "reliable",
+                semanticTruth: "true",
+                selectedCandidateId: "librarian:no-outsiders",
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const recipientEnvelope = createGamePlayerStateEnvelope(
+      poison.snapshot,
+      "p4",
+    );
+    expect(recipientEnvelope).toMatchObject({
+      payload: {
+        mode: "night_wake",
+        nightStep: { id: "role:librarian" },
+        privateInformation: {
+          kind: "no_characters",
+          abilityRoleId: "librarian",
+          noCharacterCategory: "outsider",
+        },
+      },
+    });
+    expect(JSON.stringify(recipientEnvelope)).not.toContain('"semanticTruth"');
+    expect(JSON.stringify(recipientEnvelope)).not.toContain('"selectedResolution"');
+    expect(
+      JSON.stringify(createGamePlayerStateEnvelope(poison.snapshot, "p5")),
+    ).not.toContain("privateInformation");
+    expect(
+      JSON.stringify(
+        createGameRoomStateEnvelope(poison.snapshot, "p2", () => true),
+      ),
+    ).not.toContain("informationHistory");
+  });
+
+  it("preserves Human Storyteller authority for Investigator without advancing before acknowledgement", async () => {
+    const storage = new MemoryStorage();
+    await seedRoom(
+      storage,
+      { mode: "human", playerId: "st" },
+      "investigator",
+    );
+    const commands = runtime(storage);
+
+    const poison = await commands.execute(
+      "p1",
+      command(
+        "botc.submitNightChoice",
+        { playerIds: ["p3"] },
+        "human-poison-before-investigator",
       ),
     );
 
@@ -293,11 +392,11 @@ describe("PV-3B2A Cloudflare Washerwoman information runtime", () => {
       payload: {
         viewer: { isGameModerator: true },
         game: {
-          nightStep: { id: "role:washerwoman" },
+          nightStep: { id: "role:investigator" },
           informationDecision: {
-            stepId: "role:washerwoman",
+            stepId: "role:investigator",
             recipientPlayerId: "p4",
-            roleId: "washerwoman",
+            roleId: "investigator",
             committed: false,
           },
         },
@@ -307,7 +406,7 @@ describe("PV-3B2A Cloudflare Washerwoman information runtime", () => {
     const commitCommand = command(
       "botc.commitNightInformation",
       {},
-      "human-washerwoman-commit",
+      "human-investigator-commit",
     );
     await expect(commands.execute("p1", commitCommand)).rejects.toThrow(
       "game command requires moderator authority",
@@ -319,7 +418,7 @@ describe("PV-3B2A Cloudflare Washerwoman information runtime", () => {
       revision: 11,
       outcome: {
         kind: "nightInformationCommitted",
-        stepId: "role:washerwoman",
+        stepId: "role:investigator",
         recipientPlayerId: "p4",
       },
       snapshot: {
@@ -328,6 +427,16 @@ describe("PV-3B2A Cloudflare Washerwoman information runtime", () => {
           informationHistory: [
             {
               acknowledged: false,
+              result: {
+                kind: "pair",
+                abilityRoleId: "investigator",
+                learnedRoleId: "poisoner",
+                semanticTruth: "true",
+                selectedResolution: {
+                  matchingPlayerId: "p1",
+                  matchSource: "actual",
+                },
+              },
             },
           ],
         },

@@ -427,17 +427,28 @@ Cross-project compatibility note: CampBoardGameHost live `main` (`4593f79186d0af
 
 Validation checkpoint: `quality` PASS; 139 test files / 580 tests; Web client and both WeChat product shells build/verify PASS. Cloudflare acceptance covers automatic same-revision commit, private/public secrecy, Human Storyteller authority and idempotent acknowledgement replay.
 
-###### PV-3B2B — Librarian + Investigator pair information ← NEXT
+###### PV-3B2B — Librarian + Investigator pair information ✅ COMPLETE
 
-Reuse the PV-3B2A lifecycle rather than adding role-specific runtime paths:
+PV-3B2A's lifecycle is now a shared pair-information family rather than three role-specific runtime paths:
 
-- add Rules/Information candidate domains for Librarian and Investigator, including legal zero-Outsider Librarian semantics where applicable;
-- reuse one pair-information result / private-view / acknowledgement shape;
-- preserve registration provenance and explicit reliability/truth state;
-- keep automatic selection as a simple versioned rules-legal baseline;
-- do not expand into Fortune Teller dual-target/Red Herring or Spy Grimoire.
+- Rules / Information owns one candidate generator for Washerwoman / Librarian / Investigator, parameterized by target category while preserving exact Spy / Recluse registration provenance;
+- the information recipient remains a legal member of the shown pair. This covers valid Baron setups where Washerwoman is the only Townsfolk and must be able to learn themself plus one other player;
+- Librarian zero is a typed `no_characters / outsider` result and is truthful only when there are actually zero Outsiders in play; a Spy registering as an Outsider may coexist with the truthful zero candidate because registration does not create an actual Outsider;
+- a Drunk shown Librarian is still an actual Outsider, so a zero result is not placed in the natural truthful candidate domain merely because the Drunk is the recipient;
+- Recommendation uses one deterministic `pair_information / baseline_v1` request/selection path with no narrative scoring;
+- GameModule uses one authoritative commit / acknowledgement / skip-guard path for all three roles; reliability, semantic truth and exact resolution provenance remain durable moderator/history facts;
+- PlayerView exposes only the recipient-visible pair or typed zero result, never reliability / semantic truth / registration proof;
+- Automatic Storyteller still commits when the authoritative Cloudflare mutation enters the information step; Human Storyteller keeps explicit commit authority and commit does not advance until recipient acknowledgement;
+- shared WeChat UI renders both pair information and generic `no_characters` information without Librarian / Investigator role branches;
+- Simulator's production first-night loop continues to consume the generic private-information + acknowledgement contract unchanged.
 
-After pair-information reuse is proven, continue PV-3B2 with Chef / Empath numeric information as a separate shape.
+Cross-project follow-up: the live CampBoardGameHost natural pair generator currently excludes the information source seat, while the official Washerwoman run procedure permits the Washerwoman themself to be the matching Townsfolk when necessary. This Web Host implementation follows the rules-correct domain and records the discrepancy for later Host alignment; it does **not** change the frozen `TroubleBrewingGameSnapshotV1` wire schema.
+
+Validation checkpoint: typecheck PASS; full test PASS, 141 test files / 587 tests; Web client and both WeChat product shells build/verify PASS. Cloudflare acceptance covers Librarian zero automatic same-mutation commit / secrecy plus Investigator Human Storyteller authority.
+
+###### PV-3B2C — Chef + Empath numeric information ← NEXT
+
+Reuse the same information lifecycle where applicable, but introduce a separate numeric-result shape rather than forcing Chef / Empath into pair-information fields. Preserve explicit reliability/truth, private delivery, authoritative commit and acknowledgement semantics.
 
 Fortune Teller dual-target + Red Herring/result semantics and Spy Grimoire remain later PV-3B sub-slices because they require distinct interaction/private-view contracts.
 

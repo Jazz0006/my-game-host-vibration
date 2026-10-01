@@ -65,9 +65,19 @@ export function createTroubleBrewingDemonInfoFacts(
   };
 }
 
+export type TroubleBrewingPairInformationAbilityRoleId =
+  | "washerwoman"
+  | "librarian"
+  | "investigator";
+
 export type TroubleBrewingPairInformationResolution = {
   matchingPlayerId: string;
   matchSource: TroubleBrewingCharacterRegistrationSource;
+};
+
+export type TroubleBrewingNoCharactersInformationResolution = {
+  noCharacterCategory: "outsider";
+  truthSource: "actual_state";
 };
 
 export type TroubleBrewingWasherwomanInformationResolution =
@@ -84,59 +94,115 @@ export type TroubleBrewingSemanticTruth =
   | "partially_true"
   | "not_applicable";
 
-export type TroubleBrewingWasherwomanInformationCandidate = {
+export type TroubleBrewingPairInformationCandidate = {
   candidateId: string;
   learnedRoleId: TroubleBrewingRoleId;
   shownPlayerIds: [string, string];
-  legalResolutions: TroubleBrewingWasherwomanInformationResolution[];
+  legalResolutions: TroubleBrewingPairInformationResolution[];
 };
 
-export type TroubleBrewingPairInformationResult = {
-  kind: "pair";
-  abilityRoleId: TroubleBrewingRoleId;
-  recipientPlayerId: string;
-  learnedRoleId: TroubleBrewingRoleId;
-  shownPlayerIds: [string, string];
-  reliability: TroubleBrewingInformationReliability;
-  semanticTruth: TroubleBrewingSemanticTruth;
-  selectedCandidateId: string;
-  selectedResolution: TroubleBrewingPairInformationResolution;
+export type TroubleBrewingNoCharactersInformationCandidate = {
+  candidateId: string;
+  noCharacterCategory: "outsider";
+  legalResolutions: TroubleBrewingNoCharactersInformationResolution[];
 };
 
-export type TroubleBrewingWasherwomanInformationResult =
-  TroubleBrewingPairInformationResult & {
-    abilityRoleId: "washerwoman";
-  };
+export type TroubleBrewingInformationCandidate =
+  | TroubleBrewingPairInformationCandidate
+  | TroubleBrewingNoCharactersInformationCandidate;
+
+export type TroubleBrewingWasherwomanInformationCandidate =
+  TroubleBrewingPairInformationCandidate;
+
+export type TroubleBrewingPairInformationResult =
+  | {
+      kind: "pair";
+      abilityRoleId: TroubleBrewingPairInformationAbilityRoleId;
+      recipientPlayerId: string;
+      learnedRoleId: TroubleBrewingRoleId;
+      shownPlayerIds: [string, string];
+      reliability: TroubleBrewingInformationReliability;
+      semanticTruth: TroubleBrewingSemanticTruth;
+      selectedCandidateId: string;
+      selectedResolution: TroubleBrewingPairInformationResolution;
+    }
+  | {
+      kind: "no_characters";
+      abilityRoleId: "librarian";
+      recipientPlayerId: string;
+      noCharacterCategory: "outsider";
+      reliability: TroubleBrewingInformationReliability;
+      semanticTruth: TroubleBrewingSemanticTruth;
+      selectedCandidateId: string;
+      selectedResolution: TroubleBrewingNoCharactersInformationResolution;
+    };
+
+export type TroubleBrewingWasherwomanInformationResult = Extract<
+  TroubleBrewingPairInformationResult,
+  { kind: "pair" }
+> & {
+  abilityRoleId: "washerwoman";
+};
+
+export function isTroubleBrewingPairCandidate(
+  candidate: TroubleBrewingInformationCandidate,
+): candidate is TroubleBrewingPairInformationCandidate {
+  return "learnedRoleId" in candidate;
+}
+
+function pairInformationTargetCategory(
+  abilityRoleId: TroubleBrewingPairInformationAbilityRoleId,
+): "townsfolk" | "outsider" | "minion" {
+  switch (abilityRoleId) {
+    case "washerwoman":
+      return "townsfolk";
+    case "librarian":
+      return "outsider";
+    case "investigator":
+      return "minion";
+  }
+}
 
 /**
- * Generates all distinct truthful Washerwoman information choices for the
- * current Trouble Brewing canonical setup.
+ * Generates the natural truthful information domain shared by Washerwoman,
+ * Librarian and Investigator.
  *
- * Player-visible information is unique by learned Townsfolk + shown pair.
- * When the same visible statement can be made true in multiple ways (for
- * example an actual Chef and a Spy registering as Chef), those possibilities
- * are grouped as legal resolutions instead of duplicated as recommendation
- * candidates. This prevents registration multiplicity from accidentally
- * becoming recommendation weight.
+ * Pair-visible statements are unique by learned character + shown player pair.
+ * Multiple registration witnesses for the same visible statement are grouped
+ * as legal resolutions so registration multiplicity never becomes accidental
+ * recommendation weight.
+ *
+ * The information recipient remains a legal member of the shown pair. This is
+ * required for valid Baron setups where the Washerwoman can be the only
+ * Townsfolk in play and therefore must be able to learn themself plus one
+ * other player. The optional recipient argument is retained at this boundary
+ * to make that rule choice explicit for runtime callers.
+ *
+ * Librarian additionally has one typed "no Outsiders" candidate only when
+ * there are no actual Outsiders in play. A Spy may still create registered-
+ * Outsider pair candidates in that setup; registration does not invalidate
+ * the natural zero-Outsider statement.
  */
-export function createTroubleBrewingWasherwomanInformationCandidates(
+export function createTroubleBrewingPairInformationCandidates(
   assignments: readonly BotcCanonicalSetupAssignment[],
-): TroubleBrewingWasherwomanInformationCandidate[] {
-  const candidates = new Map<
-    string,
-    TroubleBrewingWasherwomanInformationCandidate
-  >();
+  abilityRoleId: TroubleBrewingPairInformationAbilityRoleId,
+  _recipientPlayerId?: string,
+): TroubleBrewingInformationCandidate[] {
+  const targetCategory = pairInformationTargetCategory(abilityRoleId);
+  const candidates = new Map<string, TroubleBrewingPairInformationCandidate>();
 
   assignments.forEach((matchingAssignment, matchingIndex) => {
     for (const registration of troubleBrewingCharacterRegistrations(
       matchingAssignment,
     )) {
-      if (troubleBrewingRole(registration.roleId).category !== "townsfolk") {
+      if (troubleBrewingRole(registration.roleId).category !== targetCategory) {
         continue;
       }
 
       assignments.forEach((otherAssignment, otherIndex) => {
-        if (otherIndex === matchingIndex) return;
+        if (otherIndex === matchingIndex) {
+          return;
+        }
 
         const shownPlayerIds: [string, string] =
           matchingIndex < otherIndex
@@ -148,7 +214,7 @@ export function createTroubleBrewingWasherwomanInformationCandidates(
           shownPlayerIds[1],
         ]);
 
-        const resolution: TroubleBrewingWasherwomanInformationResolution = {
+        const resolution: TroubleBrewingPairInformationResolution = {
           matchingPlayerId: matchingAssignment.playerId,
           matchSource: registration.source,
         };
@@ -167,7 +233,7 @@ export function createTroubleBrewingWasherwomanInformationCandidates(
         }
 
         candidates.set(key, {
-          candidateId: `washerwoman:${registration.roleId}:${shownPlayerIds[0]}:${shownPlayerIds[1]}`,
+          candidateId: `${abilityRoleId}:${registration.roleId}:${shownPlayerIds[0]}:${shownPlayerIds[1]}`,
           learnedRoleId: registration.roleId,
           shownPlayerIds,
           legalResolutions: [resolution],
@@ -176,5 +242,58 @@ export function createTroubleBrewingWasherwomanInformationCandidates(
     }
   });
 
-  return [...candidates.values()];
+  const pairCandidates = [...candidates.values()];
+  if (
+    abilityRoleId === "librarian" &&
+    !assignments.some(
+      assignment => troubleBrewingRole(assignment.actualRoleId).category === "outsider",
+    )
+  ) {
+    const zeroCandidate: TroubleBrewingNoCharactersInformationCandidate = {
+      candidateId: "librarian:no-outsiders",
+      noCharacterCategory: "outsider",
+      legalResolutions: [
+        {
+          noCharacterCategory: "outsider",
+          truthSource: "actual_state",
+        },
+      ],
+    };
+    return [zeroCandidate, ...pairCandidates];
+  }
+
+  return pairCandidates;
+}
+
+export function createTroubleBrewingWasherwomanInformationCandidates(
+  assignments: readonly BotcCanonicalSetupAssignment[],
+  recipientPlayerId?: string,
+): TroubleBrewingWasherwomanInformationCandidate[] {
+  return createTroubleBrewingPairInformationCandidates(
+    assignments,
+    "washerwoman",
+    recipientPlayerId,
+  ).filter(isTroubleBrewingPairCandidate);
+}
+
+export function createTroubleBrewingLibrarianInformationCandidates(
+  assignments: readonly BotcCanonicalSetupAssignment[],
+  recipientPlayerId?: string,
+): TroubleBrewingInformationCandidate[] {
+  return createTroubleBrewingPairInformationCandidates(
+    assignments,
+    "librarian",
+    recipientPlayerId,
+  );
+}
+
+export function createTroubleBrewingInvestigatorInformationCandidates(
+  assignments: readonly BotcCanonicalSetupAssignment[],
+  recipientPlayerId?: string,
+): TroubleBrewingPairInformationCandidate[] {
+  return createTroubleBrewingPairInformationCandidates(
+    assignments,
+    "investigator",
+    recipientPlayerId,
+  ).filter(isTroubleBrewingPairCandidate);
 }

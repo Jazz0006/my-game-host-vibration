@@ -268,6 +268,8 @@ Validation: `typecheck` PASS; full `npm test` PASS with 137 test files / 574 tes
 
 PV-3B2A follow-up (2026-10-01): the first durable Washerwoman information-result flow has now been implemented without changing the frozen V1 wire schema. A fresh CampBoardGameHost `main` audit at `4593f79186d0af388e2d1c25e272462c576f5548` confirmed V1 is still deliberately narrow, while Host information semantics already model reliability, semantic truth and registration provenance. This repository therefore keeps delivered information in authoritative runtime/session history aligned to those semantics, but does not fork `TroubleBrewingGameSnapshotV1`. Any future delivered-information snapshot field must be introduced as a coordinated cross-project schema evolution with matching fixtures.
 
+PV-3B2B follow-up (2026-10-01): Librarian and Investigator now reuse the same durable pair-information lifecycle, with Librarian zero represented as a typed `no_characters / outsider` result. The frozen V1 snapshot wire schema remains unchanged. During implementation, a separate rules-domain discrepancy was found: the current CampBoardGameHost natural pair generator excludes the information source seat, but the Trouble Brewing Washerwoman run procedure permits the Washerwoman themself to be the matching Townsfolk when required (for example a Baron setup with only one Townsfolk). The online runtime therefore follows the rules-correct source-seat-inclusive domain and records this as a cross-project semantic-alignment follow-up rather than encoding the Host behavior into the shared snapshot contract.
+
 ### UGSM-2 — semantic-equivalence fixtures
 
 Add canonical JSON fixtures that are semantically identical across participating projects.
