@@ -23,6 +23,7 @@ describe("MG0D WeChat product runtime wiring", () => {
     expect(botc).toContain('"startCommand": "botc.startGame"');
     expect(botc).toContain('"confirmRoleCommand": "botc.confirmRole"');
     expect(botc).toContain('"beginFirstNightCommand": "botc.beginFirstNight"');
+    expect(botc).toContain('"beginOtherNightCommand": "botc.beginOtherNight"');
     expect(botc).toContain('"nightChoiceCommand": "botc.submitNightChoice"');
     expect(botc).toContain(
       '"commitNightInformationCommand": "botc.commitNightInformation"',
@@ -65,6 +66,7 @@ describe("MG0D WeChat product runtime wiring", () => {
     const game = text("miniprogram/pages/game.js");
     expect(game).toContain("this._product.confirmRoleCommand");
     expect(game).toContain("this._product.beginFirstNightCommand");
+    expect(game).toContain("this._product.beginOtherNightCommand");
     expect(game).toContain("this._product.nightChoiceCommand");
     expect(game).toContain("this._product.commitNightInformationCommand");
     expect(game).toContain("this._product.acknowledgeNightInformationCommand");

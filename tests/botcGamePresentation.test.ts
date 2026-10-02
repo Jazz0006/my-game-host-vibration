@@ -53,6 +53,56 @@ describe("PV-UI0 BotC shared game presentation", () => {
     });
   });
 
+  it("exposes the next-night action only to the active game controller during day", () => {
+    const controller = createBotcGamePresentation({
+      room: room({
+        game: {
+          phase: "day",
+          playerCount: 3,
+          confirmedRoles: 3,
+        },
+      }),
+      playerView: {
+        phase: "day",
+        mode: "day",
+        roleNameZh: "厨师",
+        roleConfirmed: true,
+      },
+    });
+
+    expect(controller).toMatchObject({
+      phaseLabel: "白天",
+      canBeginOtherNight: true,
+      statusLine: "天亮了。完成白天流程后可进入下一夜。",
+    });
+
+    const player = createBotcGamePresentation({
+      room: room({
+        viewer: {
+          playerId: "p2",
+          isHost: false,
+          isGameModerator: false,
+        },
+        game: {
+          phase: "day",
+          playerCount: 3,
+          confirmedRoles: 3,
+        },
+      }),
+      playerView: {
+        phase: "day",
+        mode: "day",
+        roleNameZh: "共情者",
+        roleConfirmed: true,
+      },
+    });
+
+    expect(player).toMatchObject({
+      canBeginOtherNight: false,
+      statusLine: "天亮了。等待白天流程。",
+    });
+  });
+
   it("projects pair information, zero-Outsider information, and player names without rule-specific UI branches", () => {
     const pair = createBotcGamePresentation({
       room: room({

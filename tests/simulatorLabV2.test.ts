@@ -511,6 +511,29 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
         },
       });
     }
+
+    const nextNight = await coordinator.sendCommand(
+      owner.playerId,
+      "botc.beginOtherNight",
+      {},
+      "pv4-begin-other-night",
+    );
+    expect(nextNight.result).toMatchObject({
+      replayed: false,
+      outcome: {
+        kind: "otherNightStarted",
+        nightComplete: false,
+      },
+    });
+    for (const client of nextNight.state.clients) {
+      expect(client.roomProjection).toMatchObject({
+        game: {
+          phase: "other_night",
+          dayNumber: 1,
+          nightNumber: 2,
+        },
+      });
+    }
   });
 
   it("keeps first-night orchestration under Human Storyteller authority", async () => {

@@ -716,6 +716,12 @@ function renderPhone(client) {
   );
   appendAction(
     root,
+    "进入下一夜",
+    presentation.canBeginOtherNight,
+    () => sendPhoneCommand(client, "botc.beginOtherNight"),
+  );
+  appendAction(
+    root,
     "提交当前私密信息",
     presentation.canCommitNightInformation,
     () => sendPhoneCommand(client, "botc.commitNightInformation"),

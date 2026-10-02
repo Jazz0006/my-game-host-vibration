@@ -191,6 +191,14 @@
   </button>
 
   <button
+    wx:if="{{canBeginOtherNight}}"
+    class="primary-button"
+    bindtap="onBeginOtherNightTap"
+  >
+    进入下一夜
+  </button>
+
+  <button
     wx:if="{{canCommitNightInformation}}"
     class="primary-button"
     bindtap="onCommitNightInformationTap"

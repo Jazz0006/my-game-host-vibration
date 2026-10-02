@@ -238,6 +238,10 @@ export class CloudflareBotcCommandRuntime {
         return this.executeModeratorGameCommand(room, {
           type: "beginFirstNight",
         });
+      case "botc.beginOtherNight":
+        return this.executeModeratorGameCommand(room, {
+          type: "beginOtherNight",
+        });
       case "botc.setRedHerring":
         if (room.gameModerator.mode !== "human") {
           throw new Error("Manual Red Herring setup requires Human Storyteller mode");
@@ -377,6 +381,7 @@ export class CloudflareBotcCommandRuntime {
     room: CloudflareBotcRoom,
     command:
       | { type: "beginFirstNight" }
+      | { type: "beginOtherNight" }
       | { type: "setRedHerring"; playerId: string }
       | { type: "commitNightInformation" }
       | { type: "completeNightStep" },

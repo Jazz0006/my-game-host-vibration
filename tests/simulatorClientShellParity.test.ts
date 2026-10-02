@@ -71,6 +71,7 @@ describe("PV-UI1 Simulator pre-device client-shell parity", () => {
 
     expect(lobby).toContain("this._product.startCommand");
     expect(lab).toContain("botc.startGame");
+    expect(lab).toContain("botc.beginOtherNight");
 
     for (const command of ["room.transferHost", "room.removePlayer"]) {
       expect(settings).toContain(command);

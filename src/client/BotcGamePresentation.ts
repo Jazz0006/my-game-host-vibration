@@ -65,6 +65,7 @@ export type BotcGamePresentation = {
   canConfirmRole: boolean;
   canSetRedHerring: boolean;
   canBeginFirstNight: boolean;
+  canBeginOtherNight: boolean;
   canCommitNightInformation: boolean;
   canAcknowledgeNightInformation: boolean;
   canCompleteNightStep: boolean;
@@ -195,7 +196,9 @@ function statusForView(
   }
 
   if (phase === "day") {
-    return "天亮了。白天流程将在下一阶段接入。";
+    return controller
+      ? "天亮了。完成白天流程后可进入下一夜。"
+      : "天亮了。等待白天流程。";
   }
 
   return "等待 authoritative PlayerView。";
@@ -432,6 +435,7 @@ export function createBotcGamePresentation(
       phase === "role_reveal" &&
       allConfirmed &&
       (redHerringDecision === null || Boolean(committedRedHerringPlayerId)),
+    canBeginOtherNight: controller && phase === "day",
     canCommitNightInformation:
       controller &&
       informationDecision !== null &&

@@ -8,6 +8,7 @@ export type BotcClientCommandEnvelope =
   | ClientCommandEnvelope<"botc.startGame", Record<string, never>>
   | ClientCommandEnvelope<"botc.confirmRole", Record<string, never>>
   | ClientCommandEnvelope<"botc.beginFirstNight", Record<string, never>>
+  | ClientCommandEnvelope<"botc.beginOtherNight", Record<string, never>>
   | ClientCommandEnvelope<"botc.setRedHerring", { playerId: string }>
   | ClientCommandEnvelope<"botc.submitNightChoice", { playerIds: string[] }>
   | ClientCommandEnvelope<"botc.commitNightInformation", Record<string, never>>
@@ -18,6 +19,7 @@ export const BOTC_CLIENT_COMMAND_TYPES = [
   "botc.startGame",
   "botc.confirmRole",
   "botc.beginFirstNight",
+  "botc.beginOtherNight",
   "botc.setRedHerring",
   "botc.submitNightChoice",
   "botc.commitNightInformation",
@@ -64,6 +66,7 @@ export function parseBotcClientCommandEnvelope(
     case "botc.startGame":
     case "botc.confirmRole":
     case "botc.beginFirstNight":
+    case "botc.beginOtherNight":
     case "botc.commitNightInformation":
     case "botc.acknowledgeNightInformation":
     case "botc.completeNightStep":

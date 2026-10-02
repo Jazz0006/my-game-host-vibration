@@ -42,6 +42,7 @@ describe("PV-1/PV-2/PV-3 BotC client protocol", () => {
 
   it.each([
     "botc.beginFirstNight",
+    "botc.beginOtherNight",
     "botc.commitNightInformation",
     "botc.completeNightStep",
   ] as const)("accepts moderator night-orchestration command %s", type => {

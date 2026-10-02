@@ -571,6 +571,15 @@ Add the minimum state/actions required to complete repeated play:
 
 Do not attempt full Trouble Brewing richness before one coherent loop works.
 
+Implementation slices:
+
+- **PV-4A — day -> next-night production seam — COMPLETE (2026-10-02).** The already-existing authoritative `beginOtherNight` GameModule transition is now reachable through the stable BotC client protocol, Cloudflare runtime, shared `BotcGamePresentation`, WeChat product config/page, and Simulator selected-phone mirror. Controller-only presentation gating is covered, and Simulator proves first night -> day -> second night through production commands.
+- **PV-4B — nomination / voting authority — NEXT.** Add authoritative per-day nomination eligibility, one nomination per living nominator, one nomination per nominee per day, living repeat-vote eligibility, one remaining ghost vote for each dead player, vote tally/threshold, and unique-highest/tie block semantics. Keep speeches/timers as presentation/orchestration concerns rather than game truth.
+- **PV-4C — execution / death / end-of-day resolution.** Resolve the block into execution/death, record `executedAndDiedTodayPlayerId` only when execution actually causes death, consume the existing other-night facts, and add only the minimum Trouble Brewing death/endgame interactions required for a coherent loop.
+- **PV-4D — repeated-loop client acceptance.** Drive day nomination/vote/execution -> other night -> dawn through Simulator and the shared WeChat presentation seam before PV-5 full-game acceptance.
+
+Do not add broad role-specific day abilities to PV-4B. Character exceptions should enter only when they are required to preserve Trouble Brewing correctness for the minimal execution/death loop.
+
 ### PV-5 — Simulator full-game acceptance
 
 Using Simulator Lab V2 + TestRoomClient:

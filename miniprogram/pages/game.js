@@ -146,6 +146,9 @@ Page({
       canBeginFirstNight: Boolean(
         this._product.beginFirstNightCommand && presentation.canBeginFirstNight
       ),
+      canBeginOtherNight: Boolean(
+        this._product.beginOtherNightCommand && presentation.canBeginOtherNight
+      ),
       canCommitNightInformation: Boolean(
         this._product.commitNightInformationCommand &&
         presentation.canCommitNightInformation
@@ -220,6 +223,15 @@ Page({
       this._product.beginFirstNightCommand,
       {},
       "进入首夜…"
+    );
+  },
+
+  onBeginOtherNightTap() {
+    if (!this.data.canBeginOtherNight) return;
+    return this.sendProductCommand(
+      this._product.beginOtherNightCommand,
+      {},
+      "进入夜晚…"
     );
   },
 
