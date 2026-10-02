@@ -263,6 +263,12 @@ describe("PV-3B1 Trouble Brewing player night choices", () => {
     module.handleCommand(
       state,
       moderatorContext,
+      { type: "resolveDay" },
+      dependencies,
+    );
+    module.handleCommand(
+      state,
+      moderatorContext,
       { type: "beginOtherNight" },
       dependencies,
     );

@@ -12,6 +12,7 @@ export type BotcClientCommandEnvelope =
   | ClientCommandEnvelope<"botc.nominate", { nomineePlayerId: string }>
   | ClientCommandEnvelope<"botc.submitDayVote", { vote: boolean }>
   | ClientCommandEnvelope<"botc.closeNomination", Record<string, never>>
+  | ClientCommandEnvelope<"botc.resolveDay", Record<string, never>>
   | ClientCommandEnvelope<"botc.setRedHerring", { playerId: string }>
   | ClientCommandEnvelope<"botc.submitNightChoice", { playerIds: string[] }>
   | ClientCommandEnvelope<"botc.commitNightInformation", Record<string, never>>
@@ -26,6 +27,7 @@ export const BOTC_CLIENT_COMMAND_TYPES = [
   "botc.nominate",
   "botc.submitDayVote",
   "botc.closeNomination",
+  "botc.resolveDay",
   "botc.setRedHerring",
   "botc.submitNightChoice",
   "botc.commitNightInformation",
@@ -74,6 +76,7 @@ export function parseBotcClientCommandEnvelope(
     case "botc.beginFirstNight":
     case "botc.beginOtherNight":
     case "botc.closeNomination":
+    case "botc.resolveDay":
     case "botc.commitNightInformation":
     case "botc.acknowledgeNightInformation":
     case "botc.completeNightStep":

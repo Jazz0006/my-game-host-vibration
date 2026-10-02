@@ -121,6 +121,20 @@ describe("PV-1/PV-2/PV-3 BotC client protocol", () => {
       type: "botc.closeNomination",
       payload: {},
     });
+
+    expect(parseBotcClientCommandEnvelope(
+      createClientCommandEnvelope(
+        "botc.resolveDay",
+        {},
+        "resolve-day-1",
+      ),
+    )).toEqual({
+      protocolVersion: 1,
+      kind: "command",
+      commandId: "resolve-day-1",
+      type: "botc.resolveDay",
+      payload: {},
+    });
   });
 
   it("accepts the moderator Red Herring setup command", () => {

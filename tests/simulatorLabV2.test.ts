@@ -570,6 +570,40 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
       },
     });
 
+    await expect(
+      coordinator.sendCommand(
+        state.clients[1]!.playerId,
+        "botc.resolveDay",
+        {},
+        "pv4c-resolve-unauthorized",
+      ),
+    ).rejects.toThrow("game command requires moderator authority");
+
+    const resolvedDay = await coordinator.sendCommand(
+      owner.playerId,
+      "botc.resolveDay",
+      {},
+      "pv4c-resolve-day-1",
+    );
+    state = resolvedDay.state;
+    expect(resolvedDay.result).toMatchObject({
+      replayed: false,
+      outcome: {
+        kind: "dayResolved",
+        executionDied: false,
+        noExecution: true,
+      },
+    });
+    expect(state.clients[0]!.roomProjection).toMatchObject({
+      game: {
+        phase: "day",
+        dayResolution: {
+          dayNumber: 1,
+          noExecution: true,
+        },
+      },
+    });
+
     const nextNight = await coordinator.sendCommand(
       owner.playerId,
       "botc.beginOtherNight",

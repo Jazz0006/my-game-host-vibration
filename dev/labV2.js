@@ -697,6 +697,29 @@ function renderPhone(client) {
     ]);
   }
 
+  if (presentation.isDay && presentation.dayResolved) {
+    appendInfoCard(root, "DAY RESULT", [
+      presentation.dayNoExecution
+        ? "今天无人被处决"
+        : presentation.dayExecutionName +
+          (presentation.dayExecutionDied ? " 被处决并死亡" : " 被处决，但没有死亡"),
+    ]);
+  }
+
+  if (presentation.gameEnded) {
+    appendInfoCard(root, "GAME OVER", [
+      presentation.winnerLabel,
+      presentation.endReasonLabel,
+    ]);
+  }
+
+  appendAction(
+    root,
+    "结算白天",
+    presentation.canResolveDay,
+    () => sendPhoneCommand(client, "botc.resolveDay"),
+  );
+
   if (presentation.minionDemonName) {
     appendInfoCard(root, "MINION INFO", [
       "恶魔：" + presentation.minionDemonName,

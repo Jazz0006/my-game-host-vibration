@@ -75,6 +75,15 @@ import {
   type BotcDayVotingPublicView,
   type BotcDayVotingState,
 } from "./BotcDayVoting.js";
+import {
+  commitBotcExecutionResolution,
+  commitBotcNoExecutionResolution,
+  createBotcDayResolutionFacts,
+  shouldVirginExecuteNominator,
+  type BotcDayResolution,
+  type BotcGameEndReason,
+  type BotcWinner,
+} from "./BotcDayResolution.js";
 
 export type { BotcSetupAssignment } from "./TroubleBrewingSetup.js";
 export type {
@@ -140,6 +149,10 @@ export type BotcGameState = {
   nightStepIndex?: number;
   otherNightProgress?: TroubleBrewingOtherNightProgress;
   dayVoting?: BotcDayVotingState;
+  dayResolution?: BotcDayResolution;
+  virginAbilitySpent: boolean;
+  winner?: BotcWinner;
+  endReason?: BotcGameEndReason;
 };
 
 export type BotcCommand =
@@ -151,6 +164,7 @@ export type BotcCommand =
   | { type: "nominate"; nomineePlayerId: string }
   | { type: "submitDayVote"; vote: boolean }
   | { type: "closeNomination" }
+  | { type: "resolveDay" }
   | { type: "submitNightChoice"; playerIds: string[] }
   | { type: "commitNightInformation" }
   | { type: "acknowledgeNightInformation" }
@@ -188,6 +202,13 @@ export type BotcCommandOutcome =
       nomineePlayerId: string;
     }
   | {
+      kind: "virginExecutionTriggered";
+      virginPlayerId: string;
+      executedPlayerId: string;
+      winner?: BotcWinner;
+      endReason?: BotcGameEndReason;
+    }
+  | {
       kind: "dayVoteRecorded";
       nominationId: string;
       voterPlayerId: string;
@@ -203,6 +224,14 @@ export type BotcCommandOutcome =
       blockNomineePlayerId?: string;
       highVoteCount: number;
       tiedAtHigh: boolean;
+    }
+  | {
+      kind: "dayResolved";
+      executionPlayerId?: string;
+      executionDied: boolean;
+      noExecution: boolean;
+      winner?: BotcWinner;
+      endReason?: BotcGameEndReason;
     }
   | {
       kind: "nightChoiceCommitted";
@@ -271,6 +300,9 @@ export type BotcPublicView = {
   nightNumber: number;
   deadPlayerIds: string[];
   dayVoting?: BotcDayVotingPublicView;
+  dayResolution?: BotcDayResolution;
+  winner?: BotcWinner;
+  endReason?: BotcGameEndReason;
 };
 
 export type BotcModeratorView = BotcPublicView & {
@@ -407,6 +439,7 @@ function beginDay(state: BotcGameState, dayNumber: number): void {
   state.phase = "day";
   state.dayNumber = dayNumber;
   state.dayVoting = startBotcDayVotingDay(state.dayVoting, dayNumber);
+  delete state.dayResolution;
 }
 
 function otherNightFacts(state: BotcGameState): TroubleBrewingOtherNightFacts {
@@ -558,6 +591,18 @@ function publicView(state: BotcGameState): BotcPublicView {
     ...(state.phase === "day" && state.dayVoting
       ? { dayVoting: createBotcDayVotingPublicView(state.dayVoting, dayVotingFacts(state)) }
       : {}),
+    ...(state.phase === "day" && state.dayResolution
+      ? {
+          dayResolution: {
+            ...state.dayResolution,
+            ...(state.dayResolution.execution
+              ? { execution: { ...state.dayResolution.execution } }
+              : {}),
+          },
+        }
+      : {}),
+    ...(state.winner ? { winner: state.winner } : {}),
+    ...(state.endReason ? { endReason: state.endReason } : {}),
   };
 }
 
@@ -589,6 +634,7 @@ export class BotcGameModule implements GameModule<
       diedTonightPlayerIds: [],
       roleTransitions: [],
       informationHistory: [],
+      virginAbilitySpent: false,
     };
   }
 
@@ -709,11 +755,20 @@ export class BotcGameModule implements GameModule<
         if (state.phase !== "day") {
           throw new Error("BotC other night can only begin from day");
         }
+        if (state.winner) {
+          throw new Error("BotC game has already ended");
+        }
         if (state.dayVoting?.activeNomination) {
           throw new Error("Cannot begin BotC night while a nomination is active");
         }
-        if (state.dayVoting?.blockNomineePlayerId) {
+        if (
+          state.dayVoting?.blockNomineePlayerId &&
+          !state.dayResolution
+        ) {
           throw new Error("BotC execution resolution is required before night");
+        }
+        if (!state.dayResolution) {
+          throw new Error("BotC day must be resolved before night");
         }
 
         // Night-start is dusk for these day-spanning effects. The previous
@@ -727,7 +782,8 @@ export class BotcGameModule implements GameModule<
         state.nightNumber += 1;
 
         if (!progress.activeStep) {
-          state.dayNumber += 1;
+          const nextDayNumber = state.dayNumber + 1;
+          beginDay(state, nextDayNumber);
           clearCompletedOtherNightFacts(state);
           return {
             state,
@@ -751,8 +807,13 @@ export class BotcGameModule implements GameModule<
       }
 
       case "nominate": {
-        if (state.phase !== "day" || !state.dayVoting) {
-          throw new Error("BotC nominations are only available during day");
+        if (
+          state.phase !== "day" ||
+          !state.dayVoting ||
+          state.dayResolution ||
+          state.winner
+        ) {
+          throw new Error("BotC nominations are only available during unresolved day");
         }
         if (!context.playerId) throw new Error("player command requires playerId");
         const nomination = startBotcNomination(
@@ -761,6 +822,41 @@ export class BotcGameModule implements GameModule<
           context.playerId,
           command.nomineePlayerId,
         );
+
+        const nomineeAssignment = state.assignments.find(
+          assignment => assignment.playerId === command.nomineePlayerId,
+        );
+        if (
+          nomineeAssignment?.actualRoleId === "virgin" &&
+          !state.virginAbilitySpent
+        ) {
+          state.virginAbilitySpent = true;
+          if (
+            shouldVirginExecuteNominator(
+              createBotcDayResolutionFacts(state),
+              command.nomineePlayerId,
+              context.playerId,
+            )
+          ) {
+            delete state.dayVoting.activeNomination;
+            const resolution = commitBotcExecutionResolution(
+              state,
+              context.playerId,
+              "virgin",
+            );
+            return {
+              state,
+              outcome: {
+                kind: "virginExecutionTriggered",
+                virginPlayerId: command.nomineePlayerId,
+                executedPlayerId: context.playerId,
+                ...(state.winner ? { winner: state.winner } : {}),
+                ...(state.endReason ? { endReason: state.endReason } : {}),
+              },
+            };
+          }
+        }
+
         return {
           state,
           outcome: {
@@ -773,8 +869,13 @@ export class BotcGameModule implements GameModule<
       }
 
       case "submitDayVote": {
-        if (state.phase !== "day" || !state.dayVoting) {
-          throw new Error("BotC day voting is only available during day");
+        if (
+          state.phase !== "day" ||
+          !state.dayVoting ||
+          state.dayResolution ||
+          state.winner
+        ) {
+          throw new Error("BotC day voting is only available during unresolved day");
         }
         if (!context.playerId) throw new Error("player command requires playerId");
         const nomination = submitBotcDayVote(
@@ -798,8 +899,13 @@ export class BotcGameModule implements GameModule<
         if (!context.isModerator) {
           throw new Error("Only the BotC moderator can close a nomination");
         }
-        if (state.phase !== "day" || !state.dayVoting) {
-          throw new Error("BotC nominations are only available during day");
+        if (
+          state.phase !== "day" ||
+          !state.dayVoting ||
+          state.dayResolution ||
+          state.winner
+        ) {
+          throw new Error("BotC nominations are only available during unresolved day");
         }
         const closed = closeBotcNomination(state.dayVoting, dayVotingFacts(state));
         return {
@@ -816,6 +922,55 @@ export class BotcGameModule implements GameModule<
               : {}),
             highVoteCount: state.dayVoting.highVoteCount,
             tiedAtHigh: state.dayVoting.tiedAtHigh,
+          },
+        };
+      }
+
+      case "resolveDay": {
+        if (!context.isModerator) {
+          throw new Error("Only the BotC moderator can resolve the day");
+        }
+        if (
+          state.phase !== "day" ||
+          !state.dayVoting ||
+          state.dayResolution ||
+          state.winner
+        ) {
+          throw new Error("BotC day can only be resolved once during day");
+        }
+        if (state.dayVoting.activeNomination) {
+          throw new Error("Cannot resolve BotC day while a nomination is active");
+        }
+
+        const executionPlayerId = state.dayVoting.blockNomineePlayerId;
+        if (executionPlayerId) {
+          const resolution = commitBotcExecutionResolution(
+            state,
+            executionPlayerId,
+            "vote",
+          );
+          return {
+            state,
+            outcome: {
+              kind: "dayResolved",
+              executionPlayerId,
+              executionDied: Boolean(resolution.execution?.died),
+              noExecution: false,
+              ...(state.winner ? { winner: state.winner } : {}),
+              ...(state.endReason ? { endReason: state.endReason } : {}),
+            },
+          };
+        }
+
+        commitBotcNoExecutionResolution(state);
+        return {
+          state,
+          outcome: {
+            kind: "dayResolved",
+            executionDied: false,
+            noExecution: true,
+            ...(state.winner ? { winner: state.winner } : {}),
+            ...(state.endReason ? { endReason: state.endReason } : {}),
           },
         };
       }

@@ -217,6 +217,27 @@
     <view class="choice-note" wx:if="{{!dayTiedAtHigh}}">{{dayHighVoteCount}} 票</view>
   </view>
 
+  <view class="night-choice-card" wx:if="{{isDay && dayResolved}}">
+    <view class="eyebrow">DAY RESULT</view>
+    <view class="choice-title" wx:if="{{dayNoExecution}}">今天无人被处决</view>
+    <view class="choice-title" wx:elif="{{dayExecutionDied}}">{{dayExecutionName}} 被处决并死亡</view>
+    <view class="choice-title" wx:else>{{dayExecutionName}} 被处决，但没有死亡</view>
+  </view>
+
+  <view class="night-choice-card" wx:if="{{gameEnded}}">
+    <view class="eyebrow">GAME OVER</view>
+    <view class="choice-title">{{winnerLabel}}</view>
+    <view class="choice-note">{{endReasonLabel}}</view>
+  </view>
+
+  <button
+    wx:if="{{canResolveDay}}"
+    class="primary-button"
+    bindtap="onResolveDayTap"
+  >
+    结算白天
+  </button>
+
   <view class="progress-card">
     <view class="progress-label">身份确认进度</view>
     <view class="progress-value">{{confirmedRoles}} / {{playerCount}}</view>

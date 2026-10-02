@@ -177,6 +177,12 @@ describe("PV-3B2C Chef + Empath numeric information runtime", () => {
     module.handleCommand(
       game,
       moderatorContext,
+      { type: "resolveDay" },
+      dependencies,
+    );
+    module.handleCommand(
+      game,
+      moderatorContext,
       { type: "beginOtherNight" },
       dependencies,
     );

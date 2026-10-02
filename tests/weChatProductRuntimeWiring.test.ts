@@ -27,6 +27,7 @@ describe("MG0D WeChat product runtime wiring", () => {
     expect(botc).toContain('"nominateCommand": "botc.nominate"');
     expect(botc).toContain('"dayVoteCommand": "botc.submitDayVote"');
     expect(botc).toContain('"closeNominationCommand": "botc.closeNomination"');
+    expect(botc).toContain('"resolveDayCommand": "botc.resolveDay"');
     expect(botc).toContain('"nightChoiceCommand": "botc.submitNightChoice"');
     expect(botc).toContain(
       '"commitNightInformationCommand": "botc.commitNightInformation"',
@@ -73,6 +74,7 @@ describe("MG0D WeChat product runtime wiring", () => {
     expect(game).toContain("this._product.nominateCommand");
     expect(game).toContain("this._product.dayVoteCommand");
     expect(game).toContain("this._product.closeNominationCommand");
+    expect(game).toContain("this._product.resolveDayCommand");
     expect(game).toContain("this._product.nightChoiceCommand");
     expect(game).toContain("this._product.commitNightInformationCommand");
     expect(game).toContain("this._product.acknowledgeNightInformationCommand");

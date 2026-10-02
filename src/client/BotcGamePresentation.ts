@@ -48,6 +48,13 @@ export type BotcGamePresentation = {
   dayTiedAtHigh: boolean;
   myDayVoteYes: boolean;
   ghostVoteSpent: boolean;
+  dayResolved: boolean;
+  dayExecutionName: string;
+  dayExecutionDied: boolean;
+  dayNoExecution: boolean;
+  gameEnded: boolean;
+  winnerLabel: string;
+  endReasonLabel: string;
   nightStepId: string;
   nightChoiceKey: string;
   nightChoiceOptions: BotcNightChoiceOption[];
@@ -83,6 +90,7 @@ export type BotcGamePresentation = {
   canSubmitDayVoteYes: boolean;
   canSubmitDayVoteNo: boolean;
   canCloseNomination: boolean;
+  canResolveDay: boolean;
   canCommitNightInformation: boolean;
   canAcknowledgeNightInformation: boolean;
   canCompleteNightStep: boolean;
@@ -129,6 +137,21 @@ function roomPlayers(room: UnknownRecord | null): UnknownRecord[] {
 function playerName(room: UnknownRecord | null, playerId: string): string {
   const player = roomPlayers(room).find(item => asString(item.id) === playerId);
   return player ? asString(player.name) || playerId : playerId;
+}
+
+function gameEndReasonLabel(reason: string): string {
+  switch (reason) {
+    case "demon_died":
+      return "恶魔死亡";
+    case "two_alive":
+      return "仅剩两名存活玩家";
+    case "saint_executed":
+      return "圣徒因处决死亡";
+    case "mayor_no_execution":
+      return "三人存活且无人被处决，市长获胜";
+    default:
+      return "";
+  }
 }
 
 function phaseLabel(phase: string): string {
@@ -316,6 +339,11 @@ export function createBotcGamePresentation(
     .filter(playerId => playerId && playerId !== humanModeratorPlayerId);
 
   const dayVoting = asRecord(game?.dayVoting);
+  const dayResolution = asRecord(game?.dayResolution);
+  const dayExecution = asRecord(dayResolution?.execution);
+  const winner = asString(game?.winner);
+  const endReason = asString(game?.endReason);
+  const gameEnded = Boolean(winner);
   const activeNomination = asRecord(dayVoting?.activeNomination);
   const usedNominatorPlayerIds = asStringArray(dayVoting?.usedNominatorPlayerIds);
   const usedNomineePlayerIds = asStringArray(dayVoting?.usedNomineePlayerIds);
@@ -334,6 +362,8 @@ export function createBotcGamePresentation(
   const canNominate =
     isDay &&
     dayVoting !== null &&
+    dayResolution === null &&
+    !gameEnded &&
     !dayNominationId &&
     currentPlayerIsParticipant &&
     !currentPlayerDead &&
@@ -436,6 +466,18 @@ export function createBotcGamePresentation(
     dayTiedAtHigh: Boolean(dayVoting?.tiedAtHigh),
     myDayVoteYes,
     ghostVoteSpent,
+    dayResolved: dayResolution !== null,
+    dayExecutionName: playerName(room, asString(dayExecution?.playerId)),
+    dayExecutionDied: Boolean(dayExecution?.died),
+    dayNoExecution: Boolean(dayResolution?.noExecution),
+    gameEnded,
+    winnerLabel:
+      winner === "good"
+        ? "好人阵营获胜"
+        : winner === "evil"
+          ? "邪恶阵营获胜"
+          : "",
+    endReasonLabel: gameEndReasonLabel(endReason),
     nightStepId,
     nightChoiceKey,
     nightChoiceOptions,
@@ -493,9 +535,15 @@ export function createBotcGamePresentation(
     allConfirmed,
     statusLine:
       connectionLine ||
-      (isDay && dayNominationId
-        ? `${playerName(room, dayNominatorPlayerId)} 提名 ${playerName(room, dayNomineePlayerId)}；当前 ${dayYesVoterPlayerIds.length} 票。`
-        : statusForView(playerView, allConfirmed, controller)),
+      (gameEnded
+        ? `${winner === "good" ? "好人阵营" : "邪恶阵营"}获胜：${gameEndReasonLabel(endReason)}。`
+        : isDay && dayNominationId
+          ? `${playerName(room, dayNominatorPlayerId)} 提名 ${playerName(room, dayNomineePlayerId)}；当前 ${dayYesVoterPlayerIds.length} 票。`
+          : isDay && dayResolution
+            ? dayExecution
+              ? `${playerName(room, asString(dayExecution.playerId))} 已被处决${dayExecution.died ? "并死亡" : "，但没有死亡"}。`
+              : "白天结束：无人被处决。"
+            : statusForView(playerView, allConfirmed, controller)),
     canConfirmRole:
       phase === "role_reveal" &&
       mode === "role_reveal" &&
@@ -513,19 +561,34 @@ export function createBotcGamePresentation(
     canBeginOtherNight:
       controller &&
       isDay &&
-      !dayNominationId &&
-      !dayBlockNomineePlayerId,
+      dayResolution !== null &&
+      !gameEnded,
     canNominate,
     canSubmitDayVoteYes:
       isDay &&
+      dayResolution === null &&
+      !gameEnded &&
       Boolean(dayNominationId) &&
       currentPlayerIsParticipant &&
       (!currentPlayerDead || !ghostVoteSpent),
     canSubmitDayVoteNo:
       isDay &&
+      dayResolution === null &&
+      !gameEnded &&
       Boolean(dayNominationId) &&
       currentPlayerIsParticipant,
-    canCloseNomination: controller && isDay && Boolean(dayNominationId),
+    canCloseNomination:
+      controller &&
+      isDay &&
+      dayResolution === null &&
+      !gameEnded &&
+      Boolean(dayNominationId),
+    canResolveDay:
+      controller &&
+      isDay &&
+      dayResolution === null &&
+      !gameEnded &&
+      !dayNominationId,
     canCommitNightInformation:
       controller &&
       informationDecision !== null &&

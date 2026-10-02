@@ -107,6 +107,12 @@ describe("B0B3 Trouble Brewing live other-night progression", () => {
     confirmAll(module, game);
     completeFirstNight(module, game);
     expect(game).toMatchObject({ phase: "day", dayNumber: 1, nightNumber: 1 });
+    module.handleCommand(
+      game,
+      moderatorContext,
+      { type: "resolveDay" },
+      dependencies,
+    );
 
     const started = module.handleCommand(
       game,
@@ -237,6 +243,12 @@ describe("B0B3 Trouble Brewing live other-night progression", () => {
       kind: "scarlet_woman_to_imp",
       playerId: "p4",
     });
+    module.handleCommand(
+      game,
+      moderatorContext,
+      { type: "resolveDay" },
+      dependencies,
+    );
 
     module.handleCommand(
       game,
@@ -306,6 +318,12 @@ describe("B0B3 Trouble Brewing live other-night progression", () => {
       shownRoleId: "imp",
     });
     expect(game.roleTransitions).toEqual([]);
+    module.handleCommand(
+      game,
+      moderatorContext,
+      { type: "resolveDay" },
+      dependencies,
+    );
 
     module.handleCommand(
       game,

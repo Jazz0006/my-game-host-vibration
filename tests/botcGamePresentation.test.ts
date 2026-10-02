@@ -53,13 +53,24 @@ describe("PV-UI0 BotC shared game presentation", () => {
     });
   });
 
-  it("exposes the next-night action only to the active game controller during day", () => {
-    const controller = createBotcGamePresentation({
+  it("requires controller day resolution before exposing the next-night action", () => {
+    const unresolved = createBotcGamePresentation({
       room: room({
         game: {
           phase: "day",
           playerCount: 3,
           confirmedRoles: 3,
+          deadPlayerIds: [],
+          dayVoting: {
+            dayNumber: 1,
+            aliveCount: 3,
+            threshold: 2,
+            usedNominatorPlayerIds: [],
+            usedNomineePlayerIds: [],
+            spentGhostVotePlayerIds: [],
+            highVoteCount: 0,
+            tiedAtHigh: false,
+          },
         },
       }),
       playerView: {
@@ -70,10 +81,50 @@ describe("PV-UI0 BotC shared game presentation", () => {
       },
     });
 
-    expect(controller).toMatchObject({
+    expect(unresolved).toMatchObject({
       phaseLabel: "白天",
-      canBeginOtherNight: true,
+      canResolveDay: true,
+      canBeginOtherNight: false,
       statusLine: "天亮了。完成白天流程后可进入下一夜。",
+    });
+
+    const resolved = createBotcGamePresentation({
+      room: room({
+        game: {
+          phase: "day",
+          playerCount: 3,
+          confirmedRoles: 3,
+          deadPlayerIds: [],
+          dayVoting: {
+            dayNumber: 1,
+            aliveCount: 3,
+            threshold: 2,
+            usedNominatorPlayerIds: [],
+            usedNomineePlayerIds: [],
+            spentGhostVotePlayerIds: [],
+            highVoteCount: 0,
+            tiedAtHigh: false,
+          },
+          dayResolution: {
+            dayNumber: 1,
+            noExecution: true,
+          },
+        },
+      }),
+      playerView: {
+        phase: "day",
+        mode: "day",
+        roleNameZh: "厨师",
+        roleConfirmed: true,
+      },
+    });
+
+    expect(resolved).toMatchObject({
+      canResolveDay: false,
+      canBeginOtherNight: true,
+      dayResolved: true,
+      dayNoExecution: true,
+      statusLine: "白天结束：无人被处决。",
     });
 
     const player = createBotcGamePresentation({
@@ -87,6 +138,17 @@ describe("PV-UI0 BotC shared game presentation", () => {
           phase: "day",
           playerCount: 3,
           confirmedRoles: 3,
+          deadPlayerIds: [],
+          dayVoting: {
+            dayNumber: 1,
+            aliveCount: 3,
+            threshold: 2,
+            usedNominatorPlayerIds: [],
+            usedNomineePlayerIds: [],
+            spentGhostVotePlayerIds: [],
+            highVoteCount: 0,
+            tiedAtHigh: false,
+          },
         },
       }),
       playerView: {
@@ -98,8 +160,63 @@ describe("PV-UI0 BotC shared game presentation", () => {
     });
 
     expect(player).toMatchObject({
+      canResolveDay: false,
       canBeginOtherNight: false,
       statusLine: "天亮了。等待白天流程。",
+    });
+  });
+
+  it("projects terminal winner state and disables all day continuation actions", () => {
+    const presentation = createBotcGamePresentation({
+      room: room({
+        game: {
+          phase: "day",
+          playerCount: 3,
+          confirmedRoles: 3,
+          deadPlayerIds: ["p1"],
+          dayVoting: {
+            dayNumber: 1,
+            aliveCount: 2,
+            threshold: 1,
+            usedNominatorPlayerIds: ["p2"],
+            usedNomineePlayerIds: ["p1"],
+            spentGhostVotePlayerIds: [],
+            highVoteCount: 2,
+            tiedAtHigh: false,
+            blockNomineePlayerId: "p1",
+          },
+          dayResolution: {
+            dayNumber: 1,
+            execution: {
+              playerId: "p1",
+              died: true,
+              source: "vote",
+            },
+            noExecution: false,
+          },
+          winner: "evil",
+          endReason: "saint_executed",
+        },
+      }),
+      playerView: {
+        phase: "day",
+        mode: "day",
+        roleNameZh: "厨师",
+        roleConfirmed: true,
+      },
+    });
+
+    expect(presentation).toMatchObject({
+      gameEnded: true,
+      winnerLabel: "邪恶阵营获胜",
+      endReasonLabel: "圣徒因处决死亡",
+      dayResolved: true,
+      dayExecutionName: "Alice",
+      dayExecutionDied: true,
+      canNominate: false,
+      canResolveDay: false,
+      canBeginOtherNight: false,
+      statusLine: "邪恶阵营获胜：圣徒因处决死亡。",
     });
   });
 

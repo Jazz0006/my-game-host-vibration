@@ -38,10 +38,18 @@ Page({
     dayTiedAtHigh: false,
     myDayVoteYes: false,
     ghostVoteSpent: false,
+    dayResolved: false,
+    dayExecutionName: "",
+    dayExecutionDied: false,
+    dayNoExecution: false,
+    gameEnded: false,
+    winnerLabel: "",
+    endReasonLabel: "",
     canNominate: false,
     canSubmitDayVoteYes: false,
     canSubmitDayVoteNo: false,
     canCloseNomination: false,
+    canResolveDay: false,
     nightStepId: "",
     nightChoiceOptions: [],
     nightChoiceMinTargets: 0,
@@ -178,6 +186,9 @@ Page({
       canCloseNomination: Boolean(
         this._product.closeNominationCommand && presentation.canCloseNomination
       ),
+      canResolveDay: Boolean(
+        this._product.resolveDayCommand && presentation.canResolveDay
+      ),
       canCommitNightInformation: Boolean(
         this._product.commitNightInformationCommand &&
         presentation.canCommitNightInformation
@@ -299,6 +310,15 @@ Page({
       this._product.closeNominationCommand,
       {},
       "结束投票…"
+    );
+  },
+
+  onResolveDayTap() {
+    if (!this.data.canResolveDay) return;
+    return this.sendProductCommand(
+      this._product.resolveDayCommand,
+      {},
+      "结算白天…"
     );
   },
 

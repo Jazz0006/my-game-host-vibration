@@ -22,6 +22,7 @@ export const WECHAT_PRODUCTS = [
     nominateCommand: "botc.nominate",
     dayVoteCommand: "botc.submitDayVote",
     closeNominationCommand: "botc.closeNomination",
+    resolveDayCommand: "botc.resolveDay",
     setRedHerringCommand: "botc.setRedHerring",
     nightChoiceCommand: "botc.submitNightChoice",
     commitNightInformationCommand: "botc.commitNightInformation",
