@@ -79,6 +79,50 @@ describe("PV-1/PV-2/PV-3 BotC client protocol", () => {
     });
   });
 
+  it("accepts stable day nomination and voting commands", () => {
+    expect(parseBotcClientCommandEnvelope(
+      createClientCommandEnvelope(
+        "botc.nominate",
+        { nomineePlayerId: " p3 " },
+        "nominate-1",
+      ),
+    )).toEqual({
+      protocolVersion: 1,
+      kind: "command",
+      commandId: "nominate-1",
+      type: "botc.nominate",
+      payload: { nomineePlayerId: "p3" },
+    });
+
+    expect(parseBotcClientCommandEnvelope(
+      createClientCommandEnvelope(
+        "botc.submitDayVote",
+        { vote: true },
+        "day-vote-1",
+      ),
+    )).toEqual({
+      protocolVersion: 1,
+      kind: "command",
+      commandId: "day-vote-1",
+      type: "botc.submitDayVote",
+      payload: { vote: true },
+    });
+
+    expect(parseBotcClientCommandEnvelope(
+      createClientCommandEnvelope(
+        "botc.closeNomination",
+        {},
+        "close-nomination-1",
+      ),
+    )).toEqual({
+      protocolVersion: 1,
+      kind: "command",
+      commandId: "close-nomination-1",
+      type: "botc.closeNomination",
+      payload: {},
+    });
+  });
+
   it("accepts the moderator Red Herring setup command", () => {
     const envelope = createClientCommandEnvelope(
       "botc.setRedHerring",
@@ -137,6 +181,22 @@ describe("PV-1/PV-2/PV-3 BotC client protocol", () => {
         "bad-red-herring",
       ),
     )).toThrow("playerId must be a non-empty string");
+
+    expect(() => parseBotcClientCommandEnvelope(
+      createClientCommandEnvelope(
+        "botc.nominate",
+        { nomineePlayerId: " " },
+        "bad-nominee",
+      ),
+    )).toThrow("nomineePlayerId must be a non-empty string");
+
+    expect(() => parseBotcClientCommandEnvelope(
+      createClientCommandEnvelope(
+        "botc.submitDayVote",
+        { vote: "yes" },
+        "bad-day-vote",
+      ),
+    )).toThrow("vote must be a boolean");
 
     expect(isBotcClientCommand({
       type: "werewolf.startGame",

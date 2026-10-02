@@ -103,6 +103,87 @@ describe("PV-UI0 BotC shared game presentation", () => {
     });
   });
 
+  it("projects one shared nomination/vote surface for players and the controller", () => {
+    const dayVoting = {
+      dayNumber: 1,
+      aliveCount: 3,
+      threshold: 2,
+      usedNominatorPlayerIds: ["p1"],
+      usedNomineePlayerIds: ["p3"],
+      spentGhostVotePlayerIds: [],
+      highVoteCount: 0,
+      tiedAtHigh: false,
+      activeNomination: {
+        id: "day-1-nomination-1",
+        nominatorPlayerId: "p1",
+        nomineePlayerId: "p3",
+        yesVoterPlayerIds: ["p2"],
+      },
+    };
+
+    const controller = createBotcGamePresentation({
+      room: room({
+        game: {
+          phase: "day",
+          playerCount: 3,
+          confirmedRoles: 3,
+          deadPlayerIds: [],
+          dayVoting,
+        },
+      }),
+      playerView: {
+        phase: "day",
+        mode: "day",
+        roleNameZh: "厨师",
+        roleConfirmed: true,
+      },
+    });
+
+    expect(controller).toMatchObject({
+      isDay: true,
+      dayNominationId: "day-1-nomination-1",
+      dayNominatorName: "Alice",
+      dayNomineeName: "Carol",
+      dayYesVoterNames: "Bob",
+      dayVoteCount: 1,
+      dayVoteThreshold: 2,
+      canNominate: false,
+      canCloseNomination: true,
+      canBeginOtherNight: false,
+    });
+
+    const voter = createBotcGamePresentation({
+      room: room({
+        viewer: {
+          playerId: "p2",
+          isHost: false,
+          isGameModerator: false,
+        },
+        game: {
+          phase: "day",
+          playerCount: 3,
+          confirmedRoles: 3,
+          deadPlayerIds: [],
+          dayVoting,
+        },
+      }),
+      playerView: {
+        phase: "day",
+        mode: "day",
+        roleNameZh: "共情者",
+        roleConfirmed: true,
+      },
+    });
+
+    expect(voter).toMatchObject({
+      myDayVoteYes: true,
+      canSubmitDayVoteYes: true,
+      canSubmitDayVoteNo: true,
+      canCloseNomination: false,
+      statusLine: "Alice 提名 Carol；当前 1 票。",
+    });
+  });
+
   it("projects pair information, zero-Outsider information, and player names without rule-specific UI branches", () => {
     const pair = createBotcGamePresentation({
       room: room({

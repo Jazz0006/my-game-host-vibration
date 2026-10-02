@@ -512,6 +512,64 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
       });
     }
 
+    state = (
+      await coordinator.sendCommand(
+        owner.playerId,
+        "botc.nominate",
+        { nomineePlayerId: state.clients[1]!.playerId },
+        "pv4b-nominate-1",
+      )
+    ).state;
+    expect(state.clients[0]!.roomProjection).toMatchObject({
+      game: {
+        dayVoting: {
+          activeNomination: {
+            nominatorPlayerId: owner.playerId,
+            nomineePlayerId: state.clients[1]!.playerId,
+          },
+        },
+      },
+    });
+
+    await expect(
+      coordinator.sendCommand(
+        state.clients[1]!.playerId,
+        "botc.closeNomination",
+        {},
+        "pv4b-close-unauthorized",
+      ),
+    ).rejects.toThrow("game command requires moderator authority");
+
+    for (const [index, client] of state.clients.entries()) {
+      state = (
+        await coordinator.sendCommand(
+          client.playerId,
+          "botc.submitDayVote",
+          { vote: false },
+          `pv4b-vote-${index + 1}`,
+        )
+      ).state;
+    }
+
+    const closed = await coordinator.sendCommand(
+      owner.playerId,
+      "botc.closeNomination",
+      {},
+      "pv4b-close-1",
+    );
+    state = closed.state;
+    expect(closed.result).toMatchObject({
+      replayed: false,
+      outcome: {
+        kind: "nominationClosed",
+        voteCount: 0,
+        threshold: 4,
+        result: "below_threshold",
+        highVoteCount: 0,
+        tiedAtHigh: false,
+      },
+    });
+
     const nextNight = await coordinator.sendCommand(
       owner.playerId,
       "botc.beginOtherNight",

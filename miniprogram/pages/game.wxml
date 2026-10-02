@@ -164,6 +164,59 @@
     </button>
   </view>
 
+  <view class="night-choice-card" wx:if="{{isDay && dayNominationOptions.length}}">
+    <view class="eyebrow">NOMINATION</view>
+    <view class="choice-title">选择提名对象</view>
+    <view class="choice-note">你今天只能提名一次；同一玩家今天只能被提名一次。</view>
+    <view class="choice-grid">
+      <button
+        wx:for="{{dayNominationOptions}}"
+        wx:key="id"
+        class="choice-option"
+        data-player-id="{{item.id}}"
+        bindtap="onDayNominateTap"
+      >
+        {{item.name}}
+      </button>
+    </view>
+  </view>
+
+  <view class="night-choice-card" wx:if="{{isDay && dayNominationId}}">
+    <view class="eyebrow">VOTE</view>
+    <view class="choice-title">{{dayNominatorName}} 提名 {{dayNomineeName}}</view>
+    <view class="choice-note">当前 {{dayVoteCount}} 票 · 上台门槛 {{dayVoteThreshold}} 票</view>
+    <view class="private-info-line" wx:if="{{dayYesVoterNames}}">赞成：{{dayYesVoterNames}}</view>
+    <view class="private-info-line" wx:if="{{ghostVoteSpent}}">你的幽灵票已在此前使用。</view>
+    <button
+      wx:if="{{canSubmitDayVoteYes}}"
+      class="primary-button"
+      bindtap="onDayVoteYesTap"
+    >
+      {{myDayVoteYes ? '维持赞成' : '投赞成票'}}
+    </button>
+    <button
+      wx:if="{{canSubmitDayVoteNo}}"
+      class="secondary-button"
+      bindtap="onDayVoteNoTap"
+    >
+      不赞成 / 撤回赞成
+    </button>
+    <button
+      wx:if="{{canCloseNomination}}"
+      class="secondary-button"
+      bindtap="onCloseNominationTap"
+    >
+      结束本次投票
+    </button>
+  </view>
+
+  <view class="night-choice-card" wx:if="{{isDay && dayHighVoteCount}}">
+    <view class="eyebrow">VOTE STATUS</view>
+    <view class="choice-title" wx:if="{{dayTiedAtHigh}}">最高票 {{dayHighVoteCount}} · 当前平票</view>
+    <view class="choice-title" wx:else>当前最高票候选：{{dayBlockNomineeName}}</view>
+    <view class="choice-note" wx:if="{{!dayTiedAtHigh}}">{{dayHighVoteCount}} 票</view>
+  </view>
+
   <view class="progress-card">
     <view class="progress-label">身份确认进度</view>
     <view class="progress-value">{{confirmedRoles}} / {{playerCount}}</view>

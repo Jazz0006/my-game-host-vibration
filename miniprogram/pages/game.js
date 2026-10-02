@@ -25,6 +25,23 @@ Page({
     canCompleteNightStep: false,
     isNightWake: false,
     isNightWaiting: false,
+    isDay: false,
+    dayNominationOptions: [],
+    dayNominationId: "",
+    dayNominatorName: "",
+    dayNomineeName: "",
+    dayYesVoterNames: "",
+    dayVoteCount: 0,
+    dayVoteThreshold: 0,
+    dayHighVoteCount: 0,
+    dayBlockNomineeName: "",
+    dayTiedAtHigh: false,
+    myDayVoteYes: false,
+    ghostVoteSpent: false,
+    canNominate: false,
+    canSubmitDayVoteYes: false,
+    canSubmitDayVoteNo: false,
+    canCloseNomination: false,
     nightStepId: "",
     nightChoiceOptions: [],
     nightChoiceMinTargets: 0,
@@ -149,6 +166,18 @@ Page({
       canBeginOtherNight: Boolean(
         this._product.beginOtherNightCommand && presentation.canBeginOtherNight
       ),
+      canNominate: Boolean(
+        this._product.nominateCommand && presentation.canNominate
+      ),
+      canSubmitDayVoteYes: Boolean(
+        this._product.dayVoteCommand && presentation.canSubmitDayVoteYes
+      ),
+      canSubmitDayVoteNo: Boolean(
+        this._product.dayVoteCommand && presentation.canSubmitDayVoteNo
+      ),
+      canCloseNomination: Boolean(
+        this._product.closeNominationCommand && presentation.canCloseNomination
+      ),
       canCommitNightInformation: Boolean(
         this._product.commitNightInformationCommand &&
         presentation.canCommitNightInformation
@@ -232,6 +261,44 @@ Page({
       this._product.beginOtherNightCommand,
       {},
       "进入夜晚…"
+    );
+  },
+
+  onDayNominateTap(event) {
+    if (!this.data.canNominate) return;
+    const nomineePlayerId = event.currentTarget.dataset.playerId;
+    if (!nomineePlayerId) return;
+    return this.sendProductCommand(
+      this._product.nominateCommand,
+      { nomineePlayerId },
+      "提交提名…"
+    );
+  },
+
+  onDayVoteYesTap() {
+    if (!this.data.canSubmitDayVoteYes) return;
+    return this.sendProductCommand(
+      this._product.dayVoteCommand,
+      { vote: true },
+      "提交投票…"
+    );
+  },
+
+  onDayVoteNoTap() {
+    if (!this.data.canSubmitDayVoteNo) return;
+    return this.sendProductCommand(
+      this._product.dayVoteCommand,
+      { vote: false },
+      "更新投票…"
+    );
+  },
+
+  onCloseNominationTap() {
+    if (!this.data.canCloseNomination) return;
+    return this.sendProductCommand(
+      this._product.closeNominationCommand,
+      {},
+      "结束投票…"
     );
   },
 

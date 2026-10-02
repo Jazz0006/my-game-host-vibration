@@ -35,6 +35,19 @@ export type BotcGamePresentation = {
   isSpectator: boolean;
   isNightWake: boolean;
   isNightWaiting: boolean;
+  isDay: boolean;
+  dayNominationOptions: BotcNightChoiceOption[];
+  dayNominationId: string;
+  dayNominatorName: string;
+  dayNomineeName: string;
+  dayYesVoterNames: string;
+  dayVoteCount: number;
+  dayVoteThreshold: number;
+  dayHighVoteCount: number;
+  dayBlockNomineeName: string;
+  dayTiedAtHigh: boolean;
+  myDayVoteYes: boolean;
+  ghostVoteSpent: boolean;
   nightStepId: string;
   nightChoiceKey: string;
   nightChoiceOptions: BotcNightChoiceOption[];
@@ -66,6 +79,10 @@ export type BotcGamePresentation = {
   canSetRedHerring: boolean;
   canBeginFirstNight: boolean;
   canBeginOtherNight: boolean;
+  canNominate: boolean;
+  canSubmitDayVoteYes: boolean;
+  canSubmitDayVoteNo: boolean;
+  canCloseNomination: boolean;
   canCommitNightInformation: boolean;
   canAcknowledgeNightInformation: boolean;
   canCompleteNightStep: boolean;
@@ -289,6 +306,47 @@ export function createBotcGamePresentation(
   const mode = asString(playerView?.mode);
   const isSpectator = mode === "spectator";
   const roleConfirmed = Boolean(playerView?.roleConfirmed);
+  const viewer = asRecord(room?.viewer);
+  const currentPlayerId = asString(viewer?.playerId);
+  const moderator = asRecord(room?.gameModerator);
+  const humanModeratorPlayerId =
+    asString(moderator?.mode) === "human" ? asString(moderator?.playerId) : "";
+  const participantPlayerIds = roomPlayers(room)
+    .map(player => asString(player.id))
+    .filter(playerId => playerId && playerId !== humanModeratorPlayerId);
+
+  const dayVoting = asRecord(game?.dayVoting);
+  const activeNomination = asRecord(dayVoting?.activeNomination);
+  const usedNominatorPlayerIds = asStringArray(dayVoting?.usedNominatorPlayerIds);
+  const usedNomineePlayerIds = asStringArray(dayVoting?.usedNomineePlayerIds);
+  const spentGhostVotePlayerIds = asStringArray(dayVoting?.spentGhostVotePlayerIds);
+  const deadPlayerIds = asStringArray(game?.deadPlayerIds);
+  const dayYesVoterPlayerIds = asStringArray(activeNomination?.yesVoterPlayerIds);
+  const dayNominationId = asString(activeNomination?.id);
+  const dayNominatorPlayerId = asString(activeNomination?.nominatorPlayerId);
+  const dayNomineePlayerId = asString(activeNomination?.nomineePlayerId);
+  const isDay = phase === "day";
+  const currentPlayerIsParticipant = participantPlayerIds.includes(currentPlayerId);
+  const currentPlayerDead = deadPlayerIds.includes(currentPlayerId);
+  const ghostVoteSpent = spentGhostVotePlayerIds.includes(currentPlayerId);
+  const myDayVoteYes = dayYesVoterPlayerIds.includes(currentPlayerId);
+  const dayBlockNomineePlayerId = asString(dayVoting?.blockNomineePlayerId);
+  const canNominate =
+    isDay &&
+    dayVoting !== null &&
+    !dayNominationId &&
+    currentPlayerIsParticipant &&
+    !currentPlayerDead &&
+    !usedNominatorPlayerIds.includes(currentPlayerId);
+  const dayNominationOptions = canNominate
+    ? participantPlayerIds
+        .filter(playerId => !usedNomineePlayerIds.includes(playerId))
+        .map(playerId => ({
+          id: playerId,
+          name: playerName(room, playerId),
+          selected: false,
+        }))
+    : [];
 
   const informationDecision = asRecord(game?.informationDecision);
   const nightStep = asRecord(playerView?.nightStep);
@@ -363,6 +421,21 @@ export function createBotcGamePresentation(
     isSpectator,
     isNightWake,
     isNightWaiting,
+    isDay,
+    dayNominationOptions,
+    dayNominationId,
+    dayNominatorName: playerName(room, dayNominatorPlayerId),
+    dayNomineeName: playerName(room, dayNomineePlayerId),
+    dayYesVoterNames: dayYesVoterPlayerIds
+      .map(playerId => playerName(room, playerId))
+      .join("、"),
+    dayVoteCount: dayYesVoterPlayerIds.length,
+    dayVoteThreshold: asNumber(dayVoting?.threshold),
+    dayHighVoteCount: asNumber(dayVoting?.highVoteCount),
+    dayBlockNomineeName: playerName(room, dayBlockNomineePlayerId),
+    dayTiedAtHigh: Boolean(dayVoting?.tiedAtHigh),
+    myDayVoteYes,
+    ghostVoteSpent,
     nightStepId,
     nightChoiceKey,
     nightChoiceOptions,
@@ -420,7 +493,9 @@ export function createBotcGamePresentation(
     allConfirmed,
     statusLine:
       connectionLine ||
-      statusForView(playerView, allConfirmed, controller),
+      (isDay && dayNominationId
+        ? `${playerName(room, dayNominatorPlayerId)} 提名 ${playerName(room, dayNomineePlayerId)}；当前 ${dayYesVoterPlayerIds.length} 票。`
+        : statusForView(playerView, allConfirmed, controller)),
     canConfirmRole:
       phase === "role_reveal" &&
       mode === "role_reveal" &&
@@ -435,7 +510,22 @@ export function createBotcGamePresentation(
       phase === "role_reveal" &&
       allConfirmed &&
       (redHerringDecision === null || Boolean(committedRedHerringPlayerId)),
-    canBeginOtherNight: controller && phase === "day",
+    canBeginOtherNight:
+      controller &&
+      isDay &&
+      !dayNominationId &&
+      !dayBlockNomineePlayerId,
+    canNominate,
+    canSubmitDayVoteYes:
+      isDay &&
+      Boolean(dayNominationId) &&
+      currentPlayerIsParticipant &&
+      (!currentPlayerDead || !ghostVoteSpent),
+    canSubmitDayVoteNo:
+      isDay &&
+      Boolean(dayNominationId) &&
+      currentPlayerIsParticipant,
+    canCloseNomination: controller && isDay && Boolean(dayNominationId),
     canCommitNightInformation:
       controller &&
       informationDecision !== null &&

@@ -9,6 +9,9 @@ export type BotcClientCommandEnvelope =
   | ClientCommandEnvelope<"botc.confirmRole", Record<string, never>>
   | ClientCommandEnvelope<"botc.beginFirstNight", Record<string, never>>
   | ClientCommandEnvelope<"botc.beginOtherNight", Record<string, never>>
+  | ClientCommandEnvelope<"botc.nominate", { nomineePlayerId: string }>
+  | ClientCommandEnvelope<"botc.submitDayVote", { vote: boolean }>
+  | ClientCommandEnvelope<"botc.closeNomination", Record<string, never>>
   | ClientCommandEnvelope<"botc.setRedHerring", { playerId: string }>
   | ClientCommandEnvelope<"botc.submitNightChoice", { playerIds: string[] }>
   | ClientCommandEnvelope<"botc.commitNightInformation", Record<string, never>>
@@ -20,6 +23,9 @@ export const BOTC_CLIENT_COMMAND_TYPES = [
   "botc.confirmRole",
   "botc.beginFirstNight",
   "botc.beginOtherNight",
+  "botc.nominate",
+  "botc.submitDayVote",
+  "botc.closeNomination",
   "botc.setRedHerring",
   "botc.submitNightChoice",
   "botc.commitNightInformation",
@@ -67,6 +73,7 @@ export function parseBotcClientCommandEnvelope(
     case "botc.confirmRole":
     case "botc.beginFirstNight":
     case "botc.beginOtherNight":
+    case "botc.closeNomination":
     case "botc.commitNightInformation":
     case "botc.acknowledgeNightInformation":
     case "botc.completeNightStep":
@@ -77,6 +84,35 @@ export function parseBotcClientCommandEnvelope(
         type: record.type,
         payload: {},
       };
+    case "botc.nominate": {
+      const payload = record.payload as Record<string, unknown>;
+      if (
+        typeof payload.nomineePlayerId !== "string" ||
+        !payload.nomineePlayerId.trim()
+      ) {
+        throw new Error("nomineePlayerId must be a non-empty string");
+      }
+      return {
+        protocolVersion: CLIENT_PROTOCOL_VERSION,
+        kind: "command",
+        commandId,
+        type: "botc.nominate",
+        payload: { nomineePlayerId: payload.nomineePlayerId.trim() },
+      };
+    }
+    case "botc.submitDayVote": {
+      const payload = record.payload as Record<string, unknown>;
+      if (typeof payload.vote !== "boolean") {
+        throw new Error("vote must be a boolean");
+      }
+      return {
+        protocolVersion: CLIENT_PROTOCOL_VERSION,
+        kind: "command",
+        commandId,
+        type: "botc.submitDayVote",
+        payload: { vote: payload.vote },
+      };
+    }
     case "botc.setRedHerring": {
       const payload = record.payload as Record<string, unknown>;
       if (typeof payload.playerId !== "string" || !payload.playerId.trim()) {

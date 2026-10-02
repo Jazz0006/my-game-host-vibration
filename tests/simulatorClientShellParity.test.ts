@@ -105,6 +105,18 @@ describe("PV-UI1 Simulator pre-device client-shell parity", () => {
     expect(wxml).toContain("选择占卜师的红鲱鱼");
     expect(lab).toContain('"botc.setRedHerring"');
     expect(lab).toContain("redHerringOptions");
+
+    for (const command of [
+      "botc.nominate",
+      "botc.submitDayVote",
+      "botc.closeNomination",
+    ]) {
+      expect(lab).toContain(command);
+    }
+    expect(wxml).toContain("选择提名对象");
+    expect(wxml).toContain("结束本次投票");
+    expect(lab).toContain("选择提名对象");
+    expect(lab).toContain("结束本次投票");
   });
 
   it("keeps quick-table mode alongside the full-client mode", () => {

@@ -638,6 +638,65 @@ function renderPhone(client) {
     root.append(choice);
   }
 
+  if (presentation.isDay && presentation.dayNominationOptions.length) {
+    const nomination = phoneElement("section", "wechat-card wechat-choice-card");
+    nomination.append(
+      phoneElement("div", "wechat-eyebrow", "NOMINATION"),
+      phoneElement("div", "wechat-section-title", "选择提名对象"),
+      phoneElement("div", "wechat-copy", "你今天只能提名一次；同一玩家今天只能被提名一次。"),
+    );
+    const grid = phoneElement("div", "wechat-choice-grid");
+    for (const option of presentation.dayNominationOptions) {
+      grid.append(createButton(
+        option.name,
+        () => sendPhoneCommand(client, "botc.nominate", {
+          nomineePlayerId: option.id,
+        }),
+        "wechat-choice-option",
+      ));
+    }
+    nomination.append(grid);
+    root.append(nomination);
+  }
+
+  if (presentation.isDay && presentation.dayNominationId) {
+    const vote = appendInfoCard(root, "VOTE", [
+      presentation.dayNominatorName + " 提名 " + presentation.dayNomineeName,
+      "当前 " + presentation.dayVoteCount + " 票 · 上台门槛 " + presentation.dayVoteThreshold + " 票",
+      presentation.dayYesVoterNames ? "赞成：" + presentation.dayYesVoterNames : "",
+      presentation.ghostVoteSpent ? "你的幽灵票已在此前使用。" : "",
+    ]);
+    appendAction(
+      vote,
+      presentation.myDayVoteYes ? "维持赞成" : "投赞成票",
+      presentation.canSubmitDayVoteYes,
+      () => sendPhoneCommand(client, "botc.submitDayVote", { vote: true }),
+    );
+    appendAction(
+      vote,
+      "不赞成 / 撤回赞成",
+      presentation.canSubmitDayVoteNo,
+      () => sendPhoneCommand(client, "botc.submitDayVote", { vote: false }),
+      true,
+    );
+    appendAction(
+      vote,
+      "结束本次投票",
+      presentation.canCloseNomination,
+      () => sendPhoneCommand(client, "botc.closeNomination"),
+      true,
+    );
+  }
+
+  if (presentation.isDay && presentation.dayHighVoteCount) {
+    appendInfoCard(root, "VOTE STATUS", [
+      presentation.dayTiedAtHigh
+        ? "最高票 " + presentation.dayHighVoteCount + " · 当前平票"
+        : "当前最高票候选：" + presentation.dayBlockNomineeName,
+      presentation.dayTiedAtHigh ? "" : presentation.dayHighVoteCount + " 票",
+    ]);
+  }
+
   if (presentation.minionDemonName) {
     appendInfoCard(root, "MINION INFO", [
       "恶魔：" + presentation.minionDemonName,
