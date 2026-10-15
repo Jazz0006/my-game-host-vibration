@@ -1,5 +1,14 @@
 # my-game-host-vibration AI Development Instructions
 
+## Evidence-first engineering policy (2026-10-15; current validation default)
+
+- Define independent observable acceptance, risk and ownership first. **Do not require new tests or a synthetic failing RED/GREEN phase for every change.** Early failing tests are an optional technique when they make implementation safer or faster, not a universal entry criterion.
+- Select the cheapest convincing evidence: existing tests, focused durable domain/integration tests, real browser/simulator/device workflows, inspected API/log evidence, type/build/static analysis, and exact diffs. Do not accept self-authored passing AI tests as sole proof of product correctness.
+- Add/retain automated regression tests for meaningful deterministic contracts and repeatable defects; avoid duplicate assertions and tests locked to incidental implementation shape. Retire obsolete tests only when the protected behavior is no longer needed or stronger coverage remains.
+- For reconnect, session secrecy, protocol, privacy, player identity and server authority, retain stable automated contracts and selected simulator / actual device tests. Test-first is optional when meaningful.
+- Maintain existing CI and release gates, core correctness, safety and independent acceptance. This policy overrides older prose implying that RED/GREEN must precede each source edit.
+
+
 > Role: **NORMATIVE / PROJECT-LEVEL AI WORKING AGREEMENT**  
 > Effective: 2026-09-27  
 > Applies to: ChatGPT, Codex/Luna, and other AI development agents working on this repository.
@@ -379,16 +388,16 @@ File size is a review signal, not by itself an ownership rule.
 
 ## 9. Risk-based testing and evidence
 
-Use **risk-based test-first development**, not mandatory RED ceremony for every source edit.
+Use **risk-based, evidence-first development**; RED/GREEN is optional, never compulsory.
 
 Default mapping:
 
 ```text
 bug fix / new stable behavior / changed stable behavior
-  -> smallest durable owning test when practical
-  -> meaningful RED when executable
-  -> implementation
-  -> GREEN
+  -> observable acceptance and current evidence review
+  -> choose owning automated test, simulator/device or API proof by risk
+  -> implement and validate with selected evidence
+  -> add durable regression coverage only for important uncovered contracts
 
 protocol / snapshot / identity / reconnect / idempotency / privacy change
   -> contract or integration test at the true ownership boundary
@@ -406,7 +415,7 @@ presentation-only / mechanical cleanup
   -> do not manufacture a domain RED
 ```
 
-Existing coverage can be valid test-first evidence.
+Existing coverage is valid independent evidence and does not require a new RED checkpoint.
 
 Tests are maintained engineering assets, not an append-only archive. Retire or narrow tests when they only protect an obsolete implementation shape and the real contract is covered more directly elsewhere.
 
