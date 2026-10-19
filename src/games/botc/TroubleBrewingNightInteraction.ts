@@ -19,6 +19,16 @@ export type TroubleBrewingNightChoiceResolution =
       appliesEffect: boolean;
     }
   | {
+      kind: "monk_protection";
+      targetPlayerId: string;
+      appliesEffect: boolean;
+    }
+  | {
+      kind: "imp_attack";
+      targetPlayerId: string;
+      appliesEffect: boolean;
+    }
+  | {
       kind: "fortune_teller_targets";
       targetPlayerIds: [string, string];
     };
@@ -84,6 +94,7 @@ export function troubleBrewingNightChoiceSpec(
       };
 
     case "butler":
+    case "monk":
       return {
         kind: "player_targets",
         minTargets: 1,
@@ -91,6 +102,14 @@ export function troubleBrewingNightChoiceSpec(
         allowedPlayerIds: participantPlayerIds.filter(
           playerId => playerId !== actorPlayerId,
         ),
+      };
+
+    case "imp":
+      return {
+        kind: "player_targets",
+        minTargets: 1,
+        maxTargets: 1,
+        allowedPlayerIds: [...participantPlayerIds],
       };
 
     case "fortune_teller":
@@ -153,6 +172,30 @@ export function resolveTroubleBrewingNightChoice(
         kind: "butler_master",
         targetPlayerId,
         appliesEffect: step.actorSource === "actual",
+      };
+    }
+
+    case "monk": {
+      const targetPlayerId = requireSingleTarget(
+        selectedPlayerIds,
+        spec.allowedPlayerIds,
+      );
+      return {
+        kind: "monk_protection",
+        targetPlayerId,
+        appliesEffect: step.actorSource === "actual",
+      };
+    }
+
+    case "imp": {
+      const targetPlayerId = requireSingleTarget(
+        selectedPlayerIds,
+        spec.allowedPlayerIds,
+      );
+      return {
+        kind: "imp_attack",
+        targetPlayerId,
+        appliesEffect: step.actorSource !== "shown_drunk",
       };
     }
 

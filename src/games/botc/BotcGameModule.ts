@@ -84,6 +84,7 @@ import {
   type BotcGameEndReason,
   type BotcWinner,
 } from "./BotcDayResolution.js";
+import { commitBotcImpAttack } from "./BotcNightAttack.js";
 
 export type { BotcSetupAssignment } from "./TroubleBrewingSetup.js";
 export type {
@@ -146,6 +147,7 @@ export type BotcGameState = {
   informationHistory: BotcNightInformationState[];
   poisonedPlayerId?: string;
   butlerMasterPlayerId?: string;
+  monkProtectedPlayerId?: string;
   nightStepIndex?: number;
   otherNightProgress?: TroubleBrewingOtherNightProgress;
   dayVoting?: BotcDayVotingState;
@@ -239,6 +241,9 @@ export type BotcCommandOutcome =
       selectedPlayerIds: string[];
       nextStepId?: BotcNightStep["id"];
       nightComplete: boolean;
+      targetDied?: boolean;
+      winner?: BotcWinner;
+      endReason?: BotcGameEndReason;
     }
   | {
       kind: "nightChoiceRecorded";
@@ -516,6 +521,7 @@ function clearCompletedOtherNightFacts(state: BotcGameState): void {
   state.diedTonightPlayerIds = [];
   state.roleTransitions = [];
   delete state.executedAndDiedTodayPlayerId;
+  delete state.monkProtectedPlayerId;
   delete state.otherNightProgress;
 }
 
@@ -644,6 +650,9 @@ export class BotcGameModule implements GameModule<
     command: BotcCommand,
     dependencies: GameModuleDependencies,
   ): GameCommandResult<BotcGameState, BotcCommandOutcome> {
+    if (state.winner) {
+      throw new Error("BotC game has already ended");
+    }
     switch (command.type) {
       case "confirmRole": {
         if (state.phase !== "role_reveal") {
@@ -772,10 +781,11 @@ export class BotcGameModule implements GameModule<
         }
 
         // Night-start is dusk for these day-spanning effects. The previous
-        // Poisoner target becomes healthy and the previous Butler master stops
-        // constraining tomorrow's vote before the new nightly choices occur.
+        // Poisoner target becomes healthy and the previous Butler/Monk effects
+        // expire before the new nightly choices occur.
         delete state.poisonedPlayerId;
         delete state.butlerMasterPlayerId;
+        delete state.monkProtectedPlayerId;
         delete state.fortuneTellerChoice;
         state.diedTonightPlayerIds = [];
         const progress = startTroubleBrewingOtherNightProgress(otherNightFacts(state));
@@ -1013,11 +1023,54 @@ export class BotcGameModule implements GameModule<
           };
         }
 
+        if (resolution.kind === "imp_attack") {
+          const attack = commitBotcImpAttack(
+            state,
+            context.playerId,
+            resolution.targetPlayerId,
+            resolution.appliesEffect,
+          );
+          if (state.winner) {
+            return {
+              state,
+              outcome: {
+                kind: "nightChoiceCommitted",
+                completedStepId: step.id,
+                selectedPlayerIds: [resolution.targetPlayerId],
+                nightComplete: true,
+                targetDied: attack.targetDied,
+                winner: state.winner,
+                ...(state.endReason ? { endReason: state.endReason } : {}),
+              },
+            };
+          }
+
+          const advanced = advanceCurrentNightStep(state);
+          return {
+            state,
+            outcome: {
+              kind: "nightChoiceCommitted",
+              completedStepId: advanced.completedStepId,
+              selectedPlayerIds: [resolution.targetPlayerId],
+              ...(advanced.nextStepId
+                ? { nextStepId: advanced.nextStepId }
+                : {}),
+              nightComplete: advanced.nightComplete,
+              targetDied: attack.targetDied,
+            },
+          };
+        }
+
         if (resolution.appliesEffect) {
           if (resolution.kind === "poisoner_target") {
             state.poisonedPlayerId = resolution.targetPlayerId;
-          } else {
+          } else if (resolution.kind === "butler_master") {
             state.butlerMasterPlayerId = resolution.targetPlayerId;
+          } else if (
+            resolution.kind === "monk_protection" &&
+            state.poisonedPlayerId !== context.playerId
+          ) {
+            state.monkProtectedPlayerId = resolution.targetPlayerId;
           }
         }
 
