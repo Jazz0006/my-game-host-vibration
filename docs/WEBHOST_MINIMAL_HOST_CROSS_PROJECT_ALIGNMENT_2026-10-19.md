@@ -1,0 +1,40 @@
+# WebHost 与 CampHost 最小 Host 架构对齐 — 2026-10-19
+
+> **WEBHOST NORMATIVE DESIGN GUARDRAIL / READ-ONLY AUDIT RESULT; NOT IMPLEMENTATION ACCEPTANCE.** This document adds current BotC implementation guardrails without replacing WebHost's product/runtime architecture or the existing PV-4 playable delivery route. Reference: CampHost `docs/MINIMAL_HOST_ARCHITECTURE_REBUILD_2026-10-19.md` and `docs/MINIMAL_HOST_P0_P1_IMPLEMENTATION_HANDOFF_2026-10-19.md`. These are *lessons/semantic references*, not WebHost source or PR authority.
+
+## Product boundary and shared truth
+
+- WebHost retains **one mutable `BotcGameState`** in the BotC GameModule, persisted as part of the existing authoritative `RoomSnapshot` in Cloudflare Durable Object. `RoomSnapshot` additionally owns room, membership, permission, transport recovery and command receipts; these are **not** cross-project BotC game facts.
+- CampHost, WebHost and EvidenceLab share **versioned game-state/event semantics**, not Kotlin Session code, network persistence, UI or evidence reconstruction authority. Existing `TroubleBrewingGameSnapshotV1` remains the frozen read-only interchange contract. **Do not extend V1 in place**; evolve a coordinated version/typed game-history contract with matching fixtures only for a real consumer. Preserve `KNOWN / UNCOMMITTED / UNKNOWN / NOT_APPLICABLE`.
+- EvidenceLab keeps source provenance, historical uncertainty and reconstruction revisions; WebHost must not fabricate missing past events or depend on EvidenceLab's event-sourcing implementation.
+- No second mutable `GameState`, long-lived UI/simulator/AI/restore copy, standalone game EventStore or parallel writable `informationHistory` after a replacement history becomes authoritative. Use read-only public/player/moderator/simulator projections with recipient-scoped secrecy.
+
+## Minimal determinate engine
+
+- GameModule/Host decides the next applicable night/day step and all **uniquely determined** rules effects using built-in script order, the current canonical state and events actually committed *before the action*. It calculates protection, poisoning duration, deaths, event-driven wakes, role transitions, nominations/votes/ghost votes, execution and victory. It must not let a player, UI or a recommendation select whether an already-determined role wakes.
+- Only genuine player-controlled actions require player input; only **rule-permitted discretionary** outcomes (e.g. relevant Recluse/Spy registration, impaired information, Mayor redirect) need storyteller/AI policy. A deterministic baseline is acceptable for playable PV stages, but it must not become a second rules authority or a generic candidate/world-search/veto engine. Existing focused legal information functions are not to be deleted solely because CampHost retired its overly generic legacy Rules stack.
+- Compute temporal effects in action order. Mechanical death can affect subsequent steps **before** Dawn while the public projection withholds the death until its announcement. Preserve death-triggered abilities; an index into a mutable night-order array is not a sufficient durable action identity. Use stable game/phase/round/actor/trigger/occurrence identities to prevent repeated or skipped actions under reorder.
+- Model each built-in TB role by **trigger / required player input / deterministic effect / genuine discretion / duration / visibility**. Verify combinations such as Poisoner -> Monk -> Imp, Soldier, Mayor, Imp succession, Ravenkeeper/Sage death triggers, Undertaker after execution, FT Red Herring, Virgin, Butler votes and endgame conditions across representative 5–15 player traces.
+
+## Confirmed action and actual observation history
+
+- Existing `BotcGameState.informationHistory` records committed night information, reliability and acknowledge status, but the repository currently lacks a **single complete globally ordered semantic event history**. `RoomSnapshot.revision` and bounded `commandReceipts` are transport/recovery/idempotency concerns, **not** such a history.
+- Plan a narrow typed `GameHistory` and monotonic event identity/sequence, covering setup commitments, player targets, action-time effects, role changes, delivered information with recipients/visibility/reliability, nominations, individual votes, executions, phase transitions and winner. Record **what actually happened/was told**, not an AI suggestion or a calculated truthful value substituted for a poisoned/drunk/misdelivered value. Do not infer an unevidenced registration choice from a visible answer.
+- For one accepted command, commit the semantic effects, corresponding history and room persistence **together** via the existing authoritative transaction boundary. Duplicate `commandId` replays must not append game events; maintain separate stable semantic action IDs where necessary. Preserve stale generation/identity/privacy checks.
+- CampHost's one-step `pendingOperation` / Previous workflow is **not a mandatory WebHost runtime design**: independently connected players may act in parallel. WebHost may keep local edit drafts, but any state effect relied on by another player, any private information actually sent, or any next irreversible game step requires prior authoritative durable acceptance. Do not introduce a cross-player rollback engine. Recover at a safe committed step, not exact UI coordinates.
+- A later manual correction of real misinformation is an **explicit historical correction**, not silent event mutation. Unaccepted proposals are drafts and must not enter history; model suggestions should be invalidated when their state/history fingerprint becomes stale.
+
+## Replacement policy, tests and rollout
+
+- **Playable PV-4 remains the active implementation route**. Integrate the necessary minimal event/step contracts along complete gameplay paths before PV-5 full-game simulator acceptance. No separate speculative infrastructure milestone blocks PV-4.
+- Each migration records: current producer, replacement owner, real consumers, state/event affected, tests/proof and **which old implementation is physically removed**. Existing callers imply migration work, not product necessity. Do not delete necessary deterministic rules, privacy gates or proven working information code for line-count reductions.
+- Test by representative end-to-end sequences and simulator clients: chronological poison/protection/Imp/death/trigger, premature information leak, same command retry, reconnect/resume, stale proposal, all-player convergence, night/day/win and no leftover old owner. Maintain focused tests for durable invariants; no artificial RED/GREEN or test-only adapters. Keep source <=50KB per file without one-function-per-file fragmentation.
+- Existing `UGSM-2` names semantic snapshot fixtures and `UGSM-3` names recommendation/context migration in the September adoption audit. **Do not reassign these identifiers to history work**. Before broader event contract changes, create a separately named and independently versioned history-contract proposal.
+
+## Audited WebHost evidence, as of 2026-10-19
+
+- `src/games/botc/BotcGameModule.ts`: mutable BotC authority, phase, assignments, night/day state, `informationHistory`; its live PV-4 work is **in progress**, not accepted.
+- `src/games/botc/BotcNightInformationRuntime.ts`: committed private result plus acknowledgement; must preserve recipient-safe projection and distinction between result commitment and actual publication.
+- `src/games/botc/TroubleBrewingGameSnapshot.ts` and `TroubleBrewingGameSnapshotProjection.ts`: frozen V1 read contract and pure runtime adapter (already adopted).
+- `src/core/room/RoomSnapshot.ts` and `src/runtime/cloudflare/CloudflareBotcCommandRuntime.ts`: existing authoritative room persistence/command-id dedupe (retain).
+- Worktree at audit contained uncommitted PV-4 `BotcGameModule.ts`, `TroubleBrewingNightInteraction.ts`, and `BotcNightAttack.ts`; these are substantive in-progress changes, **not disposable cleanup files**. Validation, PR and branch state must be rechecked before acceptance.
