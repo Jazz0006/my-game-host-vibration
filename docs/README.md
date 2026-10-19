@@ -17,6 +17,12 @@ Use these in this order:
 - Related micro-slices may remain local until a **logical checkpoint**. At that point run Mini MCP `quality` (`check-file-sizes + typecheck + test`), review the exact diff, commit, then push once for independent GitHub acceptance.
 - GitHub remains canonical remote truth and independent CI acceptance, but it is not the normal per-edit test loop. Detailed normative rules live in `AGENTS.md`.
 
+## 2026-10-19 cross-project BotC architecture guardrail
+
+- [WebHost minimum-Host and shared game-history alignment](WEBHOST_MINIMAL_HOST_CROSS_PROJECT_ALIGNMENT_2026-10-19.md) — current normative BotC ownership/temporal/event/privacy and implementation-cleanup principles informed by CampHost's approved 2026-10-19 minimal Host rebuild; **no WebHost implementation completion implied**.
+- Preserve existing UGSM-0/1 V1 snapshot contract and existing UGSM-2/3 stage names. Integrate necessary minimum GameHistory and action-time rule corrections into the **active PV-4 playable path**, then prove on PV-5 Simulator Lab; do not turn this into a separate generic engine project.
+- Live workspace/PR verification is required before concluding PV-4 or merging; any outstanding substantive PV-4 edits are preserved until tested and intentionally checkpointed.
+
 ## Current handoff
 
 - `docs/SIMULATOR_FIRST_BOTC_PLAYABLE_VERTICAL_SLICE_ROUTE_2026-09-30.md`

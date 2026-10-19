@@ -4,6 +4,17 @@
 > Effective: 2026-09-27  
 > Applies to: ChatGPT, Codex/Luna, and other AI development agents working on this repository.
 
+## Current BotC minimum-Host guardrail (2026-10-19)
+
+Read [docs/WEBHOST_MINIMAL_HOST_CROSS_PROJECT_ALIGNMENT_2026-10-19.md](docs/WEBHOST_MINIMAL_HOST_CROSS_PROJECT_ALIGNMENT_2026-10-19.md) for WebHost-specific adoption of the current CampHost lessons. This is normative for BotC domain ownership and cross-project interchange, **not** an import of CampHost's Android runtime architecture. V5 continues to own the active playable milestone (PV-4).
+
+- **Exactly one mutable WebHost BotC game truth**: `BotcGameState` within the authoritative Room snapshot; UI, Simulator, AI, read-only snapshots and recovery are consumers, not additional game owners. Room membership/identity, network delivery and command receipts stay outside the shared game contract.
+- **Host computes deterministic rules and step flow** at each action time, including protection/poison, death, conditional waking, role changes, votes, victory and unique information results. Player input and genuinely discretionary storyteller results are distinct; do not build another generic candidate/world/score/veto engine.
+- **Committed state + ordered semantic history + actual player-delivered observations** must converge in one authoritative durable write. No fake events from AI drafts, UI text or rule-truth recomputation. Preserve role/seat secrecy and Dawn-publication timing. Work towards typed global game history without maintaining permanent dual writable history.
+- **WebHost is multiplayer:** do not mechanically copy CampHost's single-phone one-step pending/Previous workflow. Require durable acceptance before any real next-player action or private/public publication. Retain command idempotency, stable step identities and safe reconnect.
+- **Replace and retire per complete gameplay path**: identify old owner/readers/writers, prove replacement and physically remove superseded live code/tests. Do not delete necessary determinate rule logic or current working narrow information functions just because CampHost removed legacy overengineering. Use risk-based end-to-end evidence rather than mechanical TDD.
+- `TroubleBrewingGameSnapshotV1` remains frozen/read-only; coordinate a separately versioned history contract with CampHost/EvidenceLab before shipping event interchange. Existing UGSM-2/3 identifiers retain their September meanings.
+
 ## 1. Authority and conflict resolution
 
 Use this authority order:

@@ -7,6 +7,8 @@
 
 ---
 
+> **2026-10-19 alignment:** PV-4 remains active. Apply [WebHost minimal Host cross-project alignment](WEBHOST_MINIMAL_HOST_CROSS_PROJECT_ALIGNMENT_2026-10-19.md) to current game flows: deterministic event-time outcomes, stable conditional steps, single authoritative game state, actual observation chronology, atomic room persistence and no duplicate engine/history. The CampHost single-phone pending/Previous workflow is not transplanted into multiplayer WebHost. Do not claim completed GameHistory or complete PV-4 until real code and acceptance evidence exist.
+
 ## 1. Decision
 
 The project is deliberately changing implementation order.
