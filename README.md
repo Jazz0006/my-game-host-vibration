@@ -14,21 +14,26 @@
 
 ## 当前开发状态
 
-截至 2026-09-30，主线阶段状态：
+截至 2026-10-26，主线阶段状态（执行顺序以 V5 为准）：
 
 ```text
 C1–C4 / D1–D5 / E1–E3 / W3D3 platform foundation ✅
 MG0    Second-game admission hardening              COMPLETE ✅
 B0A–B0B3 BotC module / setup contract / sequencing COMPLETE ✅
 B0C1–B0C3A rules-information foundations           CHECKPOINTED ✅
-SIM0   Simulator Lab V2 foundation                  ← CURRENT / NEXT
-PV0–PV7 BotC Playable Vertical Slice                PLANNED
+SIM0 / PV0–PV2 Simulator / lobby / start / role reveal COMPLETE ✅
+PV3    Night interactions through Spy Grimoire      IMPLEMENTED; overall playable acceptance remains
+MP0    Multi-platform client audit                 COMPLETE; no mandatory MP1
+PV4    Minimal day/night loop                      IN PROGRESS; S1 complete; PV4-S2 ordered records/commit NEXT
+PV5–PV7 Full-game / Developer Tools / devices       PLANNED
 B0C3B+ deeper Storyteller Recommendation            deferred as mainline
 W3E+   Production Web Cloudflare cutover            deferred / not a BotC prerequisite
 R1     Reliability Hardening / Effect Outbox        risk-driven
 ```
 
 HEAD、working tree、remote、PR/CI 都是可变事实，不在 README 固化具体 commit；开始开发前必须重新查询 live state。
+
+BotC 活动存档现使用内部 Session schema version 1，保存独立 gameId 和开局布局。旧的无版本活动存档不支持恢复，需新开局；读取失败会保留原存储，不以当前角色猜造开局事实。未开局房间与狼人存档不受此格式升级影响。
 
 ## 当前技术栈
 
@@ -150,7 +155,7 @@ Lab 保留两种互补模式：
 ## 长期产品边界
 
 - 狼人杀已验证当前平台基础；W3D3 与 MG0A–MG0D 已完成；BotC 已具备 B0A–B0B3 与 B0C1–B0C3A 后端基础，当前优先级转为 Simulator-first playable vertical slice，而不是继续让推荐算法深度领先于真实客户端可玩性；
-- 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；PV-0 已完成 shared Lobby authoritative interactions，PV-1 已完成最小 Trouble Brewing automatic setup + `botc.startGame` production path，PV-2 已完成 private role reveal + `botc.confirmRole` production path；PV-3A 已完成 first-night production orchestration，PV-3B1 已完成 Poisoner/Butler 单目标 choice/effect，PV-3B2A/B 已完成 Washerwoman/Librarian/Investigator 信息链；PV-UI0 已完成 game-page presentation convergence，PV-UI1 已把 Entry/Lobby/Settings/恢复流程纳入完整客户端 Lab，使 Lab 成为真机前应用层验收 owner；当前 NEXT 为 PV-3B2C Chef + Empath numeric information；
+- 手机只承担身份、秘密信息、夜间行动、提醒和少量管理；PV-0–PV-2 已完成大厅、开局及身份确认，PV-3 已接通单目标行动、配对/数字/占卜信息和间谍魔典，Simulator/微信共享应用展示路径；当前下一切片与交接以 [V5 §2.2](./开发计划_V5_客户端运行时与网络韧性实施路线.md#session-implementation-handoff) 为准，S1 已交付 Session 身份/初始布局/存档合同，下一步 S2 在同一 Session 上统一记录与提交；
 - 讨论、发言和社交推理仍在线下完成；
 - 断线、熄屏、切 App 和网络切换视为正常生命周期；
 - Room Owner 是房间管理/Recovery Controller，不等同于 Game Moderator/Storyteller；

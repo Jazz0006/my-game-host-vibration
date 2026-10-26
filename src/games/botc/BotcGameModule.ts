@@ -103,7 +103,19 @@ export type BotcDemonInfoState = {
   selectionSource: BotcDemonInfoSelectionSource;
 };
 
+export const BOTC_GAME_STATE_SCHEMA_VERSION = 1;
+
+/** Accepted opening facts, never reconstructed from evolving assignments. */
+export type BotcInitialSetup = Readonly<{
+  config: Readonly<BotcGameConfig>;
+  seatingPlayerIds: readonly string[];
+  assignments: readonly Readonly<BotcCanonicalSetupAssignment>[];
+}>;
+
 export type BotcGameState = {
+  readonly schemaVersion: typeof BOTC_GAME_STATE_SCHEMA_VERSION;
+  readonly gameId: string;
+  readonly initialSetup: BotcInitialSetup;
   scriptId: typeof TROUBLE_BREWING_SCRIPT_ID;
   phase: BotcGamePhase;
   seatingPlayerIds: string[];
@@ -514,16 +526,27 @@ export class BotcGameModule implements GameModule<
 > {
   readonly type = "botc";
 
-  createGame(input: BotcCreateInput, _dependencies: GameModuleDependencies): BotcGameState {
+  createGame(input: BotcCreateInput, dependencies: GameModuleDependencies): BotcGameState {
     if (input.config.scriptId !== TROUBLE_BREWING_SCRIPT_ID) {
       throw new Error("Only Trouble Brewing is supported in B0");
     }
 
+    const assignments = normalizeTroubleBrewingSetup(input.playerIds, input.assignments);
+    const gameId = dependencies.random.randomId();
+    if (!gameId.trim()) throw new Error("BotC gameId cannot be blank");
+
     return {
+      schemaVersion: BOTC_GAME_STATE_SCHEMA_VERSION,
+      gameId,
+      initialSetup: {
+        config: { ...input.config },
+        seatingPlayerIds: [...input.playerIds],
+        assignments: assignments.map(assignment => ({ ...assignment })),
+      },
       scriptId: TROUBLE_BREWING_SCRIPT_ID,
       phase: "role_reveal",
       seatingPlayerIds: [...input.playerIds],
-      assignments: normalizeTroubleBrewingSetup(input.playerIds, input.assignments),
+      assignments,
       confirmedRolePlayerIds: [],
       dayNumber: 0,
       nightNumber: 0,
