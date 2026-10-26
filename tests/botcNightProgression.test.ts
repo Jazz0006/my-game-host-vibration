@@ -138,22 +138,17 @@ describe("B0B3 Trouble Brewing live other-night progression", () => {
     expect(
       module.handleCommand(
         game,
-        moderatorContext,
-        { type: "completeNightStep" },
+        playerContext("p4"),
+        { type: "submitNightChoice", playerIds: ["p2"] },
         dependencies,
       ).outcome,
     ).toEqual({
-      kind: "nightStepCompleted",
+      kind: "nightChoiceCommitted",
       completedStepId: "role:monk",
+      selectedPlayerIds: ["p2"],
       nextStepId: "role:imp",
       nightComplete: false,
     });
-
-    // This directly simulates facts that a later Rules/Information owner will
-    // commit while resolving the active Imp action. There is deliberately no
-    // moderator command for injecting arbitrary deaths into production state.
-    game.deadPlayerIds.push("p3");
-    game.diedTonightPlayerIds.push("p3");
 
     expect(module.getModeratorView(game, { players: [] }).nightStep).toMatchObject({
       id: "role:imp",
@@ -162,25 +157,28 @@ describe("B0B3 Trouble Brewing live other-night progression", () => {
 
     const afterImp = module.handleCommand(
       game,
-      moderatorContext,
-      { type: "completeNightStep" },
+      playerContext("p2"),
+      { type: "submitNightChoice", playerIds: ["p3"] },
       dependencies,
     );
     expect(afterImp.outcome).toEqual({
-      kind: "nightStepCompleted",
+      kind: "nightChoiceCommitted",
       completedStepId: "role:imp",
+      selectedPlayerIds: ["p3"],
       nextStepId: "role:ravenkeeper",
       nightComplete: false,
     });
 
+    module.handleCommand(game, playerContext("p3"), { type: "submitNightChoice", playerIds: ["p2"] }, dependencies);
+    module.handleCommand(game, moderatorContext, { type: "commitNightInformation" }, dependencies);
     const afterRavenkeeper = module.handleCommand(
       game,
-      moderatorContext,
-      { type: "completeNightStep" },
+      playerContext("p3"),
+      { type: "acknowledgeNightInformation" },
       dependencies,
     );
     expect(afterRavenkeeper.outcome).toEqual({
-      kind: "nightStepCompleted",
+      kind: "nightInformationAcknowledged",
       completedStepId: "role:ravenkeeper",
       nextStepId: "role:empath",
       nightComplete: false,
@@ -233,11 +231,12 @@ describe("B0B3 Trouble Brewing live other-night progression", () => {
     const initialSetup = structuredClone(game.initialSetup);
     confirmAll(module, game);
     completeFirstNight(module, game);
-    game.deadPlayerIds.push("p5");
-    game.roleTransitions.push({
-      kind: "scarlet_woman_to_imp",
-      playerId: "p4",
-    });
+    module.handleCommand(game, playerContext("p1"), { type: "nominate", playerId: "p5" }, dependencies);
+    for (const id of ["p1", "p2", "p3"]) {
+      module.handleCommand(game, playerContext(id), { type: "vote", approve: true }, dependencies);
+    }
+    module.handleCommand(game, moderatorContext, { type: "finishVote" }, dependencies);
+    module.handleCommand(game, moderatorContext, { type: "closeDay" }, dependencies);
 
     module.handleCommand(
       game,
@@ -293,13 +292,14 @@ describe("B0B3 Trouble Brewing live other-night progression", () => {
 
     const completed = module.handleCommand(
       game,
-      moderatorContext,
-      { type: "completeNightStep" },
+      playerContext("p4"),
+      { type: "submitNightChoice", playerIds: ["p5"] },
       dependencies,
     );
     expect(completed.outcome).toEqual({
-      kind: "nightStepCompleted",
+      kind: "nightChoiceCommitted",
       completedStepId: "role:imp",
+      selectedPlayerIds: ["p5"],
       nightComplete: true,
     });
     expect(game.assignments.find(item => item.playerId === "p4")).toMatchObject({

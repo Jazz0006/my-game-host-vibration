@@ -49,7 +49,7 @@ import {
 } from "./TroubleBrewingRecommendation.js";
 import {
   cloneNightInformationState,
-  commitCurrentNightInformation,
+  resolveCurrentNightInformation,
   currentFortuneTellerChoice,
   currentInformationState,
   informationReadyStep,
@@ -65,6 +65,9 @@ import {
   type BotcMinionInfoView,
   type BotcPrivateInformationView,
 } from "./BotcPlayerPrivateViews.js";
+import { botcMechanicalChanges, nextBotcRecord, type BotcGameHistory } from "./BotcGameHistory.js";
+import { createTroubleBrewingDay, resolveTroubleBrewingDay, type BotcDayCommand, type BotcDayState } from "./TroubleBrewingDay.js";
+import { resolveTroubleBrewingDeath, resolveTroubleBrewingImpAttack, troubleBrewingWinner, type BotcWinner } from "./TroubleBrewingLife.js";
 
 export type { BotcSetupAssignment } from "./TroubleBrewingSetup.js";
 export type {
@@ -92,7 +95,8 @@ export type BotcGamePhase =
   | "role_reveal"
   | "first_night"
   | "day"
-  | "other_night";
+  | "other_night"
+  | "finished";
 
 export type BotcDemonInfoSelectionSource = "moderator" | "baseline_v1";
 
@@ -103,7 +107,13 @@ export type BotcDemonInfoState = {
   selectionSource: BotcDemonInfoSelectionSource;
 };
 
-export const BOTC_GAME_STATE_SCHEMA_VERSION = 1;
+export const BOTC_GAME_STATE_SCHEMA_VERSION = 2;
+
+export type BotcCommandContext = GameCommandContext & {
+  /** Required by external command adapters; absent only for trusted game orchestration. */
+  actionId?: string;
+  automaticInformation?: boolean;
+};
 
 /** Accepted opening facts, never reconstructed from evolving assignments. */
 export type BotcInitialSetup = Readonly<{
@@ -116,6 +126,13 @@ export type BotcGameState = {
   readonly schemaVersion: typeof BOTC_GAME_STATE_SCHEMA_VERSION;
   readonly gameId: string;
   readonly initialSetup: BotcInitialSetup;
+  interactionId: string;
+  history: BotcGameHistory;
+  day?: BotcDayState;
+  ghostVoteSpentPlayerIds: string[];
+  winner?: BotcWinner;
+  monkProtectedPlayerId?: string;
+  ravenkeeperChoice?: { nightNumber: number; playerId: string };
   scriptId: typeof TROUBLE_BREWING_SCRIPT_ID;
   phase: BotcGamePhase;
   seatingPlayerIds: string[];
@@ -136,7 +153,6 @@ export type BotcGameState = {
     nightNumber: number;
     playerIds: [string, string];
   };
-  informationHistory: BotcNightInformationState[];
   poisonedPlayerId?: string;
   butlerMasterPlayerId?: string;
   nightStepIndex?: number;
@@ -144,6 +160,7 @@ export type BotcGameState = {
 };
 
 export type BotcCommand =
+  | BotcDayCommand
   | { type: "confirmRole" }
   | { type: "setDemonBluffs"; roleIds: TroubleBrewingRoleId[] }
   | { type: "setRedHerring"; playerId: string }
@@ -155,6 +172,7 @@ export type BotcCommand =
   | { type: "completeNightStep" };
 
 export type BotcCommandOutcome =
+  | { kind: "dayActionCommitted"; action: BotcDayCommand["type"]; executionPlayerId?: string; executionDied?: boolean; voteCount?: number }
   | {
       kind: "roleConfirmed";
       allConfirmed: boolean;
@@ -189,7 +207,7 @@ export type BotcCommandOutcome =
   | {
       kind: "nightChoiceRecorded";
       stepId: BotcNightStep["id"];
-      selectedPlayerIds: [string, string];
+      selectedPlayerIds: string[];
     }
   | {
       kind: "nightInformationCommitted";
@@ -224,6 +242,7 @@ export type BotcRedHerringDecisionView = {
 };
 
 export type BotcPlayerView = {
+  actionId?: string;
   phase: BotcGamePhase;
   mode: "role_reveal" | "waiting" | "night_wake" | "day" | "spectator";
   roleId?: TroubleBrewingRoleId;
@@ -235,9 +254,16 @@ export type BotcPlayerView = {
   minionInfo?: BotcMinionInfoView;
   demonInfo?: BotcDemonInfoView;
   privateInformation?: BotcPrivateInformationView;
+  alive?: boolean;
+  canNominate?: boolean;
+  nominationTargetIds?: string[];
+  canVote?: boolean;
+  voteSubmitted?: boolean;
 };
 
 export type BotcPublicView = {
+  canCompleteNightStep: boolean;
+  actionId: string;
   scriptId: typeof TROUBLE_BREWING_SCRIPT_ID;
   phase: BotcGamePhase;
   playerCount: number;
@@ -245,6 +271,9 @@ export type BotcPublicView = {
   dayNumber: number;
   nightNumber: number;
   deadPlayerIds: string[];
+  ghostVoteSpentPlayerIds: string[];
+  winner?: BotcWinner;
+  day?: Omit<BotcDayState, "ballot"> & { ballot?: { nominatorPlayerId: string; nomineePlayerId: string; submittedCount: number } };
 };
 
 export type BotcModeratorView = BotcPublicView & {
@@ -440,6 +469,15 @@ function clearCompletedOtherNightFacts(state: BotcGameState): void {
   state.roleTransitions = [];
   delete state.executedAndDiedTodayPlayerId;
   delete state.otherNightProgress;
+  delete state.monkProtectedPlayerId;
+  delete state.ravenkeeperChoice;
+}
+
+function enterDay(state: BotcGameState): void {
+  state.phase = "day";
+  state.day = createTroubleBrewingDay();
+  const winner = troubleBrewingWinner(state);
+  if (winner) { state.winner = winner; state.phase = "finished"; }
 }
 
 function advanceCurrentNightStep(
@@ -456,6 +494,7 @@ function advanceCurrentNightStep(
     if (!nextStep) {
       state.phase = "day";
       state.dayNumber = 1;
+      enterDay(state);
       delete state.nightStepIndex;
       return {
         kind: "nightStepCompleted",
@@ -485,6 +524,7 @@ function advanceCurrentNightStep(
       state.dayNumber += 1;
       commitResolvedRoleTransitions(state);
       clearCompletedOtherNightFacts(state);
+      enterDay(state);
       return {
         kind: "nightStepCompleted",
         completedStepId: advanced.completedStep.id,
@@ -504,14 +544,27 @@ function advanceCurrentNightStep(
 }
 
 function publicView(state: BotcGameState): BotcPublicView {
+  const day = state.day;
+  const { ballot, ...dayFacts } = day ?? createTroubleBrewingDay();
+  const step = currentNightStep(state);
+  const actor = step?.actorPlayerIds[0];
   return {
+    canCompleteNightStep: Boolean(step && !informationReadyStep(state, step) &&
+      !(actor && troubleBrewingNightChoiceSpec(step, actor, state.seatingPlayerIds))),
+    actionId: state.interactionId,
     scriptId: state.scriptId,
     phase: state.phase,
     playerCount: state.assignments.length,
     confirmedRoles: state.confirmedRolePlayerIds.length,
     dayNumber: state.dayNumber,
     nightNumber: state.nightNumber,
-    deadPlayerIds: [...state.deadPlayerIds],
+    deadPlayerIds: state.deadPlayerIds.filter(id => !state.diedTonightPlayerIds.includes(id)),
+    ghostVoteSpentPlayerIds: [...state.ghostVoteSpentPlayerIds],
+    ...(state.winner ? { winner: { ...state.winner } } : {}),
+    ...(state.phase === "day" || state.phase === "finished" ? { day: {
+      ...structuredClone(dayFacts), ...(ballot ? { ballot: { nominatorPlayerId: ballot.nominatorPlayerId,
+        nomineePlayerId: ballot.nomineePlayerId, submittedCount: Object.keys(ballot.votes).length } } : {}),
+    } } : {}),
   };
 }
 
@@ -538,6 +591,16 @@ export class BotcGameModule implements GameModule<
     return {
       schemaVersion: BOTC_GAME_STATE_SCHEMA_VERSION,
       gameId,
+      interactionId: dependencies.random.randomId(),
+      ghostVoteSpentPlayerIds: [],
+      history: {
+        coverage: "from_creation",
+        nextSequence: 2,
+        actions: [{ kind: "setup", recordId: `${gameId}:fact:1`, sequence: 1 }],
+        observations: [],
+        notices: [],
+        acknowledgedObservationIds: [],
+      },
       initialSetup: {
         config: { ...input.config },
         seatingPlayerIds: [...input.playerIds],
@@ -553,17 +616,125 @@ export class BotcGameModule implements GameModule<
       deadPlayerIds: [],
       diedTonightPlayerIds: [],
       roleTransitions: [],
-      informationHistory: [],
     };
   }
 
   handleCommand(
+    state: BotcGameState,
+    context: BotcCommandContext,
+    command: BotcCommand,
+    dependencies: GameModuleDependencies,
+  ): GameCommandResult<BotcGameState, BotcCommandOutcome> {
+    if (context.actionId !== undefined && context.actionId !== state.interactionId) {
+      throw new Error("Stale BotC interaction; synchronize before acting");
+    }
+    const draft = structuredClone(state);
+    const promptBefore = this.interactionKey(state);
+    if (command.type === "beginOtherNight" && state.phase === "day" &&
+      !draft.day?.closed && !draft.day?.ballot && !draft.day?.nominators.length) {
+      this.acceptCommand(draft, context, { type: "closeDay" }, dependencies);
+    }
+    const outcome = this.acceptCommand(draft, context, command, dependencies);
+    if (context.automaticInformation) {
+      const decision = moderatorInformationDecision(draft, currentNightStep(draft));
+      if (decision && !decision.committed) {
+        this.acceptCommand(draft, { isModerator: true, now: context.now },
+          { type: "commitNightInformation" }, dependencies, true);
+      }
+    }
+    this.commitCurrentNotices(draft);
+    if (promptBefore !== this.interactionKey(draft)) {
+      draft.interactionId = dependencies.random.randomId();
+    }
+    for (const key of Object.keys(state)) {
+      if (!(key in draft)) delete (state as unknown as Record<string, unknown>)[key];
+    }
+    Object.assign(state, draft);
+    return { state, outcome };
+  }
+
+  private interactionKey(state: BotcGameState): string {
+    const step = currentNightStep(state);
+    return JSON.stringify([state.phase, state.dayNumber, state.nightNumber, step?.id,
+      currentFortuneTellerChoice(state), state.ravenkeeperChoice, currentInformationState(state, step),
+      state.day?.nominators.length, Boolean(state.day?.ballot), state.day?.closed]);
+  }
+
+  private commitCurrentNotices(state: BotcGameState): void {
+    const step = currentNightStep(state);
+    if (!step || (step.kind !== "system_info" && step.kind !== "role_change_info")) return;
+    for (const recipientPlayerId of step.actorPlayerIds) {
+      if (state.history.notices.some(item => item.stepId === step.id &&
+        item.nightNumber === state.nightNumber && item.recipientPlayerId === recipientPlayerId)) continue;
+      const minion = step.id === "minion_info" ? createBotcMinionInfoView(demonInfoFacts(state), recipientPlayerId) : undefined;
+      const demon = step.id === "demon_info" ? createBotcDemonInfoView(state.demonInfo) : undefined;
+      const content = minion ? { kind: "minion_info" as const, value: minion } :
+        demon ? { kind: "demon_info" as const, value: demon } :
+        step.kind === "role_change_info" ? { kind: "role_change" as const, roleId: "imp" as const } : undefined;
+      if (content) state.history.notices.push({ ...nextBotcRecord(state), stepId: step.id,
+        nightNumber: state.nightNumber, recipientPlayerId, content: structuredClone(content) });
+    }
+  }
+
+  private acceptCommand(
+    state: BotcGameState,
+    context: GameCommandContext,
+    command: BotcCommand,
+    dependencies: GameModuleDependencies,
+    automatic = false,
+  ): BotcCommandOutcome {
+    const before = structuredClone(state);
+    const identity = nextBotcRecord(state);
+    const result = this.applyCommand(state, context, command, dependencies);
+    if (!result.outcome) throw new Error("BotC command produced no outcome");
+    state.history.actions.push({
+      ...identity, kind: "command", at: context.now,
+      ...(context.playerId ? { actorPlayerId: context.playerId } : {}),
+      authority: automatic ? "automatic" : context.isModerator ? "moderator" : "player",
+      command: structuredClone(command), outcome: structuredClone(result.outcome),
+      effects: botcMechanicalChanges(before, state),
+    });
+    return result.outcome;
+  }
+
+  private applyCommand(
     state: BotcGameState,
     context: GameCommandContext,
     command: BotcCommand,
     dependencies: GameModuleDependencies,
   ): GameCommandResult<BotcGameState, BotcCommandOutcome> {
     switch (command.type) {
+      case "nominate":
+      case "vote":
+      case "finishVote":
+      case "closeDay": {
+        const resolved = resolveTroubleBrewingDay(state, context.playerId, context.isModerator, command);
+        state.day = resolved.day;
+        state.ghostVoteSpentPlayerIds = resolved.ghostVoteSpentPlayerIds;
+        if (command.type === "closeDay") {
+          const target = resolved.day.executionPlayerId;
+          if (target) {
+            const victim = state.assignments.find(item => item.playerId === target)!;
+            const death = resolveTroubleBrewingDeath(state, target, "execution");
+            state.deadPlayerIds = death.deadPlayerIds;
+            state.assignments = death.assignments;
+            state.roleTransitions = death.roleTransitions;
+            state.day.executionDied = death.died;
+            if (death.died) state.executedAndDiedTodayPlayerId = target;
+            if (death.died && victim.actualRoleId === "saint" && state.poisonedPlayerId !== target) {
+              state.winner = { team: "evil", reason: "saint_executed" };
+            }
+          }
+          const winner = state.winner ?? troubleBrewingWinner(state);
+          if (winner) state.winner = winner;
+          if (state.winner) state.phase = "finished";
+        }
+        return { state, outcome: { kind: "dayActionCommitted", action: command.type,
+          ...(state.day.executionPlayerId ? { executionPlayerId: state.day.executionPlayerId } : {}),
+          ...(state.day.executionDied === undefined ? {} : { executionDied: state.day.executionDied }),
+          ...(command.type === "finishVote" ? { voteCount: state.day.tallies.at(-1)!.voteCount } : {}),
+        } };
+      }
       case "confirmRole": {
         if (state.phase !== "role_reveal") {
           throw new Error("BotC role confirmation is closed");
@@ -646,6 +817,7 @@ export class BotcGameModule implements GameModule<
         if (!firstStep) {
           state.phase = "day";
           state.dayNumber = 1;
+          enterDay(state);
           delete state.nightStepIndex;
           return {
             state,
@@ -675,6 +847,7 @@ export class BotcGameModule implements GameModule<
         if (state.phase !== "day") {
           throw new Error("BotC other night can only begin from day");
         }
+        if (!state.day?.closed) throw new Error("Close the day before beginning the next night");
 
         // Night-start is dusk for these day-spanning effects. The previous
         // Poisoner target becomes healthy and the previous Butler master stops
@@ -682,6 +855,8 @@ export class BotcGameModule implements GameModule<
         delete state.poisonedPlayerId;
         delete state.butlerMasterPlayerId;
         delete state.fortuneTellerChoice;
+        delete state.ravenkeeperChoice;
+        delete state.monkProtectedPlayerId;
         state.diedTonightPlayerIds = [];
         const progress = startTroubleBrewingOtherNightProgress(otherNightFacts(state));
         state.nightNumber += 1;
@@ -689,6 +864,7 @@ export class BotcGameModule implements GameModule<
         if (!progress.activeStep) {
           state.dayNumber += 1;
           clearCompletedOtherNightFacts(state);
+          enterDay(state);
           return {
             state,
             outcome: {
@@ -748,11 +924,27 @@ export class BotcGameModule implements GameModule<
           };
         }
 
-        if (resolution.appliesEffect) {
+        if (resolution.kind === "ravenkeeper_target") {
+          if (state.ravenkeeperChoice?.nightNumber === state.nightNumber) throw new Error("Ravenkeeper target is already recorded");
+          state.ravenkeeperChoice = { nightNumber: state.nightNumber, playerId: resolution.targetPlayerId };
+          return { state, outcome: { kind: "nightChoiceRecorded", stepId: step.id, selectedPlayerIds: [resolution.targetPlayerId] } };
+        }
+
+        if (resolution.appliesEffect && state.poisonedPlayerId !== context.playerId) {
           if (resolution.kind === "poisoner_target") {
             state.poisonedPlayerId = resolution.targetPlayerId;
-          } else {
+          } else if (resolution.kind === "butler_master") {
             state.butlerMasterPlayerId = resolution.targetPlayerId;
+          } else if (resolution.kind === "monk_protection") {
+            state.monkProtectedPlayerId = resolution.targetPlayerId;
+          } else if (resolution.kind === "imp_attack") {
+            const death = resolveTroubleBrewingImpAttack(state, context.playerId, resolution.targetPlayerId);
+            if (death?.died) {
+              state.deadPlayerIds = death.deadPlayerIds;
+              state.assignments = death.assignments;
+              state.roleTransitions = death.roleTransitions;
+              state.diedTonightPlayerIds.push(resolution.targetPlayerId);
+            }
           }
         }
 
@@ -775,10 +967,12 @@ export class BotcGameModule implements GameModule<
         if (!context.isModerator) {
           throw new Error("Only the BotC moderator can commit night information");
         }
-        const committed = commitCurrentNightInformation(
+        const committed = resolveCurrentNightInformation(
           state,
           currentNightStep(state),
         );
+        const { acknowledged, ...content } = committed;
+        state.history.observations.push({ ...nextBotcRecord(state), ...content });
         return {
           state,
           outcome: {
@@ -809,7 +1003,11 @@ export class BotcGameModule implements GameModule<
         if (!information || information.acknowledged) {
           throw new Error("Active BotC night information is not ready for acknowledgement");
         }
-        information.acknowledged = true;
+        const record = state.history.observations.find(item =>
+          item.nightNumber === information.nightNumber && item.stepId === information.stepId &&
+          item.recipientPlayerId === information.recipientPlayerId);
+        if (!record) throw new Error("Committed information record is missing");
+        state.history.acknowledgedObservationIds.push(record.recordId);
         const wasFortuneTeller = activeInformationStep.roleId === "fortune_teller";
         const advanced = advanceCurrentNightStep(state);
         if (wasFortuneTeller) {
@@ -871,7 +1069,7 @@ export class BotcGameModule implements GameModule<
     context: GameViewContext,
   ): BotcPlayerView {
     const assignment = state.assignments.find(item => item.playerId === playerId);
-    if (!assignment) return { phase: state.phase, mode: "spectator" };
+    if (!assignment) return { phase: state.phase, mode: "spectator", actionId: state.interactionId };
 
     const activeStep = currentNightStep(state);
     const visibleRoleId =
@@ -884,12 +1082,23 @@ export class BotcGameModule implements GameModule<
     const visibleRole = troubleBrewingRole(visibleRoleId);
     const confirmed = state.confirmedRolePlayerIds.includes(playerId);
     const base = {
+      actionId: state.interactionId,
       phase: state.phase,
+      alive: !publicView(state).deadPlayerIds.includes(playerId),
       roleId: visibleRole.id,
       roleName: visibleRole.name,
       roleNameZh: visibleRole.nameZh,
       roleCategory: visibleRole.category,
       roleConfirmed: confirmed,
+      ...(state.phase === "day" ? {
+        canNominate: !state.deadPlayerIds.includes(playerId) && !state.day?.closed &&
+          !state.day?.ballot && !state.day?.nominators.includes(playerId),
+        nominationTargetIds: state.seatingPlayerIds.filter(id => !state.day?.nominees.includes(id)),
+        canVote: Boolean(state.day?.ballot) &&
+          (!state.deadPlayerIds.includes(playerId) || !state.ghostVoteSpentPlayerIds.includes(playerId)) &&
+          !(playerId in (state.day?.ballot?.votes ?? {})),
+        voteSubmitted: playerId in (state.day?.ballot?.votes ?? {}),
+      } : {}),
     };
 
     if (state.phase === "role_reveal") {
@@ -902,12 +1111,14 @@ export class BotcGameModule implements GameModule<
     if (state.phase === "first_night" || state.phase === "other_night") {
       const step = currentNightStep(state);
       if (step?.actorPlayerIds.includes(playerId)) {
+        const notice = state.history.notices.find(item => item.stepId === step.id &&
+          item.nightNumber === state.nightNumber && item.recipientPlayerId === playerId)?.content;
         const activeMinionInfo =
-          step.id === "minion_info"
+          notice?.kind === "minion_info" ? structuredClone(notice.value) : step.id === "minion_info"
             ? createBotcMinionInfoView(demonInfoFacts(state), playerId)
             : undefined;
         const activeDemonInfo =
-          step.id === "demon_info" &&
+          notice?.kind === "demon_info" ? structuredClone(notice.value) : step.id === "demon_info" &&
           state.demonInfo?.demonPlayerId === playerId
             ? createBotcDemonInfoView(state.demonInfo)
             : undefined;
@@ -926,8 +1137,8 @@ export class BotcGameModule implements GameModule<
             playerId,
             state.assignments.map(assignment => assignment.playerId),
             step.kind === "role" &&
-              step.roleId === "fortune_teller" &&
-              Boolean(currentFortuneTellerChoice(state)),
+              ((step.roleId === "fortune_teller" && Boolean(currentFortuneTellerChoice(state))) ||
+                (step.roleId === "ravenkeeper" && state.ravenkeeperChoice?.nightNumber === state.nightNumber)),
           ),
           ...(activeMinionInfo ? { minionInfo: activeMinionInfo } : {}),
           ...(activeDemonInfo ? { demonInfo: activeDemonInfo } : {}),
@@ -1001,4 +1212,12 @@ export class BotcGameModule implements GameModule<
 }
 
 export const botcGameModule = new BotcGameModule();
+
+/** Command receipts are private runtime facts, not an alternate secret view. */
+export function botcClientOutcome(outcome: BotcCommandOutcome | { kind: "gameStarted" }, moderatorSecrets: boolean): unknown {
+  if (moderatorSecrets || outcome.kind === "dayActionCommitted" || outcome.kind === "roleConfirmed") {
+    return structuredClone(outcome);
+  }
+  return { kind: outcome.kind, ...("nightComplete" in outcome ? { nightComplete: outcome.nightComplete } : {}) };
+}
 

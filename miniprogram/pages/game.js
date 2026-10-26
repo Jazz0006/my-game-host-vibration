@@ -52,6 +52,15 @@ Page({
     playerCount: 0,
     allConfirmed: false,
     statusLine: "等待 authoritative PlayerView。",
+    actionId: "",
+    showDay: false,
+    nominationOptions: [],
+    canVote: false,
+    voteSubmitted: false,
+    canFinishVote: false,
+    canCloseDay: false,
+    canBeginOtherNight: false,
+    privateInformationCharacterName: "",
   },
 
   onLoad() {
@@ -169,7 +178,10 @@ Page({
     this._commandInFlight = true;
     wx.showLoading({ title: loadingTitle });
     try {
-      await this._client.sendCommand(command, payload || {});
+      await this._client.sendCommand(command, {
+        ...(command.startsWith("botc.") ? { actionId: this.data.actionId } : {}),
+        ...(payload || {}),
+      });
     } catch (error) {
       wx.showToast({
         title: errorMessage(error),
@@ -188,6 +200,25 @@ Page({
       {},
       "正在确认…"
     );
+  },
+
+  onNominateTap(event) {
+    const playerId = event.currentTarget.dataset.playerId;
+    if (!this.data.nominationOptions?.some(item => item.id === playerId)) return;
+    return this.sendProductCommand(this._product.nominateCommand, { playerId }, "提交提名…");
+  },
+  onVoteTap(event) {
+    if (!this.data.canVote) return;
+    return this.sendProductCommand(this._product.voteCommand, { approve: event.currentTarget.dataset.approve === "yes" }, "提交投票…");
+  },
+  onFinishVoteTap() {
+    if (this.data.canFinishVote) return this.sendProductCommand(this._product.finishVoteCommand, {}, "统计投票…");
+  },
+  onCloseDayTap() {
+    if (this.data.canCloseDay) return this.sendProductCommand(this._product.closeDayCommand, {}, "结算白天…");
+  },
+  onBeginOtherNightTap() {
+    if (this.data.canBeginOtherNight) return this.sendProductCommand(this._product.beginOtherNightCommand, {}, "进入夜晚…");
   },
 
   onRedHerringTap(event) {

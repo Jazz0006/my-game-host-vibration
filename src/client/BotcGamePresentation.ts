@@ -25,6 +25,7 @@ export type BotcSpyGrimoireRow = {
 };
 
 export type BotcGamePresentation = {
+  actionId: string;
   phase: string;
   phaseLabel: string;
   connectionStatus: string;
@@ -69,6 +70,17 @@ export type BotcGamePresentation = {
   canAcknowledgeNightInformation: boolean;
   canCompleteNightStep: boolean;
   canSubmitNightChoice: boolean;
+  showDay: boolean;
+  nominationOptions: Array<{ id: string; name: string }>;
+  canVote: boolean;
+  voteSubmitted: boolean;
+  ballotLine: string;
+  canFinishVote: boolean;
+  canCloseDay: boolean;
+  canBeginOtherNight: boolean;
+  executionLine: string;
+  winnerLine: string;
+  privateInformationCharacterName: string;
 };
 
 function asRecord(value: unknown): UnknownRecord | null {
@@ -123,6 +135,8 @@ function phaseLabel(phase: string): string {
       return "夜晚";
     case "day":
       return "白天";
+    case "finished":
+      return "游戏结束";
     default:
       return "游戏";
   }
@@ -195,8 +209,9 @@ function statusForView(
   }
 
   if (phase === "day") {
-    return "天亮了。白天流程将在下一阶段接入。";
+    return "天亮了。请线下讨论，再提交提名和投票。";
   }
+  if (phase === "finished") return "本局已结束。";
 
   return "等待 authoritative PlayerView。";
 }
@@ -297,7 +312,7 @@ export function createBotcGamePresentation(
   const maxTargets = asNumber(nightChoice?.maxTargets);
   const nightStepId = asString(nightStep?.id);
   const nightChoiceKey = allowedPlayerIds.length > 0
-    ? nightStepId + ":" + allowedPlayerIds.join(",")
+    ? asString(playerView?.actionId) + ":" + nightStepId + ":" + allowedPlayerIds.join(",")
     : "";
   const nightChoiceOptions = allowedPlayerIds.map(playerId => ({
     id: playerId,
@@ -346,8 +361,12 @@ export function createBotcGamePresentation(
   const isNightWaiting =
     (phase === "first_night" || phase === "other_night") &&
     mode === "waiting";
+  const day = asRecord(game?.day);
+  const ballot = asRecord(day?.ballot);
+  const winner = asRecord(game?.winner);
 
   return {
+    actionId: asString(playerView?.actionId) || asString(game?.actionId),
     phase,
     phaseLabel: phaseLabel(phase),
     connectionStatus,
@@ -386,7 +405,8 @@ export function createBotcGamePresentation(
           .filter(Boolean)
           .join("、")
       : "",
-    privateInformationRoleName: roleDisplayName(learnedRole),
+    privateInformationRoleName: asString(privateInformation?.kind) === "character" ? "" : roleDisplayName(learnedRole),
+    privateInformationCharacterName: asString(privateInformation?.kind) === "character" ? roleDisplayName(learnedRole) : "",
     privateInformationPlayerNames: asStringArray(privateInformation?.shownPlayerIds)
       .map(playerId => playerName(room, playerId))
       .join("、"),
@@ -439,11 +459,24 @@ export function createBotcGamePresentation(
     canAcknowledgeNightInformation: privateInformation !== null,
     canCompleteNightStep:
       controller &&
+      game?.canCompleteNightStep !== false &&
       informationDecision === null &&
       (phase === "first_night" || phase === "other_night"),
     canSubmitNightChoice:
       allowedPlayerIds.length > 0 &&
       selectedNightChoiceIds.length >= minTargets &&
       selectedNightChoiceIds.length <= maxTargets,
+    showDay: phase === "day" || phase === "finished",
+    nominationOptions: playerView?.canNominate ? asStringArray(playerView.nominationTargetIds)
+      .map(id => ({ id, name: playerName(room, id) })) : [],
+    canVote: Boolean(playerView?.canVote),
+    voteSubmitted: Boolean(playerView?.voteSubmitted),
+    ballotLine: ballot ? `提名 ${playerName(room, asString(ballot.nomineePlayerId))} · 已提交 ${asNumber(ballot.submittedCount)} 票` : "",
+    canFinishVote: controller && phase === "day" && Boolean(ballot),
+    canCloseDay: controller && phase === "day" && !ballot && !day?.closed,
+    canBeginOtherNight: controller && phase === "day" && Boolean(day?.closed),
+    executionLine: day?.closed ? day.executionPlayerId
+      ? `处决：${playerName(room, asString(day.executionPlayerId))}（${day.executionDied ? "死亡" : "未造成死亡"}）` : "今天没有处决" : "",
+    winnerLine: winner ? `${winner.team === "good" ? "善良" : "邪恶"}阵营获胜` : "",
   };
 }

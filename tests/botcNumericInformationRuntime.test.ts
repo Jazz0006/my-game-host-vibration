@@ -1,3 +1,4 @@
+import { botcInformationHistory } from "../src/games/botc/BotcNightInformationRuntime.js";
 import { describe, expect, it } from "vitest";
 import type {
   GameCommandContext,
@@ -123,7 +124,7 @@ describe("PV-3B2C Chef + Empath numeric information runtime", () => {
     );
 
     expect(game.nightStepIndex).toBe(before);
-    expect(game.informationHistory.at(-1)).toMatchObject({
+    expect(botcInformationHistory(game).at(-1)).toMatchObject({
       stepId: "role:chef",
       recipientPlayerId: "p1",
       acknowledged: false,
@@ -188,8 +189,8 @@ describe("PV-3B2C Chef + Empath numeric information runtime", () => {
     );
     module.handleCommand(
       game,
-      moderatorContext,
-      { type: "completeNightStep" },
+      playerContext("p5"),
+      { type: "submitNightChoice", playerIds: ["p1"] },
       dependencies,
     );
 
@@ -206,7 +207,7 @@ describe("PV-3B2C Chef + Empath numeric information runtime", () => {
       { type: "commitNightInformation" },
       dependencies,
     );
-    expect(game.informationHistory.at(-1)).toMatchObject({
+    expect(botcInformationHistory(game).at(-1)).toMatchObject({
       nightNumber: 2,
       stepId: "role:empath",
       recipientPlayerId: "p2",

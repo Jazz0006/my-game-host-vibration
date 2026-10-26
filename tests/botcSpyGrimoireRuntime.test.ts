@@ -1,3 +1,4 @@
+import { botcInformationHistory } from "../src/games/botc/BotcNightInformationRuntime.js";
 import { describe, expect, it } from "vitest";
 import type {
   GameCommandContext,
@@ -105,7 +106,7 @@ describe("PV-3B4 Spy Grimoire runtime", () => {
       dependencies,
     );
 
-    expect(game.informationHistory.at(-1)).toMatchObject({
+    expect(botcInformationHistory(game).at(-1)).toMatchObject({
       stepId: "role:spy",
       recipientPlayerId: "p2",
       acknowledged: false,

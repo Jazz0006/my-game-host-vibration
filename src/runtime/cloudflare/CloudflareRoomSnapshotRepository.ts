@@ -32,6 +32,10 @@ export class CloudflareRoomSnapshotRepository<TSnapshot extends RoomSnapshot = R
 
   async load(): Promise<TSnapshot | undefined> {
     const snapshot = await this.storage.get<TSnapshot>(SNAPSHOT_KEY);
+    if (snapshot?.game !== undefined && isGameType(snapshot.metadata.gameType)) {
+      const restore = gameAdmission(snapshot.metadata.gameType).restorePersistedGameState;
+      if (restore) snapshot.game = restore(snapshot.game);
+    }
     if (snapshot) assertGameFormat(snapshot);
     return snapshot;
   }

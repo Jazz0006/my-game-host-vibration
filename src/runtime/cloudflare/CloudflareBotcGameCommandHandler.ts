@@ -1,4 +1,5 @@
 import type { RoomSnapshot } from "../../core/room/RoomSnapshot.js";
+import { botcClientOutcome } from "../../games/botc/BotcGameModule.js";
 import type { ClientCommandEnvelope } from "../../protocol/client/ClientProtocol.js";
 import {
   parseBotcClientCommandEnvelope,
@@ -53,6 +54,9 @@ implements CloudflareGameCommandHandler {
     let parsed;
     try {
       parsed = parseBotcClientCommandEnvelope(envelope);
+      if (parsed.type !== "botc.startGame" && !parsed.payload.actionId) {
+        throw new Error("BotC actionId is required; synchronize before acting");
+      }
     } catch (error) {
       this.sendFailure(
         webSocket,
@@ -69,7 +73,8 @@ implements CloudflareGameCommandHandler {
         createClientRawWebSocketSuccessResponse(requestId, {
           revision: execution.revision,
           replayed: execution.replayed,
-          outcome: execution.outcome,
+          outcome: botcClientOutcome(execution.outcome, execution.snapshot.gameModerator.mode === "human" &&
+            execution.snapshot.gameModerator.playerId === playerId),
         }),
       ));
       if (!execution.replayed) {

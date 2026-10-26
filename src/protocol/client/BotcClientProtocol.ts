@@ -4,7 +4,10 @@ import {
   type ClientCommandEnvelope,
 } from "./ClientProtocol.js";
 
-export type BotcClientCommandEnvelope =
+type BotcPayloadEnvelope =
+  | ClientCommandEnvelope<"botc.beginOtherNight" | "botc.finishVote" | "botc.closeDay", Record<string, never>>
+  | ClientCommandEnvelope<"botc.nominate", { playerId: string }>
+  | ClientCommandEnvelope<"botc.vote", { approve: boolean }>
   | ClientCommandEnvelope<"botc.startGame", Record<string, never>>
   | ClientCommandEnvelope<"botc.confirmRole", Record<string, never>>
   | ClientCommandEnvelope<"botc.beginFirstNight", Record<string, never>>
@@ -15,6 +18,7 @@ export type BotcClientCommandEnvelope =
   | ClientCommandEnvelope<"botc.completeNightStep", Record<string, never>>;
 
 export const BOTC_CLIENT_COMMAND_TYPES = [
+  "botc.beginOtherNight", "botc.nominate", "botc.vote", "botc.finishVote", "botc.closeDay",
   "botc.startGame",
   "botc.confirmRole",
   "botc.beginFirstNight",
@@ -35,9 +39,9 @@ export function isBotcClientCommand(value: unknown): boolean {
   );
 }
 
-export function parseBotcClientCommandEnvelope(
+function parseBotcPayloadEnvelope(
   value: unknown,
-): BotcClientCommandEnvelope {
+): BotcPayloadEnvelope {
   if (!value || typeof value !== "object") {
     throw new Error("client command envelope is required");
   }
@@ -61,6 +65,9 @@ export function parseBotcClientCommandEnvelope(
 
   const commandId = requireCommandId(record.commandId);
   switch (record.type) {
+    case "botc.beginOtherNight":
+    case "botc.finishVote":
+    case "botc.closeDay":
     case "botc.startGame":
     case "botc.confirmRole":
     case "botc.beginFirstNight":
@@ -74,6 +81,7 @@ export function parseBotcClientCommandEnvelope(
         type: record.type,
         payload: {},
       };
+    case "botc.nominate":
     case "botc.setRedHerring": {
       const payload = record.payload as Record<string, unknown>;
       if (typeof payload.playerId !== "string" || !payload.playerId.trim()) {
@@ -83,9 +91,15 @@ export function parseBotcClientCommandEnvelope(
         protocolVersion: CLIENT_PROTOCOL_VERSION,
         kind: "command",
         commandId,
-        type: "botc.setRedHerring",
+        type: record.type,
         payload: { playerId: payload.playerId.trim() },
       };
+    }
+    case "botc.vote": {
+      const payload = record.payload as Record<string, unknown>;
+      if (typeof payload.approve !== "boolean") throw new Error("approve must be a boolean");
+      return { protocolVersion: CLIENT_PROTOCOL_VERSION, kind: "command", commandId,
+        type: "botc.vote", payload: { approve: payload.approve } };
     }
     case "botc.submitNightChoice": {
       const payload = record.payload as Record<string, unknown>;
@@ -110,4 +124,15 @@ export function parseBotcClientCommandEnvelope(
     default:
       throw new Error("unsupported BotC client command type");
   }
+}
+
+/** Optional for trusted in-process callers; external adapters require it. */
+export type BotcClientCommandEnvelope = BotcPayloadEnvelope & { payload: { actionId?: string } };
+
+export function parseBotcClientCommandEnvelope(value: unknown): BotcClientCommandEnvelope {
+  const envelope = parseBotcPayloadEnvelope(value);
+  const actionId = ((value as Record<string, unknown>).payload as Record<string, unknown>).actionId;
+  if (actionId === undefined) return envelope;
+  if (typeof actionId !== "string" || !actionId.trim()) throw new Error("actionId must be a non-empty string");
+  return { ...envelope, payload: { ...envelope.payload, actionId } } as BotcClientCommandEnvelope;
 }

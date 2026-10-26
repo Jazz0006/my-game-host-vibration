@@ -101,6 +101,8 @@ function runtimePosition(
       break;
     case "role_reveal":
       throw new Error("role_reveal is not a runtime snapshot phase");
+    case "finished":
+      throw new Error("TBGS V1 cannot represent a finished Session; use the game result projection");
   }
 
   if (!Number.isSafeInteger(round) || round <= 0) {

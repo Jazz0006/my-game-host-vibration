@@ -371,7 +371,6 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
       replayed: false,
       outcome: {
         kind: "firstNightStarted",
-        firstStepId: "minion_info",
         nightComplete: false,
       },
     });
@@ -640,7 +639,7 @@ describe("SIM-0 Simulator Lab V2 foundation", () => {
       client => client.playerId === owner.playerId,
     )!;
 
-    expect(storytellerState.playerView).toEqual({
+    expect(storytellerState.playerView).toMatchObject({
       phase: "role_reveal",
       mode: "spectator",
     });

@@ -29,6 +29,7 @@ import {
   createTroubleBrewingSpyGrimoireSnapshot,
 } from "./TroubleBrewingSpyGrimoire.js";
 import type { TroubleBrewingRoleId } from "./TroubleBrewing.js";
+import type { BotcGameHistory } from "./BotcGameHistory.js";
 
 export type BotcNightInformationSelectionSource = "baseline_v1";
 
@@ -49,14 +50,16 @@ export type BotcModeratorInformationDecisionView = {
 };
 
 export type BotcNightInformationRuntimeState = {
-  phase: "role_reveal" | "first_night" | "day" | "other_night";
+  phase: "role_reveal" | "first_night" | "day" | "other_night" | "finished";
   assignments: BotcCanonicalSetupAssignment[];
   seatingPlayerIds: string[];
   deadPlayerIds: string[];
   nightNumber: number;
-  informationHistory: BotcNightInformationState[];
+  history: BotcGameHistory;
   poisonedPlayerId?: string;
   butlerMasterPlayerId?: string;
+  executedAndDiedTodayPlayerId?: string;
+  ravenkeeperChoice?: { nightNumber: number; playerId: string };
   redHerring?: { playerId: string };
   fortuneTellerChoice?: {
     nightNumber: number;
@@ -68,7 +71,7 @@ type BotcInformationAbilityRoleId =
   | TroubleBrewingPairInformationAbilityRoleId
   | TroubleBrewingNumericInformationAbilityRoleId
   | "fortune_teller"
-  | "spy";
+  | "spy" | "ravenkeeper" | "undertaker";
 
 export type BotcInformationStep = Extract<BotcNightStep, { kind: "role" }> & {
   roleId: BotcInformationAbilityRoleId;
@@ -85,7 +88,7 @@ function informationStep(
     step.roleId !== "chef" &&
     step.roleId !== "empath" &&
     step.roleId !== "fortune_teller" &&
-    step.roleId !== "spy"
+    step.roleId !== "spy" && step.roleId !== "ravenkeeper" && step.roleId !== "undertaker"
   ) {
     return undefined;
   }
@@ -121,6 +124,7 @@ export function informationReadyStep(
   if (candidate.roleId === "fortune_teller" && !currentFortuneTellerChoice(state)) {
     return undefined;
   }
+  if (candidate.roleId === "ravenkeeper" && state.ravenkeeperChoice?.nightNumber !== state.nightNumber) return undefined;
   return candidate;
 }
 
@@ -129,17 +133,29 @@ export function currentInformationState(
   step: BotcNightStep | undefined,
 ): BotcNightInformationState | undefined {
   if (!step) return undefined;
-  for (let index = state.informationHistory.length - 1; index >= 0; index -= 1) {
-    const item = state.informationHistory[index]!;
+  for (let index = state.history.observations.length - 1; index >= 0; index -= 1) {
+    const item = state.history.observations[index]!;
     if (
       item.nightNumber === state.nightNumber &&
       item.stepId === step.id &&
       step.actorPlayerIds.includes(item.recipientPlayerId)
     ) {
-      return item;
+      return {
+        ...item,
+        acknowledged: state.history.acknowledgedObservationIds.includes(item.recordId),
+      };
     }
   }
   return undefined;
+}
+
+/** Compatibility read projection; committed observations have one writable owner. */
+export function botcInformationHistory(
+  state: Pick<BotcNightInformationRuntimeState, "history">,
+): BotcNightInformationState[] {
+  return state.history.observations.map(item => cloneNightInformationState({
+    ...item, acknowledged: state.history.acknowledgedObservationIds.includes(item.recordId),
+  }));
 }
 
 function informationReliability(
@@ -375,7 +391,7 @@ function createCommittedSpyGrimoireResult(
   };
 }
 
-export function commitCurrentNightInformation(
+export function resolveCurrentNightInformation(
   state: BotcNightInformationRuntimeState,
   step: BotcNightStep | undefined,
 ): BotcNightInformationState {
@@ -392,7 +408,9 @@ export function commitCurrentNightInformation(
   }
 
   const reliability = informationReliability(state, activeStep, recipientPlayerId);
-  const result = isPairInformationRole(activeStep.roleId)
+  const result = activeStep.roleId === "ravenkeeper" || activeStep.roleId === "undertaker"
+    ? createCharacterInformation(state, activeStep.roleId, recipientPlayerId, reliability)
+    : isPairInformationRole(activeStep.roleId)
     ? createCommittedPairInformationResult(
         state,
         activeStep as BotcInformationStep & {
@@ -427,14 +445,30 @@ export function commitCurrentNightInformation(
     selectionSource: "baseline_v1",
     acknowledged: false,
   };
-  state.informationHistory.push(committed);
   return committed;
+}
+
+function createCharacterInformation(
+  state: BotcNightInformationRuntimeState,
+  roleId: "ravenkeeper" | "undertaker",
+  recipientPlayerId: string,
+  reliability: TroubleBrewingInformationReliability,
+): TroubleBrewingNightInformationResult {
+  const targetPlayerId = roleId === "ravenkeeper" ? state.ravenkeeperChoice?.playerId : state.executedAndDiedTodayPlayerId;
+  const target = state.assignments.find(item => item.playerId === targetPlayerId);
+  if (!target || !targetPlayerId) throw new Error("Character information requires an accepted target");
+  return { kind: "character", abilityRoleId: roleId, recipientPlayerId,
+    learnedRoleId: target.actualRoleId, reliability, semanticTruth: "true",
+    selectedCandidateId: `${roleId}:actual:${targetPlayerId}:${target.actualRoleId}`,
+    selectedResolution: { kind: "character_identity", targetPlayerId } };
 }
 
 export function cloneNightInformationState(
   information: BotcNightInformationState,
 ): BotcNightInformationState {
-  const result = information.result.kind === "pair"
+  const result = information.result.kind === "character"
+    ? { ...information.result, selectedResolution: { ...information.result.selectedResolution } }
+    : information.result.kind === "pair"
     ? {
         ...information.result,
         shownPlayerIds: [...information.result.shownPlayerIds] as [string, string],

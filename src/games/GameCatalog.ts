@@ -1,6 +1,6 @@
 import type { GameModule } from "../core/game/GameModule.js";
 import { botcGameModule } from "./botc/BotcGameModule.js";
-import { assertSupportedBotcGameState } from "./botc/BotcGamePersistence.js";
+import { assertSupportedBotcGameState, restoreBotcGameState } from "./botc/BotcGamePersistence.js";
 import { TROUBLE_BREWING_SCRIPT_ID } from "./botc/TroubleBrewing.js";
 import { DEFAULT_GAME_CONFIG } from "./werewolf/WerewolfDomainFacade.js";
 import { werewolfGameModule } from "./werewolf/WerewolfGameModule.js";
@@ -14,6 +14,7 @@ export type GameAdmissionDefinition = {
   maxPlayers: number;
   createInitialGameConfig(): unknown;
   assertPersistedGameState?(value: unknown): void;
+  restorePersistedGameState?(value: unknown): unknown;
   gameModule?: GameModule<unknown, unknown, unknown, unknown, unknown, unknown, unknown>;
 };
 
@@ -39,6 +40,7 @@ const definitions: Record<GameType, GameAdmissionDefinition> = {
     gameType: "botc",
     maxPlayers: 15,
     assertPersistedGameState: assertSupportedBotcGameState,
+    restorePersistedGameState: restoreBotcGameState,
     createInitialGameConfig: () => ({ scriptId: TROUBLE_BREWING_SCRIPT_ID }),
     gameModule: botcGameModule as unknown as GameModule<
       unknown,

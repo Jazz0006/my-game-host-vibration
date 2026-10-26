@@ -213,6 +213,16 @@ export type TroubleBrewingSpyGrimoireInformationResult =
   };
 
 export type TroubleBrewingNightInformationResult =
+  | {
+      kind: "character";
+      abilityRoleId: "ravenkeeper" | "undertaker";
+      recipientPlayerId: string;
+      learnedRoleId: TroubleBrewingRoleId;
+      reliability: TroubleBrewingInformationReliability;
+      semanticTruth: TroubleBrewingSemanticTruth;
+      selectedCandidateId: string;
+      selectedResolution: { kind: "character_identity"; targetPlayerId: string };
+    }
   | TroubleBrewingPairInformationResult
   | TroubleBrewingNumericInformationResult
   | TroubleBrewingBooleanInformationResult
