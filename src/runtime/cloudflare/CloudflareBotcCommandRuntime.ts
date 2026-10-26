@@ -14,6 +14,7 @@ import type { RoomPlayer, RoomState } from "../../core/room/types.js";
 import {
   botcGameModule,
   type BotcCommandOutcome,
+  type BotcCommand,
   type BotcGameConfig,
   type BotcGameState,
 } from "../../games/botc/BotcGameModule.js";
@@ -127,6 +128,7 @@ export class CloudflareBotcCommandRuntime {
     const moderatorCommand =
       envelope.type !== "botc.confirmRole" &&
       envelope.type !== "botc.submitNightChoice" &&
+      envelope.type !== "botc.nominate" && envelope.type !== "botc.vote" &&
       envelope.type !== "botc.acknowledgeNightInformation";
     if (
       moderatorCommand &&
@@ -136,9 +138,7 @@ export class CloudflareBotcCommandRuntime {
     }
 
     const mutation: () => BotcRuntimeOutcome = () => {
-      const outcome = this.mutate(room, authenticatedPlayerId, envelope);
-      this.commitAutomaticInformationIfRequired(room);
-      return outcome;
+      return this.mutate(room, authenticatedPlayerId, envelope);
     };
     const execution = await this.commands.execute(
       room,
@@ -221,181 +221,34 @@ export class CloudflareBotcCommandRuntime {
     authenticatedPlayerId: string,
     envelope: BotcClientCommandEnvelope,
   ): BotcRuntimeOutcome {
+    if (envelope.type === "botc.startGame") return this.startGame(room);
+    if (!room.game) throw new Error("BotC game has not started");
+    if (envelope.type === "botc.setRedHerring" && room.gameModerator.mode !== "human") {
+      throw new Error("Manual Red Herring setup requires Human Storyteller mode");
+    }
+    let command: BotcCommand;
     switch (envelope.type) {
-      case "botc.startGame":
-        return this.startGame(room);
-      case "botc.confirmRole":
-        return this.confirmRole(room, authenticatedPlayerId);
-      case "botc.submitNightChoice":
-        return this.submitNightChoice(
-          room,
-          authenticatedPlayerId,
-          envelope.payload.playerIds,
-        );
-      case "botc.acknowledgeNightInformation":
-        return this.acknowledgeNightInformation(room, authenticatedPlayerId);
-      case "botc.beginFirstNight":
-        return this.executeModeratorGameCommand(room, {
-          type: "beginFirstNight",
-        });
-      case "botc.setRedHerring":
-        if (room.gameModerator.mode !== "human") {
-          throw new Error("Manual Red Herring setup requires Human Storyteller mode");
-        }
-        return this.executeModeratorGameCommand(room, {
-          type: "setRedHerring",
-          playerId: envelope.payload.playerId,
-        });
-      case "botc.commitNightInformation":
-        return this.executeModeratorGameCommand(room, {
-          type: "commitNightInformation",
-        });
-      case "botc.completeNightStep":
-        return this.executeModeratorGameCommand(room, {
-          type: "completeNightStep",
-        });
+      case "botc.beginOtherNight": command = { type: "beginOtherNight" }; break;
+      case "botc.nominate": command = { type: "nominate", playerId: envelope.payload.playerId }; break;
+      case "botc.vote": command = { type: "vote", approve: envelope.payload.approve }; break;
+      case "botc.finishVote": command = { type: "finishVote" }; break;
+      case "botc.closeDay": command = { type: "closeDay" }; break;
+      case "botc.confirmRole": command = { type: "confirmRole" }; break;
+      case "botc.beginFirstNight": command = { type: "beginFirstNight" }; break;
+      case "botc.setRedHerring": command = { type: "setRedHerring", playerId: envelope.payload.playerId }; break;
+      case "botc.submitNightChoice": command = { type: "submitNightChoice", playerIds: envelope.payload.playerIds }; break;
+      case "botc.commitNightInformation": command = { type: "commitNightInformation" }; break;
+      case "botc.acknowledgeNightInformation": command = { type: "acknowledgeNightInformation" }; break;
+      case "botc.completeNightStep": command = { type: "completeNightStep" }; break;
     }
-  }
-
-  private confirmRole(
-    room: CloudflareBotcRoom,
-    playerId: string,
-  ): BotcCommandOutcome {
-    if (!room.game) throw new Error("BotC game has not started");
-
+    const playerCommand = ["confirmRole", "submitNightChoice", "acknowledgeNightInformation", "nominate", "vote"].includes(command.type);
     const now = this.environment.now();
-    const result = botcGameModule.handleCommand(
-      room.game,
-      {
-        playerId,
-        isModerator: false,
-        now,
-      },
-      { type: "confirmRole" },
-      { random: this.environment.random },
-    );
-    if (!result.outcome) {
-      throw new Error("BotC confirmRole produced no outcome");
-    }
-    room.game = result.state;
-    room.updatedAt = now;
-    return result.outcome;
-  }
-
-  private submitNightChoice(
-    room: CloudflareBotcRoom,
-    playerId: string,
-    playerIds: string[],
-  ): BotcCommandOutcome {
-    if (!room.game) throw new Error("BotC game has not started");
-
-    const now = this.environment.now();
-    const result = botcGameModule.handleCommand(
-      room.game,
-      {
-        playerId,
-        isModerator: false,
-        now,
-      },
-      {
-        type: "submitNightChoice",
-        playerIds,
-      },
-      { random: this.environment.random },
-    );
-    if (!result.outcome) {
-      throw new Error("BotC submitNightChoice produced no outcome");
-    }
-    room.game = result.state;
-    room.updatedAt = now;
-    return result.outcome;
-  }
-
-  private commitAutomaticInformationIfRequired(
-    room: CloudflareBotcRoom,
-  ): void {
-    if (room.gameModerator.mode !== "automatic" || !room.game) return;
-
-    const context = {
-      players: gameParticipantPlayers(room).map(({ id, name, seat }) => ({
-        id,
-        name,
-        seat,
-      })),
-    };
-    const moderatorView = botcGameModule.getModeratorView(room.game, context);
-    if (
-      !moderatorView.informationDecision ||
-      moderatorView.informationDecision.committed
-    ) {
-      return;
-    }
-
-    const now = this.environment.now();
-    const result = botcGameModule.handleCommand(
-      room.game,
-      {
-        isModerator: true,
-        now,
-      },
-      { type: "commitNightInformation" },
-      { random: this.environment.random },
-    );
-    if (!result.outcome || result.outcome.kind !== "nightInformationCommitted") {
-      throw new Error("Automatic BotC information commit produced no commit outcome");
-    }
-    room.game = result.state;
-    room.updatedAt = now;
-  }
-
-  private acknowledgeNightInformation(
-    room: CloudflareBotcRoom,
-    playerId: string,
-  ): BotcCommandOutcome {
-    if (!room.game) throw new Error("BotC game has not started");
-
-    const now = this.environment.now();
-    const result = botcGameModule.handleCommand(
-      room.game,
-      {
-        playerId,
-        isModerator: false,
-        now,
-      },
-      { type: "acknowledgeNightInformation" },
-      { random: this.environment.random },
-    );
-    if (!result.outcome) {
-      throw new Error("BotC acknowledgeNightInformation produced no outcome");
-    }
-    room.game = result.state;
-    room.updatedAt = now;
-    return result.outcome;
-  }
-
-  private executeModeratorGameCommand(
-    room: CloudflareBotcRoom,
-    command:
-      | { type: "beginFirstNight" }
-      | { type: "setRedHerring"; playerId: string }
-      | { type: "commitNightInformation" }
-      | { type: "completeNightStep" },
-  ): BotcCommandOutcome {
-    if (!room.game) throw new Error("BotC game has not started");
-
-    const now = this.environment.now();
-    const result = botcGameModule.handleCommand(
-      room.game,
-      {
-        isModerator: true,
-        now,
-      },
-      command,
-      { random: this.environment.random },
-    );
-    if (!result.outcome) {
-      throw new Error(`BotC ${command.type} produced no outcome`);
-    }
+    const result = botcGameModule.handleCommand(room.game, {
+      playerId: authenticatedPlayerId, isModerator: !playerCommand, now,
+      ...(envelope.payload.actionId === undefined ? {} : { actionId: envelope.payload.actionId }),
+      automaticInformation: room.gameModerator.mode === "automatic",
+    }, command, { random: this.environment.random });
+    if (!result.outcome) throw new Error("BotC game command produced no outcome");
     room.game = result.state;
     room.updatedAt = now;
     return result.outcome;

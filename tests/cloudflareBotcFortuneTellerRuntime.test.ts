@@ -169,13 +169,12 @@ describe("PV-3B3 Cloudflare Fortune Teller runtime", () => {
             nightNumber: 1,
             playerIds: ["p2", "p3"],
           },
-          informationHistory: [
+          history: { observations: [
             {},
             {},
             {
               stepId: "role:fortune_teller",
               recipientPlayerId: "p1",
-              acknowledged: false,
               selectionSource: "baseline_v1",
               result: {
                 kind: "boolean",
@@ -186,7 +185,7 @@ describe("PV-3B3 Cloudflare Fortune Teller runtime", () => {
                 selectedCandidateId: "fortune_teller:boolean:yes",
               },
             },
-          ],
+          ] },
         },
       },
     });
@@ -223,7 +222,7 @@ describe("PV-3B3 Cloudflare Fortune Teller runtime", () => {
 
     const persisted = await new CloudflareRoomSnapshotRepository(storage).load();
     expect(
-      (persisted?.game as BotcGameState | undefined)?.informationHistory,
+      (persisted?.game as BotcGameState | undefined)?.history.observations,
     ).toHaveLength(3);
   });
 

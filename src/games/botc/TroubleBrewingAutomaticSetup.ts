@@ -48,8 +48,9 @@ function rolePool(
   return TROUBLE_BREWING_ROLES
     .filter(role =>
       role.category === category &&
-      // PV-1 baseline deliberately avoids Baron's setup-count mutation.
-      role.id !== "baron"
+      // The playable baseline excludes Baron's setup mutation and day abilities
+      // that are not connected to the production command path yet.
+      !["baron", "virgin", "slayer", "mayor"].includes(role.id)
     )
     .map(role => role.id);
 }

@@ -120,6 +120,9 @@ function phoneElement(tag, className, text = "") {
 }
 
 async function sendPhoneCommand(client, type, payload = {}) {
+  if (type.startsWith("botc.") && type !== "botc.startGame") {
+    payload = { actionId: client.playerView?.actionId, ...payload };
+  }
   try {
     const response = await post("/dev/simulator/api/command", {
       playerId: client.playerId,
@@ -691,6 +694,33 @@ function renderPhone(client) {
     );
   }
 
+  if (presentation.privateInformationCharacterName) {
+    appendInfoCard(root, "PRIVATE INFO", ["你得知的角色是 " + presentation.privateInformationCharacterName]);
+    appendAction(root, "我记住了", presentation.canAcknowledgeNightInformation,
+      () => sendPhoneCommand(client, "botc.acknowledgeNightInformation"));
+  }
+  if (presentation.showDay) {
+    const day = phoneElement("section", "wechat-card");
+    for (const line of [presentation.winnerLine, presentation.executionLine, presentation.ballotLine]) {
+      if (line) day.append(phoneElement("div", "wechat-copy", line));
+    }
+    for (const option of presentation.nominationOptions) {
+      appendAction(day, "提名 " + option.name, true,
+        () => sendPhoneCommand(client, "botc.nominate", { playerId: option.id }));
+    }
+    appendAction(day, "赞成处决", presentation.canVote,
+      () => sendPhoneCommand(client, "botc.vote", { approve: true }));
+    appendAction(day, "不赞成", presentation.canVote,
+      () => sendPhoneCommand(client, "botc.vote", { approve: false }));
+    if (presentation.voteSubmitted) day.append(phoneElement("div", "wechat-copy", "已提交本轮投票"));
+    appendAction(day, "结束投票（未提交视为弃权）", presentation.canFinishVote,
+      () => sendPhoneCommand(client, "botc.finishVote"));
+    appendAction(day, "结束提名并结算处决", presentation.canCloseDay,
+      () => sendPhoneCommand(client, "botc.closeDay"));
+    appendAction(day, "进入下一夜", presentation.canBeginOtherNight,
+      () => sendPhoneCommand(client, "botc.beginOtherNight"));
+    root.append(day);
+  }
   const progress = phoneElement("section", "wechat-card wechat-progress-card");
   progress.append(
     phoneElement("span", "wechat-progress-label", "身份确认进度"),

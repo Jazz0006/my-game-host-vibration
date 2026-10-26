@@ -123,18 +123,17 @@ describe("PV-3B4 Cloudflare Spy Grimoire runtime", () => {
       snapshot: {
         game: {
           poisonedPlayerId: "p2",
-          informationHistory: [
+          history: { observations: [
             {
               stepId: "role:spy",
               recipientPlayerId: "p2",
-              acknowledged: false,
               result: {
                 kind: "spy_grimoire",
                 reliability: "poisoned",
                 semanticTruth: "true",
               },
             },
-          ],
+          ] },
         },
       },
     });

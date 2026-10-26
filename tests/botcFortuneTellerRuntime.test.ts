@@ -1,3 +1,4 @@
+import { botcInformationHistory } from "../src/games/botc/BotcNightInformationRuntime.js";
 import { describe, expect, it } from "vitest";
 import type {
   GameCommandContext,
@@ -164,7 +165,7 @@ describe("PV-3B3 Fortune Teller runtime", () => {
       dependencies,
     );
 
-    expect(game.informationHistory.at(-1)).toMatchObject({
+    expect(botcInformationHistory(game).at(-1)).toMatchObject({
       stepId: "role:fortune_teller",
       recipientPlayerId: "p1",
       result: {

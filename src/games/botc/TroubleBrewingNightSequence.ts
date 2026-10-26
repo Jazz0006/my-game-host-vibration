@@ -261,7 +261,7 @@ function roleTransitionFacts(
   const scarletWoman = scarletWomen[0];
   if (scarletWoman) {
     const assignment = assignmentForPlayer(facts, scarletWoman.playerId);
-    if (assignment.actualRoleId !== "scarlet_woman") {
+    if (assignment.actualRoleId !== "scarlet_woman" && assignment.actualRoleId !== "imp") {
       throw new Error("Scarlet Woman transition must reference the Scarlet Woman");
     }
   }
@@ -283,7 +283,7 @@ function roleTransitionFacts(
       throw new Error("Imp self-kill transition must reference the acting Imp");
     }
     if (
-      troubleBrewingRole(newImp.actualRoleId).category !== "minion" ||
+      (troubleBrewingRole(newImp.actualRoleId).category !== "minion" && newImp.actualRoleId !== "imp") ||
       facts.deadPlayerIds.includes(impSelfKill.newImpPlayerId)
     ) {
       throw new Error("Imp self-kill transition requires an alive Minion successor");

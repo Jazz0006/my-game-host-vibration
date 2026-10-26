@@ -1,3 +1,4 @@
+import { botcInformationHistory } from "../src/games/botc/BotcNightInformationRuntime.js";
 import { describe, expect, it } from "vitest";
 import type {
   GameCommandContext,
@@ -90,7 +91,7 @@ describe("PV-3B2B Librarian + Investigator information runtime", () => {
       dependencies,
     );
 
-    expect(game.informationHistory[0]).toMatchObject({
+    expect(botcInformationHistory(game)[0]).toMatchObject({
       stepId: "role:librarian",
       recipientPlayerId: "p1",
       selectionSource: "baseline_v1",
@@ -137,7 +138,7 @@ describe("PV-3B2B Librarian + Investigator information runtime", () => {
       dependencies,
     );
 
-    expect(game.informationHistory[1]).toMatchObject({
+    expect(botcInformationHistory(game)[1]).toMatchObject({
       stepId: "role:investigator",
       recipientPlayerId: "p2",
       result: {
@@ -187,6 +188,6 @@ describe("PV-3B2B Librarian + Investigator information runtime", () => {
       dependencies,
     );
     expect(game.nightStepIndex).toBe(before);
-    expect(game.informationHistory).toHaveLength(1);
+    expect(botcInformationHistory(game)).toHaveLength(1);
   });
 });

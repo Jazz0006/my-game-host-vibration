@@ -23,6 +23,11 @@ export const WECHAT_PRODUCTS = [
     commitNightInformationCommand: "botc.commitNightInformation",
     acknowledgeNightInformationCommand: "botc.acknowledgeNightInformation",
     completeNightStepCommand: "botc.completeNightStep",
+    nominateCommand: "botc.nominate",
+    voteCommand: "botc.vote",
+    finishVoteCommand: "botc.finishVote",
+    closeDayCommand: "botc.closeDay",
+    beginOtherNightCommand: "botc.beginOtherNight",
     gamePage: "/pages/game",
   },
 ];

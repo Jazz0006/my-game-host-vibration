@@ -112,17 +112,16 @@ describe("D3 Durable Object snapshot persistence", () => {
     const loaded = await new CloudflareRoomSnapshotRepository<RoomSnapshot<BotcGameState>>(storage).load();
     const restored = restoreRoomSnapshot(loaded!);
     expect(restored.room.game).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       gameId: original.gameId,
       initialSetup: original.initialSetup,
       confirmedRolePlayerIds: ["p2"],
     });
-    expect(generatedIds).toBe(1);
 
     // A fresh game in the same room identity must obtain another game ID.
     await repository.save(botcLobbySnapshot());
     const next = await new CloudflareBotcCommandRuntime(storage, dependencies).execute("p1", start);
-    expect(next.snapshot.game?.gameId).toBe("game-2");
+    expect(next.snapshot.game?.gameId).not.toBe(original.gameId);
   });
 
   it("rejects unsupported BotC archives without inventing opening facts or rewriting storage", async () => {

@@ -8,6 +8,8 @@ export type TroubleBrewingNightChoiceSpec = {
 };
 
 export type TroubleBrewingNightChoiceResolution =
+  | { kind: "monk_protection" | "imp_attack"; targetPlayerId: string; appliesEffect: boolean }
+  | { kind: "ravenkeeper_target"; targetPlayerId: string }
   | {
       kind: "poisoner_target";
       targetPlayerId: string;
@@ -76,6 +78,8 @@ export function troubleBrewingNightChoiceSpec(
 
   switch (step.roleId) {
     case "poisoner":
+    case "imp":
+    case "ravenkeeper":
       return {
         kind: "player_targets",
         minTargets: 1,
@@ -84,6 +88,7 @@ export function troubleBrewingNightChoiceSpec(
       };
 
     case "butler":
+    case "monk":
       return {
         kind: "player_targets",
         minTargets: 1,
@@ -132,6 +137,13 @@ export function resolveTroubleBrewingNightChoice(
   }
 
   switch (step.roleId) {
+    case "monk":
+    case "imp":
+      return { kind: step.roleId === "monk" ? "monk_protection" : "imp_attack",
+        targetPlayerId: requireSingleTarget(selectedPlayerIds, spec.allowedPlayerIds),
+        appliesEffect: step.actorSource !== "shown_drunk" };
+    case "ravenkeeper":
+      return { kind: "ravenkeeper_target", targetPlayerId: requireSingleTarget(selectedPlayerIds, spec.allowedPlayerIds) };
     case "poisoner": {
       const targetPlayerId = requireSingleTarget(
         selectedPlayerIds,

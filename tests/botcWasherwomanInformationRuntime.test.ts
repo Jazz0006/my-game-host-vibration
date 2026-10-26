@@ -1,3 +1,4 @@
+import { botcInformationHistory } from "../src/games/botc/BotcNightInformationRuntime.js";
 import { describe, expect, it } from "vitest";
 import type {
   GameModuleDependencies,
@@ -123,8 +124,8 @@ describe("PV-3B2A Washerwoman information runtime", () => {
       selectionSource: "baseline_v1",
       candidateId: expect.stringMatching(/^washerwoman:/u),
     });
-    expect(game.informationHistory).toHaveLength(1);
-    expect(game.informationHistory[0]).toMatchObject({
+    expect(botcInformationHistory(game)).toHaveLength(1);
+    expect(botcInformationHistory(game)[0]).toMatchObject({
       stepId: "role:washerwoman",
       nightNumber: 1,
       recipientPlayerId: "p1",
@@ -205,7 +206,7 @@ describe("PV-3B2A Washerwoman information runtime", () => {
       nextStepId: "role:chef",
       nightComplete: false,
     });
-    expect(game.informationHistory[0]?.acknowledged).toBe(true);
+    expect(botcInformationHistory(game)[0]?.acknowledged).toBe(true);
     expect(module.getPlayerView(game, "p1", viewContext).mode).toBe("waiting");
   });
 
@@ -237,7 +238,7 @@ describe("PV-3B2A Washerwoman information runtime", () => {
       dependencies,
     );
 
-    expect(game.informationHistory[0]?.result.reliability).toBe("drunk");
+    expect(botcInformationHistory(game)[0]?.result.reliability).toBe("drunk");
     const playerView = module.getPlayerView(game, "p1", viewContext);
     expect(playerView.privateInformation).toBeDefined();
     expect(JSON.stringify(playerView)).not.toContain("drunk");

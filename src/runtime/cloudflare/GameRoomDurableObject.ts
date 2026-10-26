@@ -199,7 +199,18 @@ export class GameRoomDurableObject {
     return new Response("Not Found", { status: 404 });
   }
 
-  async webSocketMessage(
+  private messageTail: Promise<void> = Promise.resolve();
+
+  webSocketMessage(
+    webSocket: HibernationWebSocketLike,
+    message: string | ArrayBuffer,
+  ): Promise<void> {
+    const execution = this.messageTail.then(() => this.handleWebSocketMessage(webSocket, message));
+    this.messageTail = execution.catch(() => undefined);
+    return execution;
+  }
+
+  private async handleWebSocketMessage(
     webSocket: HibernationWebSocketLike,
     message: string | ArrayBuffer,
   ): Promise<void> {

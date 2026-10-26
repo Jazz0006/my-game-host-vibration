@@ -1,7 +1,7 @@
 # Simulator-first BotC Playable Vertical Slice Route (2026-09-30)
 
 > Project: `Jazz0006/my-game-host-vibration`  
-> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV4-S1 COMPLETE; PV4-S2 ORDERED RECORDS / SINGLE COMMIT PATH NEXT**
+> Status: **NORMATIVE IMPLEMENTATION ROUTE — ACTIVE; PV4-S1–S4 COMPLETE FOR SELECTED BASELINE; PV-5 FULL-GAME SIMULATOR ACCEPTANCE NEXT**
 > Route owner: current execution order is governed by V5; this document owns the detailed Simulator-first / playable-vertical-slice decomposition.  
 > Supersedes as NEXT: continuing directly from B0C3A into B0C3B recommendation depth.
 
@@ -559,7 +559,7 @@ Validation before merge: typecheck PASS; Web client and both WeChat product shel
 
 ### PV-4 — Minimal day / night loop
 
-The accepted 2026-10-26 implementation sequence is owned by [V5 §2.2](../开发计划_V5_客户端运行时与网络韧性实施路线.md#session-implementation-handoff): PV4-S1 Session identity/immutable initial setup/persistence contract → PV4-S2 ordered confirmed actions and observations on one commit path → PV4-S3 minimal production day/night loop → PV4-S4 focused multiplayer/recovery/privacy acceptance. S1 is implemented; S2–S4 remain planned. Continue with S2; do not create a second writable Session beside `BotcGameState` or turn this into a standalone framework phase. Long-term ownership and proportional verification are defined in V4 §§19.2–19.4 and AGENTS; this section retains only the playable scope below.
+The accepted 2026-10-26 implementation sequence and evidence are owned by [V5 §2.2](../开发计划_V5_客户端运行时与网络韧性实施路线.md#session-implementation-handoff): PV4-S1 Session identity/immutable initial setup/persistence contract → PV4-S2 ordered confirmed actions and observations on one commit path → PV4-S3 minimal production day/night loop → PV4-S4 focused multiplayer/recovery/privacy acceptance. S1–S4 are implemented for the selected playable baseline. Continue with PV-5; S4 does not complete full-game/all-role or Developer Tools acceptance. Do not create a second writable Session beside `BotcGameState` or turn this into a standalone framework phase. Long-term ownership and proportional verification are defined in V4 §§19.2–19.4 and AGENTS; this section retains only the playable scope below.
 
 Add the minimum state/actions required to complete repeated play:
 

@@ -20,6 +20,7 @@ import {
   createGamePlayerStateEnvelope,
   createGameRoomStateEnvelope,
 } from "../src/runtime/shared/gameClientStateProjection.js";
+import { botcInformationHistory } from "../src/games/botc/BotcNightInformationRuntime.js";
 
 class MemoryStorage implements DurableObjectStorageLike {
   readonly values = new Map<string, unknown>();
@@ -38,10 +39,11 @@ class MemoryStorage implements DurableObjectStorageLike {
   }
 }
 
+let generatedIdentity = 0;
 const dependencies: GameModuleDependencies = {
   random: {
     randomInt: () => 0,
-    randomId: () => "unused",
+    randomId: () => `information-${++generatedIdentity}`,
   },
 };
 
@@ -173,6 +175,65 @@ function command(
 }
 
 describe("PV-3B2 pair-information Cloudflare runtime", () => {
+  it("commits ordered facts and immutable observations atomically, fences stale input, and preserves progress on retry", async () => {
+    class FailingStorage extends MemoryStorage {
+      fail = false;
+      override async put<T>(key: string, value: T): Promise<void> {
+        if (this.fail) throw new Error("injected write failure");
+        await super.put(key, value);
+      }
+    }
+    const storage = new FailingStorage();
+    await seedRoom(storage, { mode: "automatic" });
+    const repository = new CloudflareRoomSnapshotRepository(storage);
+    const before = await repository.load();
+    const oldActionId = (before!.game as BotcGameState).interactionId;
+    const poison = command("botc.submitNightChoice", { playerIds: ["p4"], actionId: oldActionId }, "s2-poison");
+    storage.fail = true;
+    await expect(runtime(storage).execute("p1", poison)).rejects.toThrow("injected write failure");
+    expect(await repository.load()).toEqual(before);
+    storage.fail = false;
+    const committed = await runtime(storage).execute("p1", poison);
+    const state = committed.snapshot.game as BotcGameState;
+    const observation = structuredClone(state.history.observations[0]!);
+    const sequence = [...state.history.actions, ...state.history.observations, ...state.history.notices]
+      .map(item => item.sequence!).sort((left, right) => left - right);
+    expect(sequence).toEqual(Array.from({ length: sequence.length }, (_, index) => index + 1));
+    expect(state.history.actions.slice(-2).map(item => item.kind === "command" && item.command.type))
+      .toEqual(["submitNightChoice", "commitNightInformation"]);
+    expect(state.history.actions.at(-2)).toMatchObject({ effects: { poisonedPlayerId: "p4" } });
+    expect((await runtime(storage).execute("p1", poison)).replayed).toBe(true);
+    await expect(runtime(storage).execute("p1", command("botc.submitNightChoice",
+      { playerIds: ["p5"], actionId: oldActionId }, "s2-stale"))).rejects.toThrow("Stale BotC interaction");
+    const ack = await runtime(storage).execute("p4", command("botc.acknowledgeNightInformation",
+      { actionId: state.interactionId }, "s2-ack"));
+    const acknowledged = ack.snapshot.game as BotcGameState;
+    expect(acknowledged.history.observations[0]).toEqual(observation);
+    expect(acknowledged.history.acknowledgedObservationIds).toContain(observation.recordId);
+  });
+
+  it("upgrades S1 information with an explicit unknown-order boundary without rewriting storage on read", async () => {
+    const storage = new MemoryStorage();
+    await seedRoom(storage, { mode: "automatic" });
+    const committed = await runtime(storage).execute("p1", command("botc.submitNightChoice", { playerIds: ["p4"] }, "s2-migrate"));
+    const state = committed.snapshot.game as BotcGameState;
+    const { history, interactionId, ...facts } = state;
+    const legacy = { ...committed.snapshot, game: { ...facts, schemaVersion: 1,
+      informationHistory: botcInformationHistory(state) } };
+    await storage.put("room:snapshot:v1", legacy);
+    const loaded = await new CloudflareRoomSnapshotRepository(storage).load();
+    const upgraded = loaded!.game as BotcGameState;
+    expect(upgraded.gameId).toBe(state.gameId);
+    expect(upgraded.initialSetup).toEqual(state.initialSetup);
+    expect(upgraded.history).toMatchObject({ coverage: "from_upgrade", nextSequence: 1, actions: [] });
+    expect(upgraded.history.observations[0]).toMatchObject({ sequence: null, result: history.observations[0]!.result });
+    expect(upgraded).not.toHaveProperty("informationHistory");
+    expect(await storage.get("room:snapshot:v1")).toEqual(legacy);
+    const acknowledged = await runtime(storage).execute("p4", command("botc.acknowledgeNightInformation",
+      { actionId: upgraded.interactionId }, "s2-migrated-ack"));
+    expect((acknowledged.snapshot.game as BotcGameState).history.actions[0]).toMatchObject({ sequence: 1 });
+  });
+
   it("auto-commits information in the same authoritative mutation, keeps it private, and replays acknowledgement idempotently", async () => {
     const storage = new MemoryStorage();
     await seedRoom(storage, { mode: "automatic" });
@@ -198,18 +259,17 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
       snapshot: {
         game: {
           poisonedPlayerId: "p4",
-          informationHistory: [
+          history: { observations: [
             {
               stepId: "role:washerwoman",
               recipientPlayerId: "p4",
-              acknowledged: false,
               selectionSource: "baseline_v1",
               result: {
                 reliability: "poisoned",
                 semanticTruth: "true",
               },
             },
-          ],
+          ] },
         },
       },
     });
@@ -247,7 +307,7 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
       "p2",
       () => true,
     );
-    expect(JSON.stringify(publicEnvelope)).not.toContain("informationHistory");
+    expect(JSON.stringify(publicEnvelope)).not.toContain("history");
     expect(JSON.stringify(publicEnvelope)).not.toContain("privateInformation");
     expect(JSON.stringify(publicEnvelope)).not.toContain("poisonedPlayerId");
 
@@ -268,14 +328,14 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
       },
       snapshot: {
         game: {
-          informationHistory: [
+          history: { acknowledgedObservationIds: [expect.any(String)], observations: [
             {
-              acknowledged: true,
+              stepId: "role:washerwoman",
+              recipientPlayerId: "p4",
             },
             {
               stepId: "role:chef",
               recipientPlayerId: "p5",
-              acknowledged: false,
               selectionSource: "baseline_v1",
               result: {
                 kind: "number",
@@ -286,7 +346,7 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
                 selectedCandidateId: "chef:number:1",
               },
             },
-          ],
+          ] },
         },
       },
     });
@@ -321,7 +381,7 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
     const persisted = await new CloudflareRoomSnapshotRepository(storage).load();
     expect(persisted?.revision).toBe(11);
     expect(
-      (persisted?.game as BotcGameState | undefined)?.informationHistory,
+      (persisted?.game as BotcGameState | undefined)?.history.observations,
     ).toHaveLength(2);
   });
 
@@ -349,12 +409,11 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
       },
       snapshot: {
         game: {
-          informationHistory: [
+          history: { observations: [
             {
               stepId: "role:librarian",
               recipientPlayerId: "p4",
               selectionSource: "baseline_v1",
-              acknowledged: false,
               result: {
                 kind: "no_characters",
                 abilityRoleId: "librarian",
@@ -364,7 +423,7 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
                 selectedCandidateId: "librarian:no-outsiders",
               },
             },
-          ],
+          ] },
         },
       },
     });
@@ -393,7 +452,7 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
       JSON.stringify(
         createGameRoomStateEnvelope(poison.snapshot, "p2", () => true),
       ),
-    ).not.toContain("informationHistory");
+    ).not.toContain("history");
   });
 
   it("preserves Human Storyteller authority for Investigator without advancing before acknowledgement", async () => {
@@ -415,7 +474,7 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
     );
 
     expect(
-      (poison.snapshot.game as BotcGameState).informationHistory,
+      (poison.snapshot.game as BotcGameState).history.observations,
     ).toEqual([]);
 
     const storytellerProjection = createGameRoomStateEnvelope(
@@ -459,9 +518,8 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
       snapshot: {
         game: {
           phase: "first_night",
-          informationHistory: [
+          history: { observations: [
             {
-              acknowledged: false,
               result: {
                 kind: "pair",
                 abilityRoleId: "investigator",
@@ -473,7 +531,7 @@ describe("PV-3B2 pair-information Cloudflare runtime", () => {
                 },
               },
             },
-          ],
+          ] },
         },
       },
     });

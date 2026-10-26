@@ -184,7 +184,12 @@ export class TestRoomClient<TPlayerView = unknown> {
       undefined,
       `${type}:${commandId}`,
     );
-    return session.send(createClientCommandEnvelope(type, payload, commandId));
+    const view = this.getPlayerView() as { actionId?: string } | null;
+    const body = type.startsWith("botc.") && type !== "botc.startGame" &&
+      payload && typeof payload === "object" && !("actionId" in payload)
+      ? { ...payload, actionId: view?.actionId }
+      : payload;
+    return session.send(createClientCommandEnvelope(type, body, commandId));
   }
 
   async waitForRevision(

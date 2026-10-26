@@ -66,6 +66,7 @@ export type BotcSpyGrimoireView = {
 };
 
 export type BotcPrivateInformationView =
+  | { kind: "character"; abilityRoleId: "ravenkeeper" | "undertaker"; learnedRole: BotcRoleView }
   | {
       kind: "pair";
       abilityRoleId: TroubleBrewingPairInformationAbilityRoleId;
@@ -188,6 +189,9 @@ export function createBotcPrivateInformationView(
   result: TroubleBrewingNightInformationResult,
   context: GameViewContext,
 ): BotcPrivateInformationView {
+  if (result.kind === "character") {
+    return { kind: "character", abilityRoleId: result.abilityRoleId, learnedRole: roleView(result.learnedRoleId) };
+  }
   if (result.kind === "no_characters") {
     return {
       kind: "no_characters",
