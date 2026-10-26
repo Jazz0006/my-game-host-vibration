@@ -230,6 +230,7 @@ describe("B0B3 Trouble Brewing live other-night progression", () => {
       dependencies,
     );
 
+    const initialSetup = structuredClone(game.initialSetup);
     confirmAll(module, game);
     completeFirstNight(module, game);
     game.deadPlayerIds.push("p5");
@@ -306,6 +307,9 @@ describe("B0B3 Trouble Brewing live other-night progression", () => {
       shownRoleId: "imp",
     });
     expect(game.roleTransitions).toEqual([]);
+    expect(game.initialSetup).toEqual(initialSetup);
+    expect(game.initialSetup.assignments.find(item => item.playerId === "p4"))
+      .toMatchObject({ actualRoleId: "scarlet_woman", shownRoleId: "scarlet_woman" });
 
     module.handleCommand(
       game,

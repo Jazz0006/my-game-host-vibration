@@ -11,16 +11,15 @@ import {
 } from "./TroubleBrewingGameSnapshot.js";
 
 /**
- * Projection-only context that is owned outside BotcGameState.
+ * Projection-only context supplied by the read-only interchange consumer.
  *
- * gameId, seed and persistence revisions are intentionally not invented by the
- * GameModule. A caller must supply the cross-project identity/seed when it has
- * an authoritative owner. Revisions may be omitted when this runtime has no
+ * Identity comes from the canonical Session. A caller must supply a real seed
+ * to use V1; the online runtime does not manufacture one. Revisions may be
+ * omitted when this runtime has no
  * semantically equivalent producer; V1 then records NOT_APPLICABLE rather than
  * manufacturing a value.
  */
 export type TroubleBrewingGameSnapshotProjectionContext = Readonly<{
-  gameId: string;
   gameSeed: number;
   seatOrder: readonly string[];
   gameStateRevision?: number;
@@ -49,7 +48,7 @@ function assertProjectionContext(
   state: BotcGameState,
   context: TroubleBrewingGameSnapshotProjectionContext,
 ): void {
-  if (!context.gameId.trim()) {
+  if (!state.gameId.trim()) {
     throw new Error("Trouble Brewing snapshot gameId cannot be blank");
   }
   if (!Number.isSafeInteger(context.gameSeed)) {
@@ -185,7 +184,7 @@ export function projectTroubleBrewingGameSnapshotV1(
   return {
     schemaId: TROUBLE_BREWING_GAME_SNAPSHOT_SCHEMA_ID,
     schemaVersion: TROUBLE_BREWING_GAME_SNAPSHOT_SCHEMA_VERSION,
-    gameId: context.gameId,
+    gameId: state.gameId,
     script: TROUBLE_BREWING_GAME_SNAPSHOT_SCRIPT_ID,
     gameSeed: context.gameSeed,
     position: snapshotPosition(state, context),

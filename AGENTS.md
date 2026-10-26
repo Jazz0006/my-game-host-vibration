@@ -215,6 +215,12 @@ Room Owner and Game Moderator/Storyteller are distinct authorities. A human BotC
 
 Storyteller recommendation must remain a separate recommendation/intelligence layer and must not become Room Runtime policy.
 
+### BotC single-session implementation standard
+
+The enduring implementation contract is owned by `长期架构与DurableObjects迁移设计_V4.md` §§19.2–19.4. Each active game has one canonical mutable Session state and one semantic commit boundary. Evolve the existing `BotcGameState` / GameModule seam; do not add a second writable Session beside it. Multiple transport adapters, pure rule functions, and read-only projections are legitimate; parallel game controllers, writable UI/AI/recovery state, or old/new production rule paths are not.
+
+Before changing a game flow, identify its sole writer, affected consumers, replaced path, and smallest useful evidence. Move consumers and retire replaced production paths in the same logical change. Keep genuine server-owned interactions and acknowledgement state recoverable; do not copy Offline Host's UI-only confirmation/recovery policy into this multi-phone product. Shared Session semantics or interchange work does not replace the existing read-only `TroubleBrewingGameSnapshotV1` contract without an explicit contract change.
+
 ## 5. Decision authority and AI division of work
 
 Default collaboration model:
@@ -399,16 +405,17 @@ File size is a review signal, not by itself an ownership rule.
 
 ## 9. Risk-based testing and evidence
 
-Use **risk-based, evidence-first development**; RED/GREEN is optional, never compulsory.
+Use **risk-based verification**, not default test-first or a dedicated test for every change. Reuse existing owning coverage first. Add a small behavioral test only for an important new/changed contract or a concrete failure with a meaningful coverage gap; identify that behavior and gap before adding it. RED is useful when it demonstrates the actual defect, not a required ceremony.
 
 Default mapping:
 
 ```text
 bug fix / new stable behavior / changed stable behavior
-  -> observable acceptance and current evidence review
-  -> choose owning automated test, simulator/device or API proof by risk
-  -> implement and validate with selected evidence
-  -> add durable regression coverage only for important uncovered contracts
+  -> inspect existing owning coverage
+  -> smallest durable behavioral test for an important uncovered contract
+  -> meaningful RED when useful and executable
+  -> implementation
+  -> GREEN
 
 protocol / snapshot / identity / reconnect / idempotency / privacy change
   -> contract or integration test at the true ownership boundary
@@ -426,7 +433,9 @@ presentation-only / mechanical cleanup
   -> do not manufacture a domain RED
 ```
 
-Existing coverage is valid independent evidence and does not require a new RED checkpoint.
+Existing coverage can provide the required behavioral evidence without new tests.
+
+Do not add tests solely because a file/function/component was introduced, or enumerate player-count/seat/mode combinations without a distinct risk. Do not add dedicated tests for wording, colors, spacing, or similar low-risk presentation details. Test observable behavior rather than class names, private helpers, file layout, or source text, except for existing architecture/build guards that protect an explicit invariant.
 
 Tests are maintained engineering assets, not an append-only archive. Retire or narrow tests when they only protect an obsolete implementation shape and the real contract is covered more directly elsewhere.
 
@@ -465,6 +474,8 @@ quality          -> check-file-sizes + typecheck + test
 Choose the cheapest reliable evidence for each micro-slice rather than mechanically running every command after every edit.
 
 At a normal logical checkpoint, `quality` is the default full local gate. Add narrower or runtime-specific evidence only when the changed boundary requires it. Before merge, the exact pushed commit must also pass the required independent GitHub acceptance checks.
+
+For documentation-only changes that do not alter executable commands, build/CI configuration, or runtime contracts, use exact-diff, reference, and consistency review; do not run application builds or the full test suite merely for ceremony. Explicit required remote checks still apply if such a change is submitted for merge. Once relevant checks pass, repeat them only for new changes, failures, or unresolved risk.
 
 ### `verify:flow` special rule
 

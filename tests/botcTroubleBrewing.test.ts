@@ -112,6 +112,16 @@ describe("B0A Trouble Brewing setup and views", () => {
       actualRoleId: "drunk",
       shownRoleId: "empath",
     });
+    expect(game.initialSetup).toEqual({
+      config: { scriptId: "trouble-brewing" },
+      seatingPlayerIds: playerIds,
+      assignments: game.assignments,
+    });
+    expect(game.initialSetup.assignments[1]).not.toBe(game.assignments[1]);
+    expect(game.initialSetup.seatingPlayerIds).not.toBe(game.seatingPlayerIds);
+    expect(game.initialSetup).not.toHaveProperty("demonInfo");
+    expect(game.initialSetup).not.toHaveProperty("redHerring");
+    expect(game).not.toHaveProperty("gameSeed");
 
     const playerView = module.getPlayerView(game, "p2", viewContext);
     expect(playerView).toMatchObject({
@@ -139,6 +149,9 @@ describe("B0A Trouble Brewing setup and views", () => {
       confirmedRoles: 0,
     });
     expect(publicView).not.toHaveProperty("assignments");
+    expect(playerView).not.toHaveProperty("initialSetup");
+    expect(publicView).not.toHaveProperty("initialSetup");
+    expect(moderatorView).not.toHaveProperty("initialSetup");
   });
 
   it("rejects duplicate actual characters and illegal category distributions", () => {
